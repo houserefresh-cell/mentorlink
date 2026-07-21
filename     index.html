@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MentorLink</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial;background:#f4f6fb;color:#1f2937}.wrap{max-width:1100px;margin:auto;padding:20px}
+header{background:#fff;border-bottom:1px solid #ddd}.nav{display:flex;justify-content:space-between;align-items:center}.logo{font-size:26px;font-weight:800}
+button{border:0;border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer}.p{background:#111827;color:#fff}.s{background:#e5e7eb}
+.hero{margin-top:24px;background:#fff;border-radius:24px;padding:44px;box-shadow:0 12px 30px #0001}.hero h1{font-size:48px;margin:0 0 16px}.hero p{font-size:20px;line-height:1.6}
+.actions{display:flex;gap:12px;flex-wrap:wrap}.search{display:grid;grid-template-columns:2fr 1fr auto;gap:12px;margin:28px 0;background:#fff;padding:16px;border-radius:18px}
+input,select,textarea{width:100%;padding:13px;border:1px solid #ccc;border-radius:10px;font:inherit}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{background:#fff;border-radius:18px;padding:20px;box-shadow:0 8px 20px #0001}.avatar{width:60px;height:60px;border-radius:50%;background:#e5e7eb;display:grid;place-items:center;font-weight:800;font-size:22px}
+.tags{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.tag{background:#eef2ff;border-radius:999px;padding:6px 10px;font-size:13px}.muted{color:#6b7280}.price{font-size:22px;font-weight:800;margin:12px 0}
+.hidden{display:none!important}.modal{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;padding:20px}.box{background:#fff;max-width:520px;width:100%;border-radius:20px;padding:24px}
+.notice{background:#ecfdf5;color:#065f46;padding:12px;border-radius:10px;margin-top:12px}footer{text-align:center;padding:40px;color:#6b7280}
+@media(max-width:800px){.hero{padding:28px}.hero h1{font-size:36px}.search,.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><div class="wrap nav"><div class="logo">MentorLink</div><button class="s" onclick="openForm()">כניסה / הרשמה</button></div></header>
+<main class="wrap">
+<section class="hero"><h1>לומדים ממישהו<br>שקרוב אליך בגיל</h1><p>פלטפורמה המחברת בין תיכוניסטים מצטיינים לילדי יסודי בלימודים, ספורט, יצירה וטכנולוגיה.</p>
+<div class="actions"><button class="p" onclick="document.getElementById('search').scrollIntoView()">מצאו חונך</button><button class="s" onclick="openForm('mentor')">הצטרפו כחונכים</button></div></section>
+<section class="search" id="search"><input id="q" placeholder="מה הילד רוצה ללמוד?" oninput="filterM()"><select id="city" onchange="filterM()"><option value="">כל הערים</option><option>הוד השרון</option><option>כפר סבא</option><option>רעננה</option></select><button class="p" onclick="filterM()">חיפוש</button></section>
+<h2>חונכים מומלצים</h2><section class="grid" id="grid"></section>
+</main><footer>גרסת הדגמה ראשונית · MentorLink</footer>
+<div id="modal" class="modal hidden"><div class="box"><button class="s" onclick="closeForm()">✕</button><h2 id="title">הרשמה</h2>
+<input id="name" placeholder="שם מלא"><select id="role" style="margin-top:10px"><option value="parent">הורה</option><option value="mentor">תיכוניסט/ית חונך/ת</option></select>
+<input id="phone" placeholder="טלפון" style="margin-top:10px"><input id="email" placeholder="אימייל" style="margin-top:10px">
+<textarea id="details" rows="4" placeholder="במה אתם צריכים עזרה או במה אתם מצטיינים" style="margin-top:10px"></textarea>
+<button class="p" style="width:100%;margin-top:10px" onclick="save()">שליחה</button><div id="ok" class="notice hidden">הפרטים נשמרו בדפדפן. זו גרסת הדגמה.</div></div></div>
+<script>
+const ms=[
+{name:"נועה לוי",grade:"כיתה י״א",city:"הוד השרון",sub:["מתמטיקה","אנגלית"],r:4.9,p:70},
+{name:"עומר כהן",grade:"כיתה י״ב",city:"כפר סבא",sub:["כדורגל","כושר"],r:4.8,p:80},
+{name:"מאיה ישראלי",grade:"כיתה י׳",city:"רעננה",sub:["ציור","יצירה"],r:4.7,p:65},
+{name:"יובל מזרחי",grade:"כיתה י״א",city:"הוד השרון",sub:["מחשבים","תכנות"],r:4.9,p:75},
+{name:"דניאל פרץ",grade:"כיתה י״ב",city:"רעננה",sub:["מדעים","שיעורי בית"],r:4.6,p:60},
+{name:"שירה אברהם",grade:"כיתה י׳",city:"כפר סבא",sub:["עברית","אנגלית"],r:4.8,p:65}];
+function render(a){grid.innerHTML=a.map(m=>`<article class="card"><div class="avatar">${m.name[0]}</div><h3>${m.name}</h3><div class="muted">${m.grade} · ${m.city}</div><div class="tags">${m.sub.map(s=>`<span class="tag">${s}</span>`).join("")}</div><div class="muted">⭐ ${m.r} מתוך 5</div><div class="price">₪${m.p} למפגש</div><button class="p" style="width:100%" onclick="book('${m.name}')">קביעת מפגש</button></article>`).join("")}
+function filterM(){let t=q.value.toLowerCase(),c=city.value;render(ms.filter(m=>(m.name+" "+m.city+" "+m.sub.join(" ")).toLowerCase().includes(t)&&(!c||m.city==c)))}
+function openForm(r){modal.classList.remove("hidden");if(r)role.value=r}
+function closeForm(){modal.classList.add("hidden");ok.classList.add("hidden")}
+function book(n){openForm("parent");title.textContent="קביעת מפגש עם "+n;details.value="אני מעוניין/ת לקבוע מפגש עם "+n}
+function save(){localStorage.setItem("mentorlink",JSON.stringify({name:name.value,role:role.value,phone:phone.value,email:email.value,details:details.value}));ok.classList.remove("hidden")}
+render(ms)
+</script></body></html>
