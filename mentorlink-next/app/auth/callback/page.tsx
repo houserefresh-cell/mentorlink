@@ -142,7 +142,7 @@ function AuthCallbackContent() {
       }
 
       const dashboardPath = isMentorRegistration
-        ? "/dashboard/mentor"
+        ? "/dashboard/mentor/onboarding"
         : isParentRegistration
           ? "/dashboard/parent"
           : await getDashboardPath(user.id);

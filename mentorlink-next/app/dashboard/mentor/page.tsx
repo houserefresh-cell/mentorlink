@@ -7,6 +7,7 @@ import { supabase } from "../../../lib/supabase";
 import { getAgeFromBirthDate } from "../../../lib/mentor-age";
 
 const CARDS = [
+  { key: "onboarding", title: "מסע הרשמה", description: "השלמת הפרופיל בשלבים קצרים ונוחים למובייל.", href: "/dashboard/mentor/onboarding" },
   { key: "profile", title: "פרטים אישיים", description: "שם, לימודים, שפות ותיאור קצר.", href: "/dashboard/mentor/profile" },
   { key: "subjects", title: "מקצועות ותחומים", description: "תחומי החונכות ושכבות הגיל.", href: "/dashboard/mentor/subjects" },
   { key: "availability", title: "זמינות", description: "ימים, שעות וסוגי מפגשים.", href: "/dashboard/mentor/availability" },
