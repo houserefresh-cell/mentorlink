@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 
 type Mentor = {
   id: number;
@@ -210,9 +211,12 @@ export default function Home() {
               התחברות
             </button>
 
-            <button className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-600">
-              הרשמה חינם
-            </button>
+            <Link
+  href="/register"
+  className="rounded-xl bg-slate-950 ..."
+>
+  הרשמה חינם
+</Link>
           </div>
         </div>
       </header>

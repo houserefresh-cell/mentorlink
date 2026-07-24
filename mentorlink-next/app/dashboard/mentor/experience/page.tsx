@@ -1,0 +1,24 @@
+"use client";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../../../lib/supabase";
+import { ChoicePills, Field, FormMessage, LoadingPage, MentorPageShell, SavePanel, inputClassName, toggleValue } from "../_components/MentorPageShell";
+const EXPERIENCES = ["הדרכה", "תנועת נוער", "אימון ספורט", "עבודה עם ילדים"];
+const MENTORING_TYPES = ["לימודית", "חברתית", "ספורטיבית", "אישית", "עזרה בשיעורי בית"];
+export default function ExperiencePage() {
+  const router = useRouter(); const [userId, setUserId] = useState(""); const [hasPrevious, setHasPrevious] = useState(false); const [details, setDetails] = useState(""); const [types, setTypes] = useState<string[]>([]); const [courses, setCourses] = useState(""); const [strengths, setStrengths] = useState(""); const [values, setValues] = useState(""); const [motivation, setMotivation] = useState(""); const [mentoringTypes, setMentoringTypes] = useState<string[]>([]); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [message, setMessage] = useState<FormMessage>(null);
+  useEffect(() => { async function load() { const { data: auth } = await supabase.auth.getUser(); if (!auth.user) return router.replace("/login"); setUserId(auth.user.id); const { data, error } = await supabase.from("mentor_experience").select("*").eq("user_id", auth.user.id).maybeSingle(); if (error) { console.error(error); setMessage({ type: "error", text: `שגיאה בטעינה: ${error.message}` }); } if (data) { setHasPrevious(data.has_previous_mentoring); setDetails(data.previous_mentoring_details ?? ""); setTypes(data.experience_types ?? []); setCourses(data.courses_and_certificates ?? ""); setStrengths((data.strengths ?? []).join(", ")); setValues(data.relationship_values); setMotivation(data.motivation); setMentoringTypes(data.mentoring_types ?? []); } setLoading(false); } load(); }, [router]);
+  async function save(e: FormEvent) { e.preventDefault(); if (!mentoringTypes.length) return setMessage({ type: "error", text: "יש לבחור לפחות סוג חונכות אחד." }); if (hasPrevious && !details.trim()) return setMessage({ type: "error", text: "יש לפרט את הניסיון הקודם בחונכות." }); setSaving(true); setMessage(null); const { error } = await supabase.from("mentor_experience").upsert({ user_id: userId, has_previous_mentoring: hasPrevious, previous_mentoring_details: hasPrevious ? details.trim() : null, experience_types: types, courses_and_certificates: courses.trim() || null, strengths: strengths.split(",").map((v) => v.trim()).filter(Boolean), relationship_values: values.trim(), motivation: motivation.trim(), mentoring_types: mentoringTypes, updated_at: new Date().toISOString() }); if (error) console.error(error); setMessage(error ? { type: "error", text: `שגיאה בשמירה: ${error.message}` } : { type: "success", text: "הניסיון והיכולות נשמרו בהצלחה." }); setSaving(false); }
+  if (loading) return <LoadingPage text="טוען ניסיון ויכולות..." />;
+  return <MentorPageShell title="ניסיון ויכולות" description="ספרו על הרקע, החוזקות וסגנון החונכות שלכם."><form onSubmit={save} className="space-y-6 rounded-3xl border border-blue-100 bg-white p-8 shadow-xl">
+    <label className="flex items-center gap-3 font-bold"><input type="checkbox" checked={hasPrevious} onChange={(e) => setHasPrevious(e.target.checked)} className="h-5 w-5 accent-blue-600" />יש לי ניסיון קודם בחונכות</label>
+    {hasPrevious && <Field label="פירוט ניסיון קודם" htmlFor="details"><textarea id="details" required rows={4} value={details} onChange={(e) => setDetails(e.target.value)} className={inputClassName} /></Field>}
+    <div><h2 className="mb-3 font-bold">ניסיון נוסף</h2><ChoicePills options={EXPERIENCES} selected={types} onToggle={(v) => setTypes(toggleValue(types, v))} /></div>
+    <Field label="קורסים או תעודות" htmlFor="courses"><textarea id="courses" rows={3} value={courses} onChange={(e) => setCourses(e.target.value)} className={inputClassName} /></Field>
+    <Field label="תחומי חוזקה" htmlFor="strengths"><input id="strengths" value={strengths} onChange={(e) => setStrengths(e.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
+    <Field label="מה חשוב לי בקשר עם החניך" htmlFor="values"><textarea id="values" required rows={4} value={values} onChange={(e) => setValues(e.target.value)} className={inputClassName} /></Field>
+    <Field label="מדוע אני רוצה להיות חונך" htmlFor="motivation"><textarea id="motivation" required rows={4} value={motivation} onChange={(e) => setMotivation(e.target.value)} className={inputClassName} /></Field>
+    <div><h2 className="mb-3 font-bold">סוגי חונכות</h2><ChoicePills options={MENTORING_TYPES} selected={mentoringTypes} onToggle={(v) => setMentoringTypes(toggleValue(mentoringTypes, v))} /></div>
+    <SavePanel saving={saving} message={message} label="שמירת ניסיון ויכולות" />
+  </form></MentorPageShell>;
+}

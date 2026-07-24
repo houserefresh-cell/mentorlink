@@ -1,0 +1,3 @@
+-- Intentionally left empty.
+-- Phone Auth, SMS and OTP development was cancelled before this migration ran.
+-- The parent-contact protections are implemented independently in migration 005.
