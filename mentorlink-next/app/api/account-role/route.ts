@@ -1,13 +1,10 @@
 import type { NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { hasTrustedOrigin } from "@/lib/request-security";
+import { buildAccountRoleRpcArguments } from "@/lib/account-role-policy";
 
 export const runtime = "nodejs";
-
-type AccountRoleRequest = {
-  role?: "mentor" | "parent";
-  ownerType?: "mentor" | "parent_guardian";
-};
 
 export async function POST(request: NextRequest) {
   if (!hasTrustedOrigin(request)) {
@@ -21,20 +18,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "יש להתחבר מחדש." }, { status: 401 });
   }
 
-  let body: AccountRoleRequest;
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "בקשה לא תקינה." }, { status: 400 });
-  }
-
-  if (
-    !body.role ||
-    !["mentor", "parent"].includes(body.role) ||
-    (body.ownerType &&
-      !["mentor", "parent_guardian"].includes(body.ownerType))
-  ) {
-    return Response.json({ error: "סוג החשבון אינו תקין." }, { status: 400 });
   }
 
   const admin = createSupabaseAdmin();
@@ -45,11 +33,38 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "יש להתחבר מחדש." }, { status: 401 });
   }
 
-  const { error: assignmentError } = await admin.rpc("assign_account_role", {
-    requested_user_id: auth.user.id,
-    requested_role: body.role,
-    requested_owner_type: body.ownerType ?? "mentor",
+  let rpcArguments: ReturnType<typeof buildAccountRoleRpcArguments>;
+  try {
+    rpcArguments = buildAccountRoleRpcArguments(auth.user.id, body);
+  } catch (validationError) {
+    console.error("Invalid account role request", validationError);
+    return Response.json({ error: "סוג החשבון אינו תקין." }, { status: 400 });
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Supabase user-scoped server client is not configured");
+    return Response.json(
+      { error: "לא ניתן לשמור את סוג החשבון." },
+      { status: 500 },
+    );
+  }
+
+  const authenticatedClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
   });
+
+  const { error: assignmentError } = await authenticatedClient.rpc(
+    "assign_account_role",
+    rpcArguments,
+  );
   if (assignmentError) {
     console.error("Account role assignment failed", assignmentError);
     return Response.json(
@@ -67,9 +82,9 @@ export async function POST(request: NextRequest) {
     {
       user_metadata: {
         ...auth.user.user_metadata,
-        role: body.role,
-        ...(body.role === "mentor"
-          ? { account_owner_type: body.ownerType ?? "mentor" }
+        role: rpcArguments.requested_role,
+        ...(rpcArguments.requested_role === "mentor"
+          ? { account_owner_type: rpcArguments.requested_owner_type }
           : {}),
       },
     },
@@ -78,5 +93,5 @@ export async function POST(request: NextRequest) {
     console.error("Account role display metadata update failed", metadataError);
   }
 
-  return Response.json({ role: body.role });
+  return Response.json({ role: rpcArguments.requested_role });
 }
