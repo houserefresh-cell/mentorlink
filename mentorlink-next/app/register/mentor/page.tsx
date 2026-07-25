@@ -1,12 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import { getDashboardPath } from "../../../lib/auth-routing";
 
 type OwnerType = "mentor" | "parent_guardian";
 
 export default function MentorRegisterPage() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -14,6 +17,20 @@ export default function MentorRegisterPage() {
   const [ownerType, setOwnerType] = useState<OwnerType>("mentor");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    async function protectRegistration() {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user) return;
+
+      const destination = await getDashboardPath(data.user.id);
+      if (destination !== "/register/mentor") {
+        router.replace(destination);
+      }
+    }
+
+    void protectRegistration();
+  }, [router]);
 
   const metadata = {
     first_name: firstName.trim(),

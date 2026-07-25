@@ -1,12 +1,11 @@
 import { supabase } from "./supabase";
+import { resolveDashboardPath } from "./dashboard-route";
+
+export { resolveDashboardPath } from "./dashboard-route";
 
 export async function getDashboardPath(userId: string) {
-  const [ownership, mentorProfile] = await Promise.all([
-    supabase
-      .from("mentor_account_ownership")
-      .select("user_id")
-      .eq("user_id", userId)
-      .maybeSingle(),
+  const [authUser, mentorProfile] = await Promise.all([
+    supabase.auth.getUser(),
     supabase
       .from("mentor_profiles")
       .select("user_id, first_name, birth_date, bio")
@@ -14,18 +13,25 @@ export async function getDashboardPath(userId: string) {
       .maybeSingle(),
   ]);
 
-  if (ownership.error) {
-    console.error("Ownership lookup failed", ownership.error);
+  if (authUser.error) {
+    console.error("Authenticated user lookup failed", authUser.error);
   }
   if (mentorProfile.error) {
     console.error("Mentor profile lookup failed", mentorProfile.error);
   }
 
-  if (ownership.data) {
-    const profile = mentorProfile.data as { first_name?: string | null; birth_date?: string | null; bio?: string | null } | null;
-    const hasStarterProfile = Boolean(profile?.first_name && profile?.birth_date && profile?.bio);
-    return hasStarterProfile ? "/dashboard/mentor" : "/dashboard/mentor/onboarding";
-  }
+  const user =
+    authUser.data.user?.id === userId ? authUser.data.user : null;
+  const profile = mentorProfile.data as {
+    first_name?: string | null;
+    birth_date?: string | null;
+    bio?: string | null;
+  } | null;
 
-  return "/dashboard/parent";
+  return resolveDashboardPath({
+    role: user?.user_metadata?.role,
+    hasCompletedMentorProfile: Boolean(
+      profile?.first_name && profile?.birth_date && profile?.bio,
+    ),
+  });
 }

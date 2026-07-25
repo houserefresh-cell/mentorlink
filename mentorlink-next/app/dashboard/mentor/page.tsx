@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getAgeFromBirthDate } from "../../../lib/mentor-age";
+import { getDashboardPath } from "../../../lib/auth-routing";
 
 const CARDS = [
   { key: "onboarding", title: "מסע הרשמה", description: "השלמת הפרופיל בשלבים קצרים ונוחים למובייל.", href: "/dashboard/mentor/onboarding" },
@@ -35,6 +36,10 @@ export default function MentorDashboardPage() {
     async function load() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return router.replace("/login");
+      const dashboardPath = await getDashboardPath(auth.user.id);
+      if (dashboardPath !== "/dashboard/mentor") {
+        return router.replace(dashboardPath);
+      }
       setEmail(auth.user.email ?? auth.user.phone ?? "");
       setFirstName(auth.user.user_metadata?.first_name ?? "");
       const id = auth.user.id;
