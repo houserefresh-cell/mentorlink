@@ -4,12 +4,10 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getDashboardPath } from "../../../lib/auth-routing";
-import { resolveDashboardPath } from "../../../lib/auth-routing-logic";
-import { persistAccountRole } from "../../../lib/account-role-client";
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<CallbackStatus text="משלים את אימות החשבון..." />}>
+    <Suspense fallback={<CallbackStatus text="משלים את ההתחברות עם Google..." />}>
       <AuthCallbackContent />
     </Suspense>
   );
@@ -35,25 +33,24 @@ function AuthCallbackContent() {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       const user = data.session?.user;
       if (error || !user) {
-        console.error("Authentication callback failed", error);
-        setErrorMessage("לא ניתן להשלים את אימות החשבון או ההתחברות.");
+        console.error("Google OAuth callback failed", error);
+        setErrorMessage("לא ניתן להשלים את ההתחברות עם Google.");
         return;
       }
 
       const flow = searchParams.get("flow");
       const isMentorRegistration = flow === "mentor_register";
       const isParentRegistration = flow === "parent_register";
-      const isLoginFlow = flow === "login";
 
       const [ownershipResult, mentorProfileResult] = await Promise.all([
         supabase
           .from("mentor_account_ownership")
-          .select("user_id, owner_type")
+          .select("user_id")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase
           .from("mentor_profiles")
-          .select("user_id, first_name, birth_date, bio")
+          .select("user_id")
           .eq("user_id", user.id)
           .maybeSingle(),
       ]);
@@ -67,22 +64,30 @@ function AuthCallbackContent() {
         return;
       }
 
-      const hasMentorOwnership =
-        ownershipResult.data?.owner_type === "mentor";
-      const hasStarterMentorProfile = Boolean(
-        mentorProfileResult.data?.first_name &&
-          mentorProfileResult.data?.birth_date &&
-          mentorProfileResult.data?.bio,
+      const hasMentorAccount = Boolean(
+        ownershipResult.data || mentorProfileResult.data,
       );
-      const existingRoleHint = user.user_metadata?.role;
+      const createdAt = Date.parse(user.created_at);
+      const lastSignInAt = Date.parse(user.last_sign_in_at ?? "");
+      const isNewOAuthAccount =
+        Number.isFinite(createdAt) &&
+        Number.isFinite(lastSignInAt) &&
+        Math.abs(lastSignInAt - createdAt) < 10_000;
+      const hasExistingParentAccount = !hasMentorAccount && !isNewOAuthAccount;
+
+      if (
+        (isMentorRegistration && hasExistingParentAccount) ||
+        (isParentRegistration && hasMentorAccount)
+      ) {
+        setErrorMessage(
+          "כתובת המייל כבר משויכת לחשבון מסוג אחר. יש להתחבר באמצעות סוג החשבון הקיים.",
+        );
+        return;
+      }
 
       if (isMentorRegistration) {
         const ownerType =
           searchParams.get("owner_type") === "parent_guardian"
-            ? "parent_guardian"
-            : "mentor";
-        const accountRole =
-          ownerType === "parent_guardian"
             ? "parent_guardian"
             : "mentor";
         const firstName =
@@ -95,34 +100,29 @@ function AuthCallbackContent() {
           user.user_metadata?.last_name ||
           "";
 
-        try {
-          await persistAccountRole(accountRole, true);
-        } catch (roleError) {
-          console.error("Mentor account role assignment failed", roleError);
-          setErrorMessage("לא ניתן להשלים את הגדרת חשבון החונך.");
-          return;
-        }
-
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             first_name: firstName,
             last_name: lastName,
-            role: accountRole,
+            role: "mentor",
             account_owner_type: ownerType,
           },
         });
         if (metadataError) {
           console.error("Google metadata update failed", metadataError);
         }
-      } else if (isParentRegistration) {
-        try {
-          await persistAccountRole("parent_guardian");
-        } catch (roleError) {
-          console.error("Parent account role assignment failed", roleError);
-          setErrorMessage("לא ניתן להשלים את הגדרת חשבון ההורה.");
-          return;
-        }
 
+        if (!ownershipResult.data) {
+          const { error: ownershipError } = await supabase
+            .from("mentor_account_ownership")
+            .insert({ user_id: user.id, owner_type: ownerType });
+          if (ownershipError && ownershipError.code !== "23505") {
+            console.error("Account ownership creation failed", ownershipError);
+            setErrorMessage("לא ניתן להשלים את הגדרת חשבון החונך.");
+            return;
+          }
+        }
+      } else if (isParentRegistration) {
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             first_name:
@@ -133,7 +133,7 @@ function AuthCallbackContent() {
               searchParams.get("last_name")?.trim() ||
               user.user_metadata?.last_name ||
               "",
-            role: "parent_guardian",
+            role: "parent",
           },
         });
         if (metadataError) {
@@ -141,19 +141,11 @@ function AuthCallbackContent() {
         }
       }
 
-      const dashboardPath = isLoginFlow ||
-        (!isMentorRegistration && !isParentRegistration)
-        ? await getDashboardPath(user.id)
-        : resolveDashboardPath({
-            registrationRole: isMentorRegistration
-              ? "mentor"
-              : isParentRegistration
-                ? "parent_guardian"
-                : null,
-            persistedRoleHint: existingRoleHint,
-            hasMentorOwnership,
-            hasStarterMentorProfile,
-          });
+      const dashboardPath = isMentorRegistration
+        ? "/dashboard/mentor/onboarding"
+        : isParentRegistration
+          ? "/dashboard/parent"
+          : await getDashboardPath(user.id);
       router.replace(dashboardPath);
     }
 
@@ -162,7 +154,7 @@ function AuthCallbackContent() {
 
   return (
     <CallbackStatus
-      text={errorMessage || "משלים את אימות החשבון..."}
+      text={errorMessage || "משלים את ההתחברות עם Google..."}
       error={Boolean(errorMessage)}
     />
   );
