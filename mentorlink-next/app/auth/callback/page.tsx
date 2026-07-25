@@ -4,10 +4,11 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getDashboardPath } from "../../../lib/auth-routing";
+import { resolveDashboardPath } from "../../../lib/auth-routing-logic";
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<CallbackStatus text="משלים את ההתחברות עם Google..." />}>
+    <Suspense fallback={<CallbackStatus text="משלים את אימות החשבון..." />}>
       <AuthCallbackContent />
     </Suspense>
   );
@@ -33,14 +34,15 @@ function AuthCallbackContent() {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       const user = data.session?.user;
       if (error || !user) {
-        console.error("Google OAuth callback failed", error);
-        setErrorMessage("לא ניתן להשלים את ההתחברות עם Google.");
+        console.error("Authentication callback failed", error);
+        setErrorMessage("לא ניתן להשלים את אימות החשבון או ההתחברות.");
         return;
       }
 
       const flow = searchParams.get("flow");
       const isMentorRegistration = flow === "mentor_register";
       const isParentRegistration = flow === "parent_register";
+      const isLoginFlow = flow === "login";
 
       const [ownershipResult, mentorProfileResult] = await Promise.all([
         supabase
@@ -50,7 +52,7 @@ function AuthCallbackContent() {
           .maybeSingle(),
         supabase
           .from("mentor_profiles")
-          .select("user_id")
+          .select("user_id, first_name, birth_date, bio")
           .eq("user_id", user.id)
           .maybeSingle(),
       ]);
@@ -64,20 +66,20 @@ function AuthCallbackContent() {
         return;
       }
 
-      const hasMentorAccount = Boolean(
-        ownershipResult.data || mentorProfileResult.data,
+      const hasMentorOwnership = Boolean(ownershipResult.data);
+      const hasMentorProfile = Boolean(mentorProfileResult.data);
+      const hasStarterMentorProfile = Boolean(
+        mentorProfileResult.data?.first_name &&
+          mentorProfileResult.data?.birth_date &&
+          mentorProfileResult.data?.bio,
       );
-      const createdAt = Date.parse(user.created_at);
-      const lastSignInAt = Date.parse(user.last_sign_in_at ?? "");
-      const isNewOAuthAccount =
-        Number.isFinite(createdAt) &&
-        Number.isFinite(lastSignInAt) &&
-        Math.abs(lastSignInAt - createdAt) < 10_000;
-      const hasExistingParentAccount = !hasMentorAccount && !isNewOAuthAccount;
+      const existingRoleHint = user.user_metadata?.role;
 
       if (
-        (isMentorRegistration && hasExistingParentAccount) ||
-        (isParentRegistration && hasMentorAccount)
+        (isMentorRegistration &&
+          existingRoleHint === "parent" &&
+          !hasMentorOwnership) ||
+        (isParentRegistration && (hasMentorOwnership || hasMentorProfile))
       ) {
         setErrorMessage(
           "כתובת המייל כבר משויכת לחשבון מסוג אחר. יש להתחבר באמצעות סוג החשבון הקיים.",
@@ -141,11 +143,18 @@ function AuthCallbackContent() {
         }
       }
 
-      const dashboardPath = isMentorRegistration
-        ? "/dashboard/mentor/onboarding"
-        : isParentRegistration
-          ? "/dashboard/parent"
-          : await getDashboardPath(user.id);
+      const dashboardPath = isLoginFlow
+        ? await getDashboardPath(user.id)
+        : resolveDashboardPath({
+            registrationRole: isMentorRegistration
+              ? "mentor"
+              : isParentRegistration
+                ? "parent"
+                : null,
+            persistedRoleHint: existingRoleHint,
+            hasMentorOwnership,
+            hasStarterMentorProfile,
+          });
       router.replace(dashboardPath);
     }
 
@@ -154,7 +163,7 @@ function AuthCallbackContent() {
 
   return (
     <CallbackStatus
-      text={errorMessage || "משלים את ההתחברות עם Google..."}
+      text={errorMessage || "משלים את אימות החשבון..."}
       error={Boolean(errorMessage)}
     />
   );
