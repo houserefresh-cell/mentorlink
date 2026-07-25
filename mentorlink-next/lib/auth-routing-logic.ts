@@ -1,8 +1,8 @@
-export type AccountRole = "mentor" | "parent";
+export type AccountRole = "mentor" | "parent_guardian";
 
 export type DashboardResolution = {
   registrationRole?: AccountRole | null;
-  savedAccountRole?: AccountRole | null;
+  savedAccountRoles?: readonly AccountRole[] | null;
   persistedRoleHint?: string | null;
   hasMentorOwnership?: boolean | null;
   hasStarterMentorProfile?: boolean | null;
@@ -11,7 +11,7 @@ export type DashboardResolution = {
 export function resolveDashboardPath(resolution: DashboardResolution) {
   if (
     resolution.registrationRole === "mentor" ||
-    resolution.savedAccountRole === "mentor" ||
+    resolution.savedAccountRoles?.includes("mentor") ||
     resolution.hasMentorOwnership
   ) {
     return resolution.hasStarterMentorProfile
@@ -20,8 +20,9 @@ export function resolveDashboardPath(resolution: DashboardResolution) {
   }
 
   if (
-    resolution.registrationRole === "parent" ||
-    resolution.savedAccountRole === "parent" ||
+    resolution.registrationRole === "parent_guardian" ||
+    resolution.savedAccountRoles?.includes("parent_guardian") ||
+    resolution.persistedRoleHint === "parent_guardian" ||
     resolution.persistedRoleHint === "parent"
   ) {
     return "/dashboard/parent";

@@ -48,7 +48,7 @@ function AuthCallbackContent() {
       const [ownershipResult, mentorProfileResult] = await Promise.all([
         supabase
           .from("mentor_account_ownership")
-          .select("user_id")
+          .select("user_id, owner_type")
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase
@@ -67,8 +67,8 @@ function AuthCallbackContent() {
         return;
       }
 
-      const hasMentorOwnership = Boolean(ownershipResult.data);
-      const hasMentorProfile = Boolean(mentorProfileResult.data);
+      const hasMentorOwnership =
+        ownershipResult.data?.owner_type === "mentor";
       const hasStarterMentorProfile = Boolean(
         mentorProfileResult.data?.first_name &&
           mentorProfileResult.data?.birth_date &&
@@ -76,21 +76,13 @@ function AuthCallbackContent() {
       );
       const existingRoleHint = user.user_metadata?.role;
 
-      if (
-        (isMentorRegistration &&
-          existingRoleHint === "parent" &&
-          !hasMentorOwnership) ||
-        (isParentRegistration && (hasMentorOwnership || hasMentorProfile))
-      ) {
-        setErrorMessage(
-          "כתובת המייל כבר משויכת לחשבון מסוג אחר. יש להתחבר באמצעות סוג החשבון הקיים.",
-        );
-        return;
-      }
-
       if (isMentorRegistration) {
         const ownerType =
           searchParams.get("owner_type") === "parent_guardian"
+            ? "parent_guardian"
+            : "mentor";
+        const accountRole =
+          ownerType === "parent_guardian"
             ? "parent_guardian"
             : "mentor";
         const firstName =
@@ -104,7 +96,7 @@ function AuthCallbackContent() {
           "";
 
         try {
-          await persistAccountRole("mentor", ownerType);
+          await persistAccountRole(accountRole, true);
         } catch (roleError) {
           console.error("Mentor account role assignment failed", roleError);
           setErrorMessage("לא ניתן להשלים את הגדרת חשבון החונך.");
@@ -115,7 +107,7 @@ function AuthCallbackContent() {
           data: {
             first_name: firstName,
             last_name: lastName,
-            role: "mentor",
+            role: accountRole,
             account_owner_type: ownerType,
           },
         });
@@ -124,7 +116,7 @@ function AuthCallbackContent() {
         }
       } else if (isParentRegistration) {
         try {
-          await persistAccountRole("parent");
+          await persistAccountRole("parent_guardian");
         } catch (roleError) {
           console.error("Parent account role assignment failed", roleError);
           setErrorMessage("לא ניתן להשלים את הגדרת חשבון ההורה.");
@@ -141,7 +133,7 @@ function AuthCallbackContent() {
               searchParams.get("last_name")?.trim() ||
               user.user_metadata?.last_name ||
               "",
-            role: "parent",
+            role: "parent_guardian",
           },
         });
         if (metadataError) {
@@ -156,7 +148,7 @@ function AuthCallbackContent() {
             registrationRole: isMentorRegistration
               ? "mentor"
               : isParentRegistration
-                ? "parent"
+                ? "parent_guardian"
                 : null,
             persistedRoleHint: existingRoleHint,
             hasMentorOwnership,

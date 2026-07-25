@@ -9,9 +9,9 @@ import { persistAccountRole } from "../../lib/account-role-client";
 export default function SetupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [savingRole, setSavingRole] = useState<"mentor" | "parent" | null>(
-    null,
-  );
+  const [savingRole, setSavingRole] = useState<
+    "mentor" | "parent_guardian" | null
+  >(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -34,12 +34,15 @@ export default function SetupPage() {
     void redirectToKnownDashboard();
   }, [router]);
 
-  async function chooseRole(role: "mentor" | "parent") {
+  async function chooseRole(role: "mentor" | "parent_guardian") {
     setSavingRole(role);
     setError("");
 
     try {
-      const destination = await persistAccountRole(role);
+      const destination = await persistAccountRole(
+        role,
+        role === "mentor",
+      );
       router.replace(destination);
     } catch (selectionError) {
       console.error("Account role selection failed", selectionError);
@@ -77,10 +80,12 @@ export default function SetupPage() {
             <button
               type="button"
               disabled={savingRole !== null}
-              onClick={() => void chooseRole("parent")}
+              onClick={() => void chooseRole("parent_guardian")}
               className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700 disabled:opacity-60"
             >
-              {savingRole === "parent" ? "שומר..." : "אני הורה שמחפש חונך"}
+              {savingRole === "parent_guardian"
+                ? "שומר..."
+                : "אני הורה שמחפש חונך"}
             </button>
           </div>
         )}

@@ -1,6 +1,6 @@
 export type AccountRoleRequest = {
-  role: "mentor" | "parent";
-  ownerType: "mentor" | "parent_guardian";
+  role: "mentor" | "parent_guardian";
+  managesMentorProfile: boolean;
 };
 
 export function buildAccountRoleRpcArguments(
@@ -22,24 +22,32 @@ export function buildAccountRoleRpcArguments(
 
   if (
     candidate.role !== "mentor" &&
-    candidate.role !== "parent"
+    candidate.role !== "parent_guardian"
   ) {
     throw new Error("INVALID_ACCOUNT_ROLE");
   }
 
   if (
-    candidate.ownerType !== undefined &&
-    candidate.ownerType !== "mentor" &&
-    candidate.ownerType !== "parent_guardian"
+    candidate.managesMentorProfile !== undefined &&
+    typeof candidate.managesMentorProfile !== "boolean"
   ) {
-    throw new Error("INVALID_ACCOUNT_OWNER_TYPE");
+    throw new Error("INVALID_MENTOR_PROFILE_FLAG");
   }
 
   return {
     requested_role: candidate.role,
-    requested_owner_type: candidate.ownerType ?? "mentor",
+    requested_manages_mentor_profile:
+      candidate.managesMentorProfile === true,
   } satisfies {
     requested_role: AccountRoleRequest["role"];
-    requested_owner_type: AccountRoleRequest["ownerType"];
+    requested_manages_mentor_profile:
+      AccountRoleRequest["managesMentorProfile"];
   };
+}
+
+export function addAccountRole(
+  existingRoles: readonly AccountRoleRequest["role"][],
+  requestedRole: AccountRoleRequest["role"],
+) {
+  return [...new Set([...existingRoles, requestedRole])];
 }

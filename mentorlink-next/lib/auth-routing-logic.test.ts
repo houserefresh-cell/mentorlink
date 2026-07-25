@@ -14,7 +14,7 @@ test("routes parent accounts to the parent dashboard", () => {
 
 test("routes explicit parent registration to the parent dashboard", () => {
   assert.equal(
-    resolveDashboardPath({ registrationRole: "parent" }),
+    resolveDashboardPath({ registrationRole: "parent_guardian" }),
     "/dashboard/parent",
   );
 });
@@ -30,7 +30,7 @@ test("authenticated unresolved mentor choice goes directly to existing onboardin
 
 test("authenticated parent choice goes directly to the parent dashboard", () => {
   assert.equal(
-    getRoleSelectionDestination("parent"),
+    getRoleSelectionDestination("parent_guardian"),
     "/dashboard/parent",
   );
 });
@@ -58,7 +58,7 @@ test("routes mentor accounts without starter profile to onboarding", () => {
 test("saved mentor role skips setup on later login", () => {
   assert.equal(
     resolveDashboardPath({
-      savedAccountRole: "mentor",
+      savedAccountRoles: ["mentor"],
       hasStarterMentorProfile: false,
     }),
     "/dashboard/mentor/onboarding",
@@ -67,7 +67,27 @@ test("saved mentor role skips setup on later login", () => {
 
 test("saved parent role skips setup on later login", () => {
   assert.equal(
-    resolveDashboardPath({ savedAccountRole: "parent" }),
+    resolveDashboardPath({ savedAccountRoles: ["parent_guardian"] }),
+    "/dashboard/parent",
+  );
+});
+
+test("dual-role account keeps both roles and can enter mentor onboarding", () => {
+  assert.equal(
+    resolveDashboardPath({
+      savedAccountRoles: ["mentor", "parent_guardian"],
+      hasStarterMentorProfile: false,
+    }),
+    "/dashboard/mentor/onboarding",
+  );
+});
+
+test("parent-managed minor ownership is not classified as mentor identity", () => {
+  assert.equal(
+    resolveDashboardPath({
+      savedAccountRoles: ["parent_guardian"],
+      hasMentorOwnership: false,
+    }),
     "/dashboard/parent",
   );
 });
@@ -107,5 +127,8 @@ test("database mentor ownership takes precedence over a parent metadata hint", (
 test("falls back to the setup page for unresolved users", () => {
   assert.equal(resolveDashboardPath({}), "/setup");
   assert.notEqual(getRoleSelectionDestination("mentor"), "/setup");
-  assert.notEqual(getRoleSelectionDestination("parent"), "/setup");
+  assert.notEqual(
+    getRoleSelectionDestination("parent_guardian"),
+    "/setup",
+  );
 });

@@ -68,14 +68,25 @@ export async function POST(request: NextRequest) {
   if (assignmentError) {
     console.error("Account role assignment failed", assignmentError);
     return Response.json(
-      {
-        error: assignmentError.message.includes("different role")
-          ? "כתובת המייל כבר משויכת לחשבון מסוג אחר."
-          : "לא ניתן לשמור את סוג החשבון.",
-      },
+      { error: "לא ניתן לשמור את סוג החשבון." },
       { status: 409 },
     );
   }
+
+  const existingMetadataRoles = Array.isArray(
+    auth.user.user_metadata?.account_roles,
+  )
+    ? auth.user.user_metadata.account_roles.filter(
+        (role: unknown) =>
+          role === "mentor" || role === "parent_guardian",
+      )
+    : [];
+  const metadataRoles = [
+    ...new Set([
+      ...existingMetadataRoles,
+      rpcArguments.requested_role,
+    ]),
+  ];
 
   const { error: metadataError } = await admin.auth.admin.updateUserById(
     auth.user.id,
@@ -83,8 +94,9 @@ export async function POST(request: NextRequest) {
       user_metadata: {
         ...auth.user.user_metadata,
         role: rpcArguments.requested_role,
-        ...(rpcArguments.requested_role === "mentor"
-          ? { account_owner_type: rpcArguments.requested_owner_type }
+        account_roles: metadataRoles,
+        ...(rpcArguments.requested_manages_mentor_profile
+          ? { account_owner_type: rpcArguments.requested_role }
           : {}),
       },
     },

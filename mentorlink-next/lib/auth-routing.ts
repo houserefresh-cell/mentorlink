@@ -6,11 +6,10 @@ export async function getDashboardPath(userId: string) {
     supabase
       .from("account_roles")
       .select("role")
-      .eq("user_id", userId)
-      .maybeSingle(),
+      .eq("user_id", userId),
     supabase
       .from("mentor_account_ownership")
-      .select("user_id")
+      .select("user_id, owner_type")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -35,15 +34,17 @@ export async function getDashboardPath(userId: string) {
   }
 
   const userRole = authUser.data?.user?.user_metadata?.role ?? null;
-  const hasMentorOwnership = Boolean(ownership.data);
+  const hasMentorOwnership = ownership.data?.owner_type === "mentor";
   const profile = mentorProfile.data as { first_name?: string | null; birth_date?: string | null; bio?: string | null } | null;
   const hasStarterProfile = Boolean(profile?.first_name && profile?.birth_date && profile?.bio);
 
   return resolveDashboardPath({
-    savedAccountRole:
-      accountRole.data?.role === "mentor" || accountRole.data?.role === "parent"
-        ? accountRole.data.role
-        : null,
+    savedAccountRoles: (accountRole.data ?? [])
+      .map(({ role }) => role)
+      .filter(
+        (role): role is "mentor" | "parent_guardian" =>
+          role === "mentor" || role === "parent_guardian",
+      ),
     persistedRoleHint: userRole,
     hasMentorOwnership,
     hasStarterMentorProfile: hasStarterProfile,

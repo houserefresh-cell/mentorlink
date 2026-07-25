@@ -6,7 +6,7 @@ import {
 
 export async function persistAccountRole(
   role: AccountRole,
-  ownerType: "mentor" | "parent_guardian" = "mentor",
+  managesMentorProfile = false,
 ) {
   const { data, error } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
@@ -21,7 +21,7 @@ export async function persistAccountRole(
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ role, ownerType }),
+    body: JSON.stringify({ role, managesMentorProfile }),
   });
   const result = (await response.json()) as { error?: string };
 
