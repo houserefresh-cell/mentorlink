@@ -4,7 +4,8 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
-import { getDashboardPath } from "../../../lib/auth-routing";
+import MentorOnboardingPage from "../../dashboard/mentor/onboarding/page";
+import { resolveMentorRegistrationView } from "../../../lib/mentor-register-view";
 
 type OwnerType = "mentor" | "parent_guardian";
 
@@ -17,16 +18,37 @@ export default function MentorRegisterPage() {
   const [ownerType, setOwnerType] = useState<OwnerType>("mentor");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<"loading" | "signup" | "onboarding">(
+    "loading",
+  );
 
   useEffect(() => {
     async function protectRegistration() {
       const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
-
-      const destination = await getDashboardPath(data.user.id);
-      if (destination !== "/register/mentor") {
-        router.replace(destination);
+      if (!data.user) {
+        setView("signup");
+        return;
       }
+
+      const { data: profile } = await supabase
+        .from("mentor_profiles")
+        .select("first_name, birth_date, bio")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      const resolution = resolveMentorRegistrationView({
+        isAuthenticated: true,
+        role: data.user.user_metadata?.role,
+        hasCompletedMentorProfile: Boolean(
+          profile?.first_name && profile?.birth_date && profile?.bio,
+        ),
+      });
+
+      if (resolution.view === "redirect") {
+        router.replace(resolution.destination);
+        return;
+      }
+
+      setView(resolution.view);
     }
 
     void protectRegistration();
@@ -80,6 +102,21 @@ export default function MentorRegisterPage() {
       setMessage(`שגיאה: ${error.message}`);
       setLoading(false);
     }
+  }
+
+  if (view === "loading") {
+    return (
+      <main
+        dir="rtl"
+        className="flex min-h-screen items-center justify-center bg-slate-50"
+      >
+        <p className="text-lg font-bold text-slate-600">טוען...</p>
+      </main>
+    );
+  }
+
+  if (view === "onboarding") {
+    return <MentorOnboardingPage />;
   }
 
   return (
