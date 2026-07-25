@@ -2,7 +2,12 @@ import { supabase } from "./supabase";
 import { resolveDashboardPath } from "./auth-routing-logic";
 
 export async function getDashboardPath(userId: string) {
-  const [ownership, mentorProfile, authUser] = await Promise.all([
+  const [accountRole, ownership, mentorProfile, authUser] = await Promise.all([
+    supabase
+      .from("account_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .maybeSingle(),
     supabase
       .from("mentor_account_ownership")
       .select("user_id")
@@ -16,6 +21,9 @@ export async function getDashboardPath(userId: string) {
     supabase.auth.getUser(),
   ]);
 
+  if (accountRole.error) {
+    console.error("Account role lookup failed", accountRole.error);
+  }
   if (ownership.error) {
     console.error("Ownership lookup failed", ownership.error);
   }
@@ -32,6 +40,10 @@ export async function getDashboardPath(userId: string) {
   const hasStarterProfile = Boolean(profile?.first_name && profile?.birth_date && profile?.bio);
 
   return resolveDashboardPath({
+    savedAccountRole:
+      accountRole.data?.role === "mentor" || accountRole.data?.role === "parent"
+        ? accountRole.data.role
+        : null,
     persistedRoleHint: userRole,
     hasMentorOwnership,
     hasStarterMentorProfile: hasStarterProfile,

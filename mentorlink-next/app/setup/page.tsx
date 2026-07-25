@@ -1,14 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { getDashboardPath } from "../../lib/auth-routing";
+import { persistAccountRole } from "../../lib/account-role-client";
 
 export default function SetupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [savingRole, setSavingRole] = useState<"mentor" | "parent" | null>(
+    null,
+  );
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function redirectToKnownDashboard() {
@@ -30,6 +34,25 @@ export default function SetupPage() {
     void redirectToKnownDashboard();
   }, [router]);
 
+  async function chooseRole(role: "mentor" | "parent") {
+    setSavingRole(role);
+    setError("");
+
+    try {
+      const destination = await persistAccountRole(role);
+      router.replace(destination);
+    } catch (selectionError) {
+      console.error("Account role selection failed", selectionError);
+      setError(
+        selectionError instanceof Error &&
+          selectionError.message === "AUTH_REQUIRED"
+          ? "החיבור לחשבון פג. יש להתחבר מחדש."
+          : "לא ניתן לשמור את סוג החשבון. נסו שוב.",
+      );
+      setSavingRole(null);
+    }
+  }
+
   return (
     <main dir="rtl" className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
       <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl">
@@ -41,14 +64,31 @@ export default function SetupPage() {
         {loading ? (
           <p className="mt-6 font-bold text-slate-700">מכין את הכיוון המתאים…</p>
         ) : null}
-        <div className="mt-8 flex justify-center gap-3">
-          <Link href="/login" className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">
-            חזרה להתחברות
-          </Link>
-          <Link href="/register" className="rounded-xl bg-blue-600 px-4 py-3 font-bold text-white">
-            בחירת סוג חשבון
-          </Link>
-        </div>
+        {!loading && (
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              disabled={savingRole !== null}
+              onClick={() => void chooseRole("mentor")}
+              className="rounded-xl bg-blue-600 px-4 py-3 font-bold text-white disabled:opacity-60"
+            >
+              {savingRole === "mentor" ? "שומר..." : "אני רוצה להיות חונך/ת"}
+            </button>
+            <button
+              type="button"
+              disabled={savingRole !== null}
+              onClick={() => void chooseRole("parent")}
+              className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700 disabled:opacity-60"
+            >
+              {savingRole === "parent" ? "שומר..." : "אני הורה שמחפש חונך"}
+            </button>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="mt-5 rounded-xl bg-red-50 p-4 text-red-700">
+            {error}
+          </p>
+        )}
       </div>
     </main>
   );

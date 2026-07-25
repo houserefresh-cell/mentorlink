@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getDashboardPath } from "../../../lib/auth-routing";
 import { resolveDashboardPath } from "../../../lib/auth-routing-logic";
+import { persistAccountRole } from "../../../lib/account-role-client";
 
 export default function AuthCallbackPage() {
   return (
@@ -102,6 +103,14 @@ function AuthCallbackContent() {
           user.user_metadata?.last_name ||
           "";
 
+        try {
+          await persistAccountRole("mentor", ownerType);
+        } catch (roleError) {
+          console.error("Mentor account role assignment failed", roleError);
+          setErrorMessage("לא ניתן להשלים את הגדרת חשבון החונך.");
+          return;
+        }
+
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             first_name: firstName,
@@ -113,18 +122,15 @@ function AuthCallbackContent() {
         if (metadataError) {
           console.error("Google metadata update failed", metadataError);
         }
-
-        if (!ownershipResult.data) {
-          const { error: ownershipError } = await supabase
-            .from("mentor_account_ownership")
-            .insert({ user_id: user.id, owner_type: ownerType });
-          if (ownershipError && ownershipError.code !== "23505") {
-            console.error("Account ownership creation failed", ownershipError);
-            setErrorMessage("לא ניתן להשלים את הגדרת חשבון החונך.");
-            return;
-          }
-        }
       } else if (isParentRegistration) {
+        try {
+          await persistAccountRole("parent");
+        } catch (roleError) {
+          console.error("Parent account role assignment failed", roleError);
+          setErrorMessage("לא ניתן להשלים את הגדרת חשבון ההורה.");
+          return;
+        }
+
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             first_name:
@@ -143,7 +149,8 @@ function AuthCallbackContent() {
         }
       }
 
-      const dashboardPath = isLoginFlow
+      const dashboardPath = isLoginFlow ||
+        (!isMentorRegistration && !isParentRegistration)
         ? await getDashboardPath(user.id)
         : resolveDashboardPath({
             registrationRole: isMentorRegistration
