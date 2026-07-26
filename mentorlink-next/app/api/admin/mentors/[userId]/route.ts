@@ -1,7 +1,8 @@
+import { adminApiError, adminApiSuccess } from "@/lib/admin-api";
 import { authorizeAdministrator } from "@/lib/admin-authorization";
 import { isUuid } from "@/lib/admin-authorization-core";
-import { adminApiError, adminApiSuccess } from "@/lib/admin-api";
 import { getPendingMentorDetail } from "@/lib/admin-mentor-data";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(
   request: Request,
@@ -19,7 +20,12 @@ export async function GET(
       );
     }
 
-    const mentor = await getPendingMentorDetail(userId, administrator.id);
+    const serviceRoleClient = createSupabaseAdmin();
+    const mentor = await getPendingMentorDetail(
+      userId,
+      administrator.id,
+      serviceRoleClient,
+    );
     if (!mentor) {
       return Response.json(
         { error: "Mentor review not found" },

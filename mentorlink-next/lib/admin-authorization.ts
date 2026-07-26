@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createSupabaseAdmin } from "./supabase-admin";
+import { createSupabaseServerAuth } from "./supabase-server-auth";
 import {
   getBearerToken,
   isConfiguredAdministrator,
@@ -31,7 +31,7 @@ export async function authorizeAdministrator(
     throw new AdminAuthorizationError("Administrator access is unavailable", 500);
   }
 
-  const { data, error } = await createSupabaseAdmin().auth.getUser(token);
+  const { data, error } = await createSupabaseServerAuth().auth.getUser(token);
   if (error || !data.user) {
     throw new AdminAuthorizationError("Authentication required", 401);
   }

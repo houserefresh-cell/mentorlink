@@ -4,6 +4,8 @@ import { excludeAdministrator } from "./admin-authorization-core";
 import { getAgeFromBirthDate } from "./mentor-age";
 import { createSupabaseAdmin } from "./supabase-admin";
 
+export type AdminReviewDataClient = ReturnType<typeof createSupabaseAdmin>;
+
 export type PendingMentorSummary = {
   userId: string;
   firstName: string | null;
@@ -45,8 +47,8 @@ function isMinor(birthDate: unknown) {
 
 export async function getPendingMentors(
   administratorUserId: string,
+  admin: AdminReviewDataClient,
 ): Promise<PendingMentorSummary[]> {
-  const admin = createSupabaseAdmin();
   const publicationsResult = await admin
     .from("mentor_publication")
     .select("user_id, submitted_at")
@@ -92,10 +94,9 @@ export async function getPendingMentors(
 export async function getPendingMentorDetail(
   userId: string,
   administratorUserId: string,
+  admin: AdminReviewDataClient,
 ): Promise<PendingMentorDetail | null> {
   if (userId === administratorUserId) return null;
-
-  const admin = createSupabaseAdmin();
   const publication = await admin
     .from("mentor_publication")
     .select("submitted_at")
