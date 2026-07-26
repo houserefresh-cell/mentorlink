@@ -17,6 +17,7 @@ type Summary = {
 
 type Detail = {
   userId: string;
+  status: "pending_review";
   submittedAt: string | null;
   profile: Record<string, unknown> | null;
   subjects: Array<{
@@ -210,75 +211,88 @@ function ListView({ mentors }: { mentors: Summary[] }) {
 }
 
 function DetailView({ mentor }: { mentor: Detail }) {
+  const [status, setStatus] = useState<"pending_review" | "approved" | "rejected">(mentor.status);
+  const [confirmation, setConfirmation] = useState<"approve" | "reject" | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  async function submitReview(action: "approve" | "reject") {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) { window.location.replace("/login"); return; }
+      const response = await fetch(`/api/admin/mentors/${mentor.userId}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(action === "approve" ? { action } : { action, reason }),
+      });
+      const body = (await response.json()) as { error?: string; review?: { status: "approved" | "rejected" } };
+      if (!response.ok || !body.review) throw new Error(body.error ?? "Unable to save the review");
+      setStatus(body.review.status);
+      setConfirmation(null);
+      setMessage({ type: "success", text: body.review.status === "approved" ? "The mentor application was approved. It has not been published." : "The mentor application was rejected." });
+    } catch (reviewError) {
+      setMessage({ type: "error", text: reviewError instanceof Error ? reviewError.message : "Unable to save the review" });
+    } finally { setBusy(false); }
+  }
+
   return (
     <div className="space-y-6">
-      <Link href="/dashboard/admin/mentors" className="font-bold text-blue-700">
-        ← Back to pending reviews
-      </Link>
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-        <p className="font-bold text-amber-900">Pending review</p>
-        <p className="mt-1 text-sm text-amber-800">
-          Submitted {formatDate(mentor.submittedAt)}
-        </p>
+      <Link href="/dashboard/admin/mentors" className="font-bold text-blue-700">← Back to pending reviews</Link>
+      <section className={`rounded-2xl border p-5 ${status === "pending_review" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <p className="font-bold">{status === "pending_review" ? "Pending review" : status === "approved" ? "Approved" : "Rejected"}</p>
+        <p className="mt-1 text-sm">Submitted {formatDate(mentor.submittedAt)}</p>
       </section>
-      <ReviewSection title="Personal profile">
-        <RecordFields value={mentor.profile} />
-      </ReviewSection>
-      <ReviewSection title="Mentoring subjects">
-        {mentor.subjects.length ? (
-          <div className="grid gap-3">
-            {mentor.subjects.map((subject) => (
-              <div key={subject.subjectId} className="rounded-xl bg-slate-50 p-4">
-                <p className="font-bold">
-                  {subject.customSubject || subject.subjectName || "Unnamed subject"}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  Age groups: {subject.ageGroups.join(", ") || "Not saved"}
-                </p>
+      {message ? <div className={`rounded-xl p-4 ${message.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`} role="status">{message.text}</div> : null}
+      {status === "pending_review" ? (
+        <ReviewSection title="Review decision">
+          {!confirmation ? (
+            <div className="flex flex-wrap gap-3">
+              <button type="button" disabled={busy} onClick={() => setConfirmation("approve")} className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50">Approve</button>
+              <button type="button" disabled={busy} onClick={() => setConfirmation("reject")} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:opacity-50">Reject</button>
+            </div>
+          ) : confirmation === "approve" ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="font-bold">Confirm approval?</p>
+              <p className="mt-1 text-sm text-slate-700">This records approval but does not publish the mentor publicly.</p>
+              <div className="mt-4 flex gap-3">
+                <button type="button" disabled={busy} onClick={() => void submitReview("approve")} className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "Approving…" : "Confirm approval"}</button>
+                <button type="button" disabled={busy} onClick={() => setConfirmation(null)} className="rounded-xl border border-slate-300 px-5 py-3 font-bold disabled:opacity-50">Cancel</button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyValue />
-        )}
+            </div>
+          ) : (
+            <form onSubmit={(event) => { event.preventDefault(); void submitReview("reject"); }} className="rounded-xl border border-red-200 bg-red-50 p-4">
+              <label className="block font-bold" htmlFor="rejection-reason">Rejection reason</label>
+              <textarea id="rejection-reason" required minLength={3} maxLength={1000} disabled={busy} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-32 w-full rounded-xl border border-slate-300 bg-white p-3" />
+              <p className="mt-1 text-sm text-slate-600">{reason.length}/1000 characters</p>
+              <div className="mt-4 flex gap-3">
+                <button type="submit" disabled={busy || reason.trim().length < 3} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "Rejecting…" : "Confirm rejection"}</button>
+                <button type="button" disabled={busy} onClick={() => setConfirmation(null)} className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold disabled:opacity-50">Cancel</button>
+              </div>
+            </form>
+          )}
+        </ReviewSection>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <p className="font-bold">This application has been reviewed.</p>
+          <Link href="/dashboard/admin/mentors" className="mt-3 inline-block font-bold text-blue-700">Return to the pending review queue</Link>
+        </div>
+      )}
+      <ReviewSection title="Personal profile"><RecordFields value={mentor.profile} /></ReviewSection>
+      <ReviewSection title="Mentoring subjects">
+        {mentor.subjects.length ? <div className="grid gap-3">{mentor.subjects.map((subject) => <div key={subject.subjectId} className="rounded-xl bg-slate-50 p-4"><p className="font-bold">{subject.customSubject || subject.subjectName || "Unnamed subject"}</p><p className="mt-1 text-sm text-slate-600">Age groups: {subject.ageGroups.join(", ") || "Not saved"}</p></div>)}</div> : <EmptyValue />}
       </ReviewSection>
-      <ReviewSection title="Availability">
-        <RecordFields value={mentor.availability} />
-      </ReviewSection>
-      <ReviewSection title="Locations and schools">
-        <RecordFields value={mentor.locations} />
-      </ReviewSection>
-      <ReviewSection title="Experience and mentoring approach">
-        <RecordFields value={mentor.experience} />
-      </ReviewSection>
-      <ReviewSection title="Matching preferences">
-        <RecordFields value={mentor.preferences} />
-      </ReviewSection>
-      <ReviewSection title="Profile photo">
-        {mentor.photoUrl ? (
-          <Image
-            src={mentor.photoUrl}
-            alt="Saved mentor profile"
-            width={192}
-            height={192}
-            unoptimized
-            className="h-48 w-48 rounded-2xl object-cover"
-          />
-        ) : (
-          <EmptyValue />
-        )}
-      </ReviewSection>
+      <ReviewSection title="Availability"><RecordFields value={mentor.availability} /></ReviewSection>
+      <ReviewSection title="Locations and schools"><RecordFields value={mentor.locations} /></ReviewSection>
+      <ReviewSection title="Experience and mentoring approach"><RecordFields value={mentor.experience} /></ReviewSection>
+      <ReviewSection title="Matching preferences"><RecordFields value={mentor.preferences} /></ReviewSection>
+      <ReviewSection title="Profile photo">{mentor.photoUrl ? <Image src={mentor.photoUrl} alt="Saved mentor profile" width={192} height={192} unoptimized className="h-48 w-48 rounded-2xl object-cover" /> : <EmptyValue />}</ReviewSection>
       <ReviewSection title="Parent consent">
-        <p className="mb-4 font-bold">
-          {mentor.isMinor === true
-            ? `Minor — consent status: ${String(mentor.parentConsent?.status ?? "missing")}`
-            : mentor.isMinor === false
-              ? "Adult — parent consent not required"
-              : "Age unavailable — consent requirement cannot be determined"}
-        </p>
-        {mentor.isMinor === true ? (
-          <RecordFields value={mentor.parentConsent} />
-        ) : null}
+        <p className="mb-4 font-bold">{mentor.isMinor === true ? `Minor — consent status: ${String(mentor.parentConsent?.status ?? "missing")}` : mentor.isMinor === false ? "Adult — parent consent not required" : "Age unavailable — consent requirement cannot be determined"}</p>
+        {mentor.isMinor === true ? <RecordFields value={mentor.parentConsent} /> : null}
       </ReviewSection>
     </div>
   );

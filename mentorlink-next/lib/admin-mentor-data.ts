@@ -1,6 +1,7 @@
 import "server-only";
 
 import { excludeAdministrator } from "./admin-authorization-core";
+import { isPendingQueueStatus } from "./admin-review-action-core";
 import { getAgeFromBirthDate } from "./mentor-age";
 import { createSupabaseAdmin } from "./supabase-admin";
 
@@ -18,6 +19,7 @@ export type PendingMentorSummary = {
 
 export type PendingMentorDetail = {
   userId: string;
+  status: "pending_review";
   submittedAt: string | null;
   profile: Record<string, unknown> | null;
   subjects: Array<{
@@ -51,7 +53,7 @@ export async function getPendingMentors(
 ): Promise<PendingMentorSummary[]> {
   const publicationsResult = await admin
     .from("mentor_publication")
-    .select("user_id, submitted_at")
+    .select("user_id, submitted_at, status")
     .eq("status", "pending_review")
     .neq("user_id", administratorUserId)
     .order("submitted_at", { ascending: true });
@@ -61,9 +63,10 @@ export async function getPendingMentors(
     (publicationsResult.data ?? []) as Array<{
       user_id: string;
       submitted_at: string | null;
+      status: string;
     }>,
     administratorUserId,
-  );
+  ).filter((publication) => isPendingQueueStatus(publication.status));
   if (!publications.length) return [];
 
   const profilesResult = await admin
@@ -144,6 +147,7 @@ export async function getPendingMentorDetail(
 
   return {
     userId,
+    status: "pending_review",
     submittedAt: publication.data.submitted_at,
     profile,
     subjects,
