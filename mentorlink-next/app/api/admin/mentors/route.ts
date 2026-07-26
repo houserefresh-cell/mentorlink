@@ -1,19 +1,24 @@
 import { adminApiError, adminApiSuccess } from "@/lib/admin-api";
 import { authorizeAdministrator } from "@/lib/admin-authorization";
-import { getPendingMentors } from "@/lib/admin-mentor-data";
+import { getPendingMentors, getPublicationMentors } from "@/lib/admin-mentor-data";
 import { loadAuthorizedAdminReview } from "@/lib/admin-review-loader";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: Request) {
   try {
-    const mentors = await loadAuthorizedAdminReview(
+    const result = await loadAuthorizedAdminReview(
       request.headers.get("authorization"),
       authorizeAdministrator,
       createSupabaseAdmin,
-      (administrator, serviceRoleClient) =>
-        getPendingMentors(administrator.id, serviceRoleClient),
+      async (administrator, serviceRoleClient) => {
+        const [mentors, publicationMentors] = await Promise.all([
+          getPendingMentors(administrator.id, serviceRoleClient),
+          getPublicationMentors(administrator.id, serviceRoleClient),
+        ]);
+        return { mentors, publicationMentors };
+      },
     );
-    return adminApiSuccess({ mentors });
+    return adminApiSuccess(result);
   } catch (error) {
     return adminApiError(error);
   }

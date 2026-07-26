@@ -7,9 +7,10 @@ const homepage = read("app/page.tsx");
 const header = read("app/_components/PublicHeader.tsx");
 
 test("root route renders the public MentorLink homepage without a redirect", () => {
-  assert.match(homepage, /export default function HomePage/);
+  assert.match(homepage, /export default async function HomePage/);
   assert.match(homepage, /<PublicHeader \/>/);
   assert.match(homepage, /id="mentors"/);
+  assert.match(homepage, /getPublishedMentors/);
   assert.doesNotMatch(homepage, /redirect\(|router\.replace/);
 });
 
@@ -26,11 +27,11 @@ test("mobile navigation is keyboard-usable without client-only state", () => {
   assert.doesNotMatch(header, /"use client"/);
 });
 
-test("example mentor cards cannot be mistaken for live profiles", () => {
-  assert.match(homepage, /דוגמאות להמחשה בלבד/);
-  assert.match(homepage, /אינם מחוברים למסד הנתונים/);
-  assert.match(homepage, /דוגמה בלבד/);
-  assert.doesNotMatch(homepage, /supabase|localStorage/);
+test("homepage uses real safe cards and contains no fictional mentor list", () => {
+  assert.match(homepage, /<PublicMentorDirectory mentors={mentors} \/>/);
+  assert.match(homepage, /רק חונכים שאושרו ופורסמו/);
+  assert.doesNotMatch(homepage, /דוגמה בלבד|examples =/);
+  assert.doesNotMatch(homepage, /localStorage/);
 });
 
 test("public and authentication routes retain a route home", () => {
@@ -44,9 +45,8 @@ test("public and authentication routes retain a route home", () => {
   }
 });
 
-test("administrator navigation returns to the public site without exposing admin publicly", () => {
-  const adminLayout = read("app/dashboard/admin/layout.tsx");
-  assert.match(adminLayout, /href="\/"/);
+test("administrator navigation returns home without exposing admin publicly", () => {
+  assert.match(read("app/dashboard/admin/layout.tsx"), /href="\/"/);
   assert.doesNotMatch(header, /dashboard\/admin/);
   assert.match(read("lib/admin-authorization.ts"), /authorizeAdministrator/);
 });
