@@ -2,7 +2,7 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { overlapsYomKippur, YOM_KIPPUR_MESSAGE } from "@/lib/israel-calendar";
 import { loadPublishedSchedulingMentor, loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
-import { isCurrentGeneratedSlot, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
+import { isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 const text = (value: unknown, maximum: number) =>
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     if (!Number.isFinite(requestedStart.getTime()) || !MEETING_DURATIONS.includes(duration as never)) {
       return Response.json({ error: "Invalid meeting request" }, { status: 400 });
     }
-    const requestedEnd = new Date(requestedStart.getTime() + duration * 60_000);
+    const requestedEnd = meetingEndAt(requestedStart, duration)!;
     if (overlapsYomKippur(requestedStart, requestedEnd)) {
       return Response.json({ error: YOM_KIPPUR_MESSAGE }, { status: 422 });
     }
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       help_goal: helpGoal,
       meeting_mode: meetingMode,
       requested_start_at: new Date(requestedStartAt).toISOString(),
+      requested_end_at: requestedEnd.toISOString(),
       requested_duration_minutes: duration,
       parent_message: parentMessage,
     }).select("id, status").single();

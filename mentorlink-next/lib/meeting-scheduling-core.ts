@@ -119,6 +119,12 @@ export function isCurrentGeneratedSlot(
   );
 }
 
+export function meetingEndAt(startAt: string | Date, durationMinutes: number) {
+  if (!MEETING_DURATIONS.includes(durationMinutes as never)) return null;
+  const start = startAt instanceof Date ? startAt : new Date(startAt);
+  if (!Number.isFinite(start.getTime())) return null;
+  return new Date(start.getTime() + durationMinutes * 60_000);
+}
 export function canTransition(
   actor: "parent" | "mentor",
   status: string,

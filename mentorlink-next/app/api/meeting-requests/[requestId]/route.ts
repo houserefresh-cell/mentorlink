@@ -2,7 +2,7 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { overlapsYomKippur, YOM_KIPPUR_MESSAGE } from "@/lib/israel-calendar";
 import { loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
-import { canTransition, isCurrentGeneratedSlot, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
+import { canTransition, isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function PATCH(
@@ -52,13 +52,27 @@ export async function PATCH(
       const publication = await client.from("mentor_publication").select("status").eq("user_id", current.mentor_user_id).maybeSingle();
       if (publication.data?.status !== "published") return Response.json({ error: "Mentor is not published" }, { status: 422 });
       const requestedStart = new Date(current.requested_start_at);
-      const requestedEnd = new Date(requestedStart.getTime() + current.requested_duration_minutes * 60_000);
+      const requestedEnd = new Date(current.requested_end_at);
+      const expectedEnd = meetingEndAt(requestedStart, current.requested_duration_minutes);
+      if (
+        !Number.isFinite(requestedStart.getTime()) ||
+        !Number.isFinite(requestedEnd.getTime()) ||
+        !expectedEnd ||
+        requestedEnd.getTime() !== expectedEnd.getTime() ||
+        !MEETING_DURATIONS.includes(current.requested_duration_minutes as never)
+      ) {
+        return Response.json({ error: "Invalid meeting interval" }, { status: 422 });
+      }
       if (overlapsYomKippur(requestedStart, requestedEnd)) return Response.json({ error: YOM_KIPPUR_MESSAGE }, { status: 422 });
       const slots = await loadSlots(client, current.mentor_user_id);
       if (!isCurrentGeneratedSlot(slots, current.requested_start_at, current.meeting_mode, current.requested_duration_minutes)) {
         return Response.json({ error: "המועד אינו זמין עוד." }, { status: 422 });
       }
-      Object.assign(update, { status: "accepted", responded_at: new Date().toISOString() });
+      Object.assign(update, {
+        status: "accepted",
+        requested_end_at: requestedEnd.toISOString(),
+        responded_at: new Date().toISOString(),
+      });
       recipientId = current.parent_user_id;
       kind = "meeting_request_accepted";
       title = "בקשת הפגישה אושרה";

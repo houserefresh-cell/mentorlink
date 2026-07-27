@@ -51,7 +51,7 @@ export async function loadSlots(
     client.from("mentor_availability_windows").select("*").eq("mentor_user_id", mentorUserId).eq("is_active", true),
     client.from("mentor_blackout_periods").select("starts_at, ends_at").eq("mentor_user_id", mentorUserId).gt("ends_at", now.toISOString()),
     client.from("administrator_blackout_periods").select("starts_at, ends_at").gt("ends_at", now.toISOString()),
-    client.from("meeting_requests").select("requested_start_at, requested_duration_minutes").eq("mentor_user_id", mentorUserId).eq("status", "accepted").gt("requested_start_at", now.toISOString()),
+    client.from("meeting_requests").select("requested_start_at, requested_end_at").eq("mentor_user_id", mentorUserId).eq("status", "accepted").gt("requested_end_at", now.toISOString()),
   ]);
   if (windows.error || mentorBlackouts.error || administratorBlackouts.error || accepted.error) throw new Error("Scheduling data unavailable");
   return generateBookableSlots({
@@ -59,7 +59,7 @@ export async function loadSlots(
     blackouts: [...(mentorBlackouts.data ?? []), ...(administratorBlackouts.data ?? [])],
     accepted: (accepted.data ?? []).map((meeting) => ({
       starts_at: meeting.requested_start_at,
-      ends_at: new Date(new Date(meeting.requested_start_at).getTime() + meeting.requested_duration_minutes * 60_000).toISOString(),
+      ends_at: meeting.requested_end_at,
     })),
     now,
     days,

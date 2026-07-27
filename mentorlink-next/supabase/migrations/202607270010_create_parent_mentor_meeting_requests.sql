@@ -61,6 +61,7 @@ create table public.meeting_requests (
   help_goal text not null check (char_length(help_goal) between 5 and 500),
   meeting_mode text not null check (meeting_mode in ('פרונטלי', 'אונליין')),
   requested_start_at timestamptz not null,
+  requested_end_at timestamptz not null,
   requested_duration_minutes integer not null check (
     requested_duration_minutes in (30, 45, 60, 90)
   ),
@@ -78,6 +79,11 @@ create table public.meeting_requests (
   cancelled_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint meeting_requests_requested_interval_valid check (
+    requested_end_at > requested_start_at
+    and requested_end_at
+      = requested_start_at + requested_duration_minutes * interval '1 minute'
+  ),
   constraint meeting_requests_idempotency_unique unique (parent_user_id, idempotency_key)
 );
 
@@ -85,11 +91,7 @@ alter table public.meeting_requests
   add constraint meeting_requests_no_accepted_overlap
   exclude using gist (
     mentor_user_id with =,
-    tstzrange(
-      requested_start_at,
-      requested_start_at + make_interval(mins => requested_duration_minutes),
-      '[)'
-    ) with &&
+    tstzrange(requested_start_at, requested_end_at, '[)') with &&
   )
   where (status = 'accepted');
 
@@ -120,7 +122,7 @@ create index meeting_requests_parent_history_idx
 create index meeting_requests_mentor_inbox_idx
   on public.meeting_requests (mentor_user_id, status, created_at desc);
 create index meeting_requests_mentor_time_idx
-  on public.meeting_requests (mentor_user_id, requested_start_at)
+  on public.meeting_requests (mentor_user_id, requested_start_at, requested_end_at)
   where status = 'accepted';
 create index notifications_user_unread_idx
   on public.notifications (user_id, created_at desc)
