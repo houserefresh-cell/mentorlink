@@ -4,6 +4,7 @@ import { loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
 import { canTransition, isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToUser } from "@/lib/web-push-delivery";
 
 export async function PATCH(
   request: Request,
@@ -119,6 +120,12 @@ export async function PATCH(
       subject: title,
       heading: title,
       body: "העדכון זמין באזור האישי במנטורלינק.",
+      href: actor === "parent" ? "/dashboard/mentor/meeting-requests" : "/dashboard/parent",
+    });
+    await sendPushToUser(client, recipientId, {
+      type: kind,
+      title,
+      body: "עדכון בבקשת פגישה ממתין באזור האישי.",
       href: actor === "parent" ? "/dashboard/mentor/meeting-requests" : "/dashboard/parent",
     });
     return Response.json({ request: result.data });

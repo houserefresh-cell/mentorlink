@@ -4,6 +4,7 @@ import { loadPublishedSchedulingMentor, loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
 import { isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToUser } from "@/lib/web-push-delivery";
 
 const text = (value: unknown, maximum: number) =>
   typeof value === "string" && value.trim().length <= maximum
@@ -84,6 +85,12 @@ export async function POST(request: Request) {
       subject: "בקשת פגישה חדשה במנטורלינק",
       heading: "בקשת פגישה חדשה",
       body: "בקשה חדשה ממתינה לבדיקה באזור האישי.",
+      href: "/dashboard/mentor/meeting-requests",
+    });
+    await sendPushToUser(client, mentor.mentorUserId, {
+      type: "meeting_request_created",
+      title: "בקשת פגישה חדשה במנטורלינק",
+      body: "התקבלה בקשת פגישה חדשה לאישורך.",
       href: "/dashboard/mentor/meeting-requests",
     });
     return Response.json({ request: data }, { status: 201 });

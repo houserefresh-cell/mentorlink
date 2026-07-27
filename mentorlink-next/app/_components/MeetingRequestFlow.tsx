@@ -107,7 +107,7 @@ export default function MeetingRequestFlow({
   if (!mentorBookingId) return null;
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="mt-5 min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white">
+      <button type="button" onClick={() => setOpen(true)} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white">
         בקשת פגישה
       </button>
       {open && (

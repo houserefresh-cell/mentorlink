@@ -18,7 +18,9 @@ const CARDS = [
   { key: "photo", title: "תמונת פרופיל", description: "תמונה ברורה ואמינה למשפחות.", href: "/dashboard/mentor/photo" },
   { key: "parentConsent", title: "אישור הורה", description: "אישור הורה לחונך שטרם מלאו לו 18.", href: "/dashboard/mentor/parent-consent" },
   { key: "preview", title: "תצוגה מקדימה ופרסום", description: "בדיקה ושליחת הפרופיל לאישור.", href: "/dashboard/mentor/preview" },
+  { key: "inquiries", title: "פניות מהורים", description: "פניות כלליות ותשובות להורים.", href: "/dashboard/mentor/inquiries" },
   { key: "meetingRequests", title: "בקשות לפגישה", description: "בקשות חדשות, פגישות מאושרות והיסטוריה.", href: "/dashboard/mentor/meeting-requests" },
+  { key: "phoneNotifications", title: "התראות בטלפון", description: "הפעלת עדכונים מיידיים במכשיר זה.", href: "/dashboard/mentor/notifications" },
 ] as const;
 
 type ConsentCardStatus = "הושלם" | "ממתין לאישור" | "חסר" | "לא נדרש";
