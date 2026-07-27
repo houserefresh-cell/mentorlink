@@ -2,6 +2,8 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { loadPublishedSchedulingMentor } from "@/lib/meeting-data";
 import { deliverInquiryUpdate } from "@/lib/inquiry-notifications";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { loadPublishedMentors } from "@/lib/public-mentor-data";
+import type { PublicMentor } from "@/lib/public-mentor-core";
 
 const clean = (value: unknown, maximum: number) =>
   typeof value === "string" && value.trim().length <= maximum
@@ -77,18 +79,22 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false });
     if (result.error) throw new Error("query failed");
     const rows = result.data ?? [];
-    const mentorNames = new Map<string, string>();
+    const mentorSummaries = new Map<string, PublicMentor>();
     if (user.role === "parent") {
       const ids = [...new Set(rows.map((row) => row.mentor_user_id))];
       if (ids.length) {
-        const profiles = await client.from("mentor_profiles")
-          .select("user_id, first_name, last_name").in("user_id", ids);
-        for (const profile of profiles.data ?? []) {
-          const initial = Array.from(profile.last_name?.trim() ?? "")[0];
-          mentorNames.set(
-            profile.user_id,
-            `${profile.first_name?.trim() || "חונך/ת"}${initial ? ` ${initial}׳` : ""}`,
-          );
+        const [publications, publishedMentors] = await Promise.all([
+          client.from("mentor_publication")
+            .select("user_id, public_booking_id")
+            .eq("status", "published")
+            .in("user_id", ids),
+          loadPublishedMentors(client),
+        ]);
+        if (publications.error) throw new Error("publication query failed");
+        const mentorsByBookingId = new Map(publishedMentors.map((mentor) => [mentor.bookingId, mentor]));
+        for (const publication of publications.data ?? []) {
+          const mentor = mentorsByBookingId.get(publication.public_booking_id);
+          if (mentor) mentorSummaries.set(publication.user_id, mentor);
         }
       }
     }
@@ -96,7 +102,7 @@ export async function GET(request: Request) {
       inquiries: rows.map(({ mentor_user_id, ...row }) => ({
         ...row,
         ...(user.role === "parent"
-          ? { mentor_display_name: mentorNames.get(mentor_user_id) ?? "חונך/ת" }
+          ? { mentor: mentorSummaries.get(mentor_user_id) ?? null }
           : {}),
       })),
     }, { headers: { "Cache-Control": "no-store" } });

@@ -24,7 +24,7 @@ export default function PublicMentorDirectory({ mentors }: { mentors: PublicMent
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const action = params.get("action");
-    if (action !== "inquiry" && action !== "meeting") return;
+    if (action !== "details" && action !== "inquiry" && action !== "meeting") return;
     const mentor = mentors.find((candidate) => candidate.bookingId === params.get("mentor"));
     if (mentor) queueMicrotask(() => openInteraction(mentor, action));
   }, [mentors, openInteraction]);

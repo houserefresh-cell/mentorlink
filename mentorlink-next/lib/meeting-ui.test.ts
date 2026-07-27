@@ -51,3 +51,23 @@ test("parent and mentor dashboards render request history and valid actions", ()
   assert.match(panel, /disabled=\{busyId === item\.id/);
   assert.doesNotMatch(panel, /parent_email|parent_phone|mentor_email|mentor_phone/);
 });
+test("every disabled meeting state has visible Hebrew guidance matching the API contract", () => {
+  const flow = read("app/_components/MeetingRequestFlow.tsx");
+  for (const message of [
+    "יש לבחור מקצוע.", "יש לבחור אופן פגישה.", "יש לבחור מועד לפגישה.",
+    "יש לבחור משך פגישה.", "יש להזין שם פרטי של הילד/ה.",
+    "יש לבחור כיתה או גיל.", "בחמישה תווים לפחות.",
+  ]) assert.match(flow, new RegExp(message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(flow, /missingRequirements\.length === 0/);
+  assert.match(flow, /disabled=\{!complete \|\| busy\}/);
+  assert.match(flow, /if \(busy \|\| !accessToken/);
+  assert.match(flow, /parentMessage: message/);
+});
+
+test("availability guidance distinguishes no slots from no selected slot", () => {
+  const flow = read("app/_components/MeetingRequestFlow.tsx");
+  assert.match(flow, /החונך עדיין לא הגדיר מועדים זמינים לפגישה\./);
+  assert.match(flow, /config\.slots\.length > 0 && !slot && mode/);
+  assert.match(flow, /יש לבחור מועד לפגישה\./);
+  assert.match(flow, /aria-live="polite"/);
+});

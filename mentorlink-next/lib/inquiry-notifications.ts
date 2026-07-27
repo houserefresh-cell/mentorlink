@@ -23,10 +23,21 @@ export async function deliverInquiryUpdate(
     body: input.body,
     href: input.href,
   });
-  await sendPushToUser(client, input.userId, {
-    type: input.kind,
-    title: input.title,
-    body: input.body,
-    href: input.href,
-  });
+  try {
+    await sendPushToUser(client, input.userId, {
+      type: input.kind,
+      title: input.title,
+      body: input.body,
+      href: input.href,
+    });
+  } catch (error) {
+    console.info("Web Push delivery", {
+      notificationType: input.kind,
+      stage: "DELIVERY_UNEXPECTED_FAILURE",
+      subscriptions: 0,
+      successes: 0,
+      failures: 1,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
 }

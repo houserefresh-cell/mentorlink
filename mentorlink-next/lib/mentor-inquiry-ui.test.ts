@@ -98,3 +98,24 @@ test("onboarding is optional and notification controls remain available later", 
   assert.match(controls, /setMessage/);
   assert.match(controls, /setShowInstall/);
 });
+test("parent inquiry cards reuse the public mentor summary and stable opaque deep link", () => {
+  const panel = read("app/dashboard/_components/MentorInquiriesPanel.tsx");
+  assert.match(inquiryApi, /loadPublishedMentors\(client\)/);
+  assert.match(inquiryApi, /public_booking_id/);
+  assert.match(inquiryApi, /mentor: mentorSummaries\.get\(mentor_user_id\)/);
+  assert.match(panel, /item\.mentor\?\.displayName/);
+  assert.match(panel, /item\.mentor\?\.city/);
+  assert.match(panel, /item\.mentor\.subjects\.map/);
+  assert.match(panel, /mentor=\$\{encodeURIComponent\(item\.mentor\.bookingId\)\}&action=details/);
+  assert.match(directory, /action !== "details" && action !== "inquiry" && action !== "meeting"/);
+  assert.doesNotMatch(panel, /mentor_user_id|user_id|birth_date|phone|email/i);
+});
+
+test("contact details remain hidden because current consent does not authorize sharing", () => {
+  const panel = read("app/dashboard/_components/MentorInquiriesPanel.tsx");
+  assert.match(panel, /פרטי הקשר יופיעו לאחר שהחונך ישיב לפנייה/);
+  assert.match(panel, /לאחר שתוגדר הרשאה מפורשת לשיתוף שלהם/);
+  assert.doesNotMatch(panel, /tel:|wa\.me|mentor_phone|mentor_email/i);
+  const historyApi = inquiryApi.slice(inquiryApi.indexOf("export async function GET"));
+  assert.doesNotMatch(historyApi, /parent_phone|parent_email|profile\.phone|auth\.admin\.getUserById/);
+});

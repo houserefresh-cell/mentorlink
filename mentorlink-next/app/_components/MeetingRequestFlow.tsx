@@ -37,6 +37,7 @@ export default function MeetingRequestFlow({
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
+  const [configError, setConfigError] = useState("");
   const [subject, setSubject] = useState("");
   const [mode, setMode] = useState("");
   const [slot, setSlot] = useState<Slot | null>(null);
@@ -54,12 +55,18 @@ export default function MeetingRequestFlow({
     if (!open) return;
     void Promise.all([
       supabase.auth.getSession(),
-      fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}`).then((response) => response.json()),
+      fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}`).then(async (response) => ({ ok: response.ok, body: await response.json() })),
     ]).then(([session, scheduling]) => {
       setAccessToken(session.data.session?.access_token ?? null);
       setRole(session.data.session?.user.user_metadata?.role ?? null);
-      setConfig(scheduling);
-    });
+      if (scheduling.ok && scheduling.body?.mentor && Array.isArray(scheduling.body?.slots)) {
+        setConfig(scheduling.body);
+        setConfigError("");
+      } else {
+        setConfig(null);
+        setConfigError(scheduling.body?.error ?? "לא ניתן לטעון את המועדים הזמינים.");
+      }
+    }).catch(() => setConfigError("לא ניתן לטעון את המועדים הזמינים."));
   }, [mentorBookingId, open]);
 
   useEffect(() => {
@@ -76,10 +83,19 @@ export default function MeetingRequestFlow({
   const dateSlots = (config?.slots ?? []).filter(
     (item) => item.meetingMode === mode && dateKey(item.startAt) === selectedDate,
   );
-  const complete = subject && mode && slot && duration && childName.trim() && grade && goal.trim().length >= 5;
+  const missingRequirements = [
+    !subject ? "יש לבחור מקצוע." : null,
+    !mode ? "יש לבחור אופן פגישה." : null,
+    !slot ? "יש לבחור מועד לפגישה." : null,
+    !duration ? "יש לבחור משך פגישה." : null,
+    !childName.trim() ? "יש להזין שם פרטי של הילד/ה." : null,
+    !grade ? "יש לבחור כיתה או גיל." : null,
+    goal.trim().length < 5 ? "יש לתאר במה נדרשת עזרה, בחמישה תווים לפחות." : null,
+  ].filter((value): value is string => Boolean(value));
+  const complete = missingRequirements.length === 0;
 
   async function submit() {
-    if (!accessToken || !complete || !slot) return;
+    if (busy || !accessToken || !complete || !slot) return;
     setBusy(true);
     setStatus("");
     const response = await fetch("/api/meeting-requests", {
@@ -129,10 +145,13 @@ export default function MeetingRequestFlow({
               </div>
             ) : role !== "parent" ? (
               <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 font-bold text-red-700">רק חשבון הורה יכול לשלוח בקשת פגישה.</p>
+            ) : configError ? (
+              <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 font-bold text-red-700">{configError}</p>
             ) : !config ? (
               <p className="mt-6">טוען מועדים זמינים...</p>
             ) : (
               <div className="mt-6 space-y-6">
+                {!config.slots.length && <p role="status" className="rounded-xl bg-amber-50 p-4 font-bold text-amber-900">החונך עדיין לא הגדיר מועדים זמינים לפגישה.</p>}
                 <Choice title="1. מקצוע" values={config.mentor.subjects} selected={subject} onSelect={(value) => { setSubject(value); }} />
                 <Choice title="2. אופן הפגישה" values={config.mentor.meetingModes} selected={mode} onSelect={(value) => { setMode(value); setSlot(null); setDuration(0); }} />
                 {mode && <Choice title="3. תאריך" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = config.slots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); setSlot(first ?? null); setDuration(0); }} />}
@@ -144,8 +163,9 @@ export default function MeetingRequestFlow({
                 </div>
                 <Field label="במה נדרשת עזרה?"><textarea value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={500} rows={3} /></Field>
                 <Field label="הודעה קצרה לחונך (לא חובה)"><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={500} rows={2} /></Field>
-                {complete && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>{childName} · {grade}</p></div>}
-                <button type="button" disabled={!complete || busy} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:bg-slate-400">{busy ? "שולח..." : "שליחת בקשת פגישה"}</button>
+                {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>{childName} · {grade}</p></div>}
+                {config.slots.length > 0 && !slot && mode && <p role="status" className="rounded-xl bg-amber-50 p-3 font-bold text-amber-900">יש לבחור מועד לפגישה.</p>}
+                {!complete && <div role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black">כדי לשלוח את הבקשה:</p><ul className="mt-2 list-inside list-disc text-sm text-slate-700">{missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></div>}                <button type="button" disabled={!complete || busy} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:bg-slate-400">{busy ? "שולח..." : "שליחת בקשת פגישה"}</button>
                 {status && <p role="status" className="rounded-xl bg-blue-50 p-4 text-center font-bold">{status}</p>}
               </div>
             )}

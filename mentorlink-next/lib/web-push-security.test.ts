@@ -76,14 +76,14 @@ test("subscription APIs always authenticate and scope endpoints to the signed-in
 test("test Push is rate limited and expired subscriptions are removed", () => {
   assert.match(delivery, /Date\.now\(\) - lastTested < 60_000/);
   assert.match(testRoute, /status: 429/);
-  assert.match(delivery, /\[404, 410\]\.includes\(statusCode\)/g);
+  assert.equal((delivery.match(/\[404, 410\]\.includes\((?:result|delivery)\.statusCode \?\? 0\)/g) ?? []).length, 2);
   assert.match(delivery, /\.delete\(\).*\.eq\("user_id", userId\)/s);
 });
 
 test("Push delivery is generic, best effort and keeps secrets server-only", () => {
   assert.match(delivery, /import "server-only"/);
   assert.match(delivery, /WEB_PUSH_VAPID_PRIVATE_KEY/);
-  assert.match(delivery, /catch \{/);
+  assert.match(delivery, /catch \(error\)/);
   assert.doesNotMatch(controls, /WEB_PUSH_VAPID_PRIVATE_KEY|p256dh_key|auth_key/);
   assert.doesNotMatch(delivery, /console\.(?:log|error)\([^)]*(?:endpoint|p256dh|auth_key)/s);
   const meetingCreate = read("app/api/meeting-requests/route.ts");
@@ -108,4 +108,22 @@ test("inquiry and meeting Push payloads have distinct generic text", () => {
   const inquiryPush = inquiry.slice(inquiry.lastIndexOf("deliverInquiryUpdate"));
   const meetingPush = meeting.slice(meeting.lastIndexOf("sendPushToUser"));
   assert.doesNotMatch(`${inquiryPush}\n${meetingPush}`, /childFirstName|parentMessage|helpGoal|subject:/);
+});
+test("real inquiry Push is awaited, best effort, and uses the shared delivery primitive", () => {
+  const inquiryRoute = read("app/api/mentor-inquiries/route.ts");
+  const inquiryDelivery = read("lib/inquiry-notifications.ts");
+  assert.match(inquiryRoute, /await deliverInquiryUpdate\(client/);
+  assert.match(inquiryRoute, /userId: mentor\.mentorUserId/);
+  assert.match(inquiryDelivery, /await sendPushToUser\(client, input\.userId/);
+  assert.match(inquiryDelivery, /catch \(error\)/);
+  assert.equal((delivery.match(/deliverSubscription\(/g) ?? []).length, 3);
+});
+
+test("server diagnostics are sanitized and temporary provider failures retain subscriptions", () => {
+  for (const value of ["notificationType", "stage", "subscriptions", "successes", "failures", "providerStatus", "errorName"]) {
+    assert.match(delivery, new RegExp(value));
+  }
+  assert.match(delivery, /if \(\[404, 410\]\.includes/);
+  assert.doesNotMatch(delivery, /diagnostic\([^\n]*(?:endpoint|p256dh|auth_key)/);
+  assert.doesNotMatch(delivery, /else[\s\S]{0,80}\.delete\(\)/);
 });
