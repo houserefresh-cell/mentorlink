@@ -1,14 +1,33 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 import MeetingRequestFlow from "./MeetingRequestFlow";
 import MentorInquiryFlow from "./MentorInquiryFlow";
 import { ALL_CITIES, filterPublicMentors } from "@/lib/public-mentor-filter";
 
+type DirectoryAction = "details" | "inquiry" | "meeting";
+type ActiveInteraction = { mentor: PublicMentor; action: DirectoryAction };
 export default function PublicMentorDirectory({ mentors }: { mentors: PublicMentor[] }) {
   const [search, setSearch] = useState("");
   const [city, setCity] = useState(ALL_CITIES);
+  const [activeInteraction, setActiveInteraction] = useState<ActiveInteraction | null>(null);
+  const originRef = useRef<HTMLButtonElement | null>(null);
+  const openInteraction = useCallback((mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement | null = null) => {
+    originRef.current = origin;
+    setActiveInteraction({ mentor, action });
+  }, []);
+  const closeInteraction = useCallback(() => {
+    setActiveInteraction(null);
+    queueMicrotask(() => originRef.current?.focus());
+  }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action");
+    if (action !== "inquiry" && action !== "meeting") return;
+    const mentor = mentors.find((candidate) => candidate.bookingId === params.get("mentor"));
+    if (mentor) queueMicrotask(() => openInteraction(mentor, action));
+  }, [mentors, openInteraction]);
   const cities = useMemo(
     () => [...new Set(mentors.map((mentor) => mentor.city).filter((value): value is string => Boolean(value)))]
       .sort((first, second) => first.localeCompare(second, "he")),
@@ -60,123 +79,54 @@ export default function PublicMentorDirectory({ mentors }: { mentors: PublicMent
       {filtered.length ? (
         <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),17.5rem))] justify-center gap-4">
           {filtered.map((mentor, index) => (
-            <MentorCard key={`${mentor.displayName}-${mentor.city ?? ""}-${index}`} mentor={mentor} />
+            <MentorCard key={`${mentor.bookingId}-${index}`} mentor={mentor} onOpen={openInteraction} />
           ))}
         </div>
       ) : (
         <EmptyState hasMentors={mentors.length > 0} onReset={resetFilters} />
       )}
+
+      {activeInteraction?.action === "details" && <MentorDetailsDialog mentor={activeInteraction.mentor} onClose={closeInteraction} />}
+      {activeInteraction?.action === "inquiry" && <MentorInquiryFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} subjects={activeInteraction.mentor.subjects} open onClose={closeInteraction} />}
+      {activeInteraction?.action === "meeting" && <MeetingRequestFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} open onClose={closeInteraction} />}
     </section>
   );
 }
 
-function MentorCard({ mentor }: { mentor: PublicMentor }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId();
+function MentorCard({ mentor, onOpen }: { mentor: PublicMentor; onOpen: (mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement) => void }) {
   const initial = Array.from(mentor.displayName.trim())[0] || "מ";
-  const shortIntroduction = mentor.introduction && mentor.introduction.length > 90
-    ? `${mentor.introduction.slice(0, 87).trimEnd()}…`
-    : mentor.introduction;
-
+  const shortIntroduction = mentor.introduction && mentor.introduction.length > 90 ? `${mentor.introduction.slice(0, 87).trimEnd()}…` : mentor.introduction;
   return (
-    <>
-      <article className="flex h-full min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_-22px_rgba(15,23,42,0.55)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200">
-        <div className="flex min-w-0 items-center gap-3">
-          <Avatar initial={initial} large={false} />
-          <div className="min-w-0">
-            <h3 className="break-words text-xl font-black leading-tight text-slate-950">{mentor.displayName}</h3>
-            {mentor.city && <City city={mentor.city} />}
-          </div>
-        </div>
-
-        {mentor.subjects.length > 0 && (
-          <ul aria-label="תחומי חונכות" className="mt-3 flex min-w-0 flex-wrap gap-1.5">
-            {mentor.subjects.map((subject) => (
-              <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold leading-5 text-blue-800 [overflow-wrap:anywhere]">
-                {subject}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-3 grid gap-2">
-          <CompactLine label="מתאים לגילאים" values={mentor.ageGroups} />
-          <CompactLine label="אופן המפגש" values={mentor.meetingModes} />
-        </div>
-        {shortIntroduction && <p className="mt-3 line-clamp-2 break-words text-sm leading-6 text-slate-600">{shortIntroduction}</p>}
-
-        <button ref={triggerRef} type="button" onClick={() => dialogRef.current?.showModal()} aria-haspopup="dialog" className="mt-auto min-h-11 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-800 transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-          לפרטים
-        </button>
-      </article>
-
-      <MentorDetailsDialog
-        dialogRef={dialogRef}
-        titleId={titleId}
-        mentor={mentor}
-        initial={initial}
-        onClose={() => dialogRef.current?.close()}
-        onClosed={() => triggerRef.current?.focus()}
-      />
-    </>
+    <article className="flex h-full min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_-22px_rgba(15,23,42,0.55)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200">
+      <div className="flex min-w-0 items-center gap-3"><Avatar initial={initial} large={false} /><div className="min-w-0"><h3 className="break-words text-xl font-black leading-tight text-slate-950">{mentor.displayName}</h3>{mentor.city && <City city={mentor.city} />}</div></div>
+      {mentor.subjects.length > 0 && <ul aria-label="תחומי חונכות" className="mt-3 flex min-w-0 flex-wrap gap-1.5">{mentor.subjects.map((subject) => <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold leading-5 text-blue-800 [overflow-wrap:anywhere]">{subject}</li>)}</ul>}
+      <div className="mt-3 grid gap-2"><CompactLine label="מתאים לגילאים" values={mentor.ageGroups} /><CompactLine label="אופן המפגש" values={mentor.meetingModes} /></div>
+      {shortIntroduction && <p className="mt-3 line-clamp-2 break-words text-sm leading-6 text-slate-600">{shortIntroduction}</p>}
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+        <button type="button" onClick={(event) => onOpen(mentor, "meeting", event.currentTarget)} aria-haspopup="dialog" className="col-span-2 min-h-11 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">בקשת פגישה</button>
+        <button type="button" onClick={(event) => onOpen(mentor, "inquiry", event.currentTarget)} aria-haspopup="dialog" className="min-h-11 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">פנייה לחונך</button>
+        <button type="button" onClick={(event) => onOpen(mentor, "details", event.currentTarget)} aria-haspopup="dialog" className="min-h-11 rounded-xl px-3 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">לפרטים</button>
+      </div>
+    </article>
   );
 }
-
-function MentorDetailsDialog({
-  dialogRef, titleId, mentor, initial, onClose, onClosed,
-}: {
-  dialogRef: React.RefObject<HTMLDialogElement | null>;
-  titleId: string;
-  mentor: PublicMentor;
-  initial: string;
-  onClose: () => void;
-  onClosed: () => void;
-}) {
+function MentorDetailsDialog({ mentor, onClose }: { mentor: PublicMentor; onClose: () => void }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const initial = Array.from(mentor.displayName.trim())[0] || "מ";
+  useEffect(() => { dialogRef.current?.showModal(); }, []);
   return (
-    <dialog
-      ref={dialogRef}
-      dir="rtl"
-      aria-labelledby={titleId}
-      onClose={onClosed}
-      onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
-      className="m-auto max-h-[90dvh] w-[min(calc(100%_-_2rem),34rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-right text-slate-950 shadow-2xl backdrop:bg-slate-950/55"
-    >
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
-        <h2 id={titleId} className="text-lg font-black">פרטי החונך</h2>
-        <button type="button" onClick={onClose} aria-label="סגירת פרטי החונך" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-2xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">×</button>
-      </div>
+    <dialog ref={dialogRef} dir="rtl" aria-labelledby={titleId} onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.close(); }} className="m-auto max-h-[90dvh] w-[min(calc(100%_-_2rem),34rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-right text-slate-950 shadow-2xl backdrop:bg-slate-950/55">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur"><h2 id={titleId} className="text-lg font-black">פרטי החונך</h2><button type="button" onClick={() => dialogRef.current?.close()} aria-label="סגירת פרטי החונך" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-2xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">×</button></div>
       <div className="p-5 sm:p-6">
-        <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-gradient-to-l from-blue-50 to-violet-50 p-4">
-          <Avatar initial={initial} large />
-          <div className="min-w-0">
-            <p className="break-words text-2xl font-black">{mentor.displayName}</p>
-            {mentor.city && <City city={mentor.city} />}
-          </div>
-        </div>
-        {mentor.subjects.length > 0 && (
-          <DetailsSection title="תחומי חונכות">
-            <ul className="flex min-w-0 flex-wrap gap-1.5">
-              {mentor.subjects.map((subject) => (
-                <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-bold text-blue-800 [overflow-wrap:anywhere]">{subject}</li>
-              ))}
-            </ul>
-          </DetailsSection>
-        )}
+        <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-gradient-to-l from-blue-50 to-violet-50 p-4"><Avatar initial={initial} large /><div className="min-w-0"><p className="break-words text-2xl font-black">{mentor.displayName}</p>{mentor.city && <City city={mentor.city} />}</div></div>
+        {mentor.subjects.length > 0 && <DetailsSection title="תחומי חונכות"><ul className="flex min-w-0 flex-wrap gap-1.5">{mentor.subjects.map((subject) => <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-bold text-blue-800 [overflow-wrap:anywhere]">{subject}</li>)}</ul></DetailsSection>}
         {mentor.introduction && <DetailsSection title="קצת עליי"><p className="whitespace-pre-wrap break-words leading-7 text-slate-700">{mentor.introduction}</p></DetailsSection>}
-        <DetailsValues title="מתאים לגילאים" values={mentor.ageGroups} />
-        <DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} />
-        <DetailsValues title="אופן המפגש" values={mentor.meetingModes} />
-        <DetailsValues title="זמינות כללית" values={mentor.availability} />
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <MentorInquiryFlow mentorBookingId={mentor.bookingId} mentorDisplayName={mentor.displayName} subjects={mentor.subjects} />
-          <MeetingRequestFlow mentorBookingId={mentor.bookingId} mentorDisplayName={mentor.displayName} />
-        </div>
+        <DetailsValues title="מתאים לגילאים" values={mentor.ageGroups} /><DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} /><DetailsValues title="אופן המפגש" values={mentor.meetingModes} /><DetailsValues title="זמינות כללית" values={mentor.availability} />
       </div>
     </dialog>
   );
 }
-
 function Avatar({ initial, large }: { initial: string; large: boolean }) {
   return <div aria-hidden="true" className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600 font-black text-white shadow-md shadow-blue-200/70 ${large ? "h-16 w-16 rounded-2xl text-2xl" : "h-12 w-12 rounded-xl text-lg"}`}>{initial}</div>;
 }

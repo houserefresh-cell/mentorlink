@@ -49,8 +49,8 @@ test("native details dialog supports Escape, accessible naming, and focus return
   assert.match(source, /aria-haspopup="dialog"/);
   assert.match(source, /aria-labelledby={titleId}/);
   assert.match(source, /aria-label="סגירת פרטי החונך"/);
-  assert.match(source, /onClose={onClosed}/);
-  assert.match(source, /triggerRef\.current\?\.focus\(\)/);
+  assert.match(source, /onClose={onClose}/);
+  assert.match(source, /originRef\.current\?\.focus\(\)/);
 });
 
 test("filters and live result count remain accessible on mobile", () => {

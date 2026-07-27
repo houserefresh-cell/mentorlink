@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
@@ -24,11 +24,16 @@ const GRADES = [
 export default function MeetingRequestFlow({
   mentorBookingId,
   mentorDisplayName,
+  open,
+  onClose,
 }: {
   mentorBookingId: string;
   mentorDisplayName: string;
+  open: boolean;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
@@ -44,10 +49,6 @@ export default function MeetingRequestFlow({
   const [status, setStatus] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("mentor") === mentorBookingId && params.get("action") === "meeting") queueMicrotask(() => setOpen(true));
-  }, [mentorBookingId]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,6 +61,12 @@ export default function MeetingRequestFlow({
       setConfig(scheduling);
     });
   }, [mentorBookingId, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    dialogRef.current?.showModal();
+    queueMicrotask(() => closeButtonRef.current?.focus());
+  }, [open]);
 
   const dates = useMemo(
     () => [...new Set((config?.slots ?? []).filter((item) => !mode || item.meetingMode === mode).map((item) => dateKey(item.startAt)))],
@@ -104,25 +111,20 @@ export default function MeetingRequestFlow({
     setBusy(false);
   }
 
-  if (!mentorBookingId) return null;
+  if (!mentorBookingId || !open) return null;
   return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white">
-        בקשת פגישה
-      </button>
-      {open && (
-        <div role="dialog" aria-modal="true" aria-label="בקשת פגישה" className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-5">
+        <dialog ref={dialogRef} aria-label="בקשת פגישה" onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.close(); }} className="m-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-visible border-0 bg-transparent p-0 backdrop:bg-slate-950/55 sm:m-auto sm:w-[min(calc(100%_-_2rem),42rem)]">
           <div dir="rtl" className="max-h-[92dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-7">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-2xl font-black">בקשת פגישה עם {mentorDisplayName}</h2>
-              <button type="button" onClick={() => setOpen(false)} aria-label="סגירת בקשת פגישה" className="h-11 w-11 rounded-xl border text-2xl">×</button>
+              <button ref={closeButtonRef} type="button" onClick={() => dialogRef.current?.close()} aria-label="סגירת בקשת פגישה" className="h-11 w-11 rounded-xl border text-2xl">×</button>
             </div>
             {!accessToken ? (
               <div className="mt-6 rounded-2xl bg-blue-50 p-5">
                 <p className="font-bold">כדי לשלוח בקשת פגישה יש להתחבר כהורה.</p>
                 <div className="mt-4 flex gap-3">
-                  <Link href={`/login?returnTo=/?mentor=${mentorBookingId}%26action=meeting`} className="rounded-xl bg-blue-700 px-4 py-3 font-bold text-white">כניסה</Link>
-                  <Link href={`/register/parent?returnTo=/?mentor=${mentorBookingId}%26action=meeting`} className="rounded-xl border border-blue-300 px-4 py-3 font-bold text-blue-800">הרשמה כהורה</Link>
+                  <Link href={`/login?returnTo=${encodeURIComponent(`/?mentor=${mentorBookingId}&action=meeting`)}`} className="rounded-xl bg-blue-700 px-4 py-3 font-bold text-white">כניסה</Link>
+                  <Link href={`/register/parent?returnTo=${encodeURIComponent(`/?mentor=${mentorBookingId}&action=meeting`)}`} className="rounded-xl border border-blue-300 px-4 py-3 font-bold text-blue-800">הרשמה כהורה</Link>
                 </div>
               </div>
             ) : role !== "parent" ? (
@@ -148,9 +150,7 @@ export default function MeetingRequestFlow({
               </div>
             )}
           </div>
-        </div>
-      )}
-    </>
+        </dialog>
   );
 }
 
