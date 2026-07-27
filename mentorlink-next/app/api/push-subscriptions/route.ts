@@ -1,5 +1,6 @@
 import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { parsePublicVapidKey } from "@/lib/web-push-public-key";
 
 type SubscriptionBody = {
   action?: string;
@@ -10,13 +11,17 @@ type SubscriptionBody = {
 export async function GET(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "נדרשת התחברות." }, { status: 401 });
+  const publicKey = parsePublicVapidKey(
+    process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY,
+  );
+  const configured = Boolean(
+    publicKey.ok &&
+    process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim() &&
+    process.env.WEB_PUSH_SUBJECT?.trim()
+  );
   return Response.json({
-    configured: Boolean(
-      process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY &&
-      process.env.WEB_PUSH_VAPID_PRIVATE_KEY &&
-      process.env.WEB_PUSH_SUBJECT
-    ),
-    publicKey: process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_PUBLIC_KEY ?? null,
+    configured,
+    publicKey: configured && publicKey.ok ? publicKey.key : null,
   }, { headers: { "Cache-Control": "no-store" } });
 }
 

@@ -2,11 +2,49 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { parsePublicVapidKey } from "@/lib/web-push-public-key";
 
-function toUint8Array(value: string) {
-  const padded = `${value}${"=".repeat((4 - value.length % 4) % 4)}`
-    .replace(/-/g, "+").replace(/_/g, "/");
-  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+type PushDiagnosticCode =
+  | "SW_REGISTER_FAILED"
+  | "SW_NOT_READY"
+  | "SW_UPDATE_FAILED"
+  | "API_GET_FAILED"
+  | "VAPID_INVALID"
+  | "SUBSCRIBE_FAILED"
+  | "API_POST_FAILED";
+
+class PushActivationError extends Error {
+  constructor(readonly code: PushDiagnosticCode, cause?: unknown) {
+    super(code, { cause });
+    this.name = "PushActivationError";
+  }
+}
+
+function safeErrorName(error: unknown) {
+  return error instanceof Error && error.name ? error.name : "UnknownError";
+}
+
+function logDiagnostic(code: PushDiagnosticCode, error: unknown) {
+  console.warn("MentorLink Web Push activation diagnostic", {
+    code,
+    errorName: safeErrorName(error),
+  });
+}
+
+function serviceWorkerReady(timeoutMilliseconds = 10_000) {
+  return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => reject(new PushActivationError("SW_NOT_READY")),
+      timeoutMilliseconds,
+    );
+    navigator.serviceWorker.ready.then((registration) => {
+      window.clearTimeout(timeout);
+      resolve(registration);
+    }, (error) => {
+      window.clearTimeout(timeout);
+      reject(new PushActivationError("SW_NOT_READY", error));
+    });
+  });
 }
 
 export default function WebPushControls({ compact = false }: { compact?: boolean }) {
@@ -19,6 +57,7 @@ export default function WebPushControls({ compact = false }: { compact?: boolean
   const [showInstall, setShowInstall] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [diagnosticCode, setDiagnosticCode] = useState<PushDiagnosticCode | "">("");
 
   useEffect(() => {
     const hasSupport = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -29,10 +68,20 @@ export default function WebPushControls({ compact = false }: { compact?: boolean
       setIsIos(/iPad|iPhone|iPod/.test(navigator.userAgent));
       void supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? ""));
       if (hasSupport) {
-        void navigator.serviceWorker.register("/sw.js").then(async (registration) => {
+        void navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(async (registration) => {
+          if (registration.scope !== new URL("/", window.location.origin).href) {
+            throw new PushActivationError("SW_REGISTER_FAILED");
+          }
+          void registration.update().catch((error) => {
+            logDiagnostic("SW_UPDATE_FAILED", error);
+          });
           const subscription = await registration.pushManager.getSubscription();
           setEndpoint(subscription?.endpoint ?? "");
-        }).catch(() => setSupported(false));
+        }).catch((error) => {
+          logDiagnostic("SW_REGISTER_FAILED", error);
+          setDiagnosticCode("SW_REGISTER_FAILED");
+          setSupported(false);
+        });
       }
     });
   }, []);
@@ -41,39 +90,77 @@ export default function WebPushControls({ compact = false }: { compact?: boolean
     if (!token || !supported || (isIos && !standalone)) return;
     setBusy(true);
     setMessage("");
+    setDiagnosticCode("");
     try {
-      const permissionResult = await Notification.requestPermission();
+      const permissionResult = Notification.permission === "granted"
+        ? "granted"
+        : await Notification.requestPermission();
       setPermission(permissionResult);
       if (permissionResult !== "granted") {
         setMessage("ההתראות נחסמו בהגדרות המכשיר.");
         return;
       }
-      const configResponse = await fetch("/api/push-subscriptions", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const config = await configResponse.json();
-      if (!config.configured || !config.publicKey) throw new Error("not configured");
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: toUint8Array(config.publicKey),
-      });
+
+      let config: { configured?: boolean; publicKey?: unknown };
+      try {
+        const configResponse = await fetch("/api/push-subscriptions", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!configResponse.ok) throw new Error(`HTTP_${configResponse.status}`);
+        config = await configResponse.json();
+      } catch (error) {
+        throw new PushActivationError("API_GET_FAILED", error);
+      }
+      const vapidKey = parsePublicVapidKey(config.publicKey);
+      if (!config.configured || !vapidKey.ok) {
+        throw new PushActivationError("VAPID_INVALID");
+      }
+
+      let registration: ServiceWorkerRegistration;
+      try {
+        registration = await serviceWorkerReady();
+      } catch (error) {
+        throw error instanceof PushActivationError
+          ? error
+          : new PushActivationError("SW_NOT_READY", error);
+      }
+
+      let subscription: PushSubscription;
+      try {
+        subscription = await registration.pushManager.getSubscription()
+          ?? await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKey.applicationServerKey,
+          });
+      } catch (error) {
+        throw new PushActivationError("SUBSCRIBE_FAILED", error);
+      }
+
       const json = subscription.toJSON();
-      const response = await fetch("/api/push-subscriptions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ endpoint: subscription.endpoint, keys: json.keys }),
-      });
-      if (!response.ok) throw new Error("save failed");
+      try {
+        const response = await fetch("/api/push-subscriptions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint, keys: json.keys }),
+        });
+        if (!response.ok) throw new Error(`HTTP_${response.status}`);
+      } catch (error) {
+        throw new PushActivationError("API_POST_FAILED", error);
+      }
+
       setEndpoint(subscription.endpoint);
       setMessage("ההתראות פעילות במכשיר זה.");
-    } catch {
-      setMessage("לא ניתן להפעיל התראות כרגע.");
+    } catch (error) {
+      const code = error instanceof PushActivationError
+        ? error.code
+        : "SUBSCRIBE_FAILED";
+      logDiagnostic(code, error);
+      setDiagnosticCode(code);
+      setMessage("לא ניתן להפעיל את ההתראות כרגע. אפשר לנסות שוב בעוד כמה רגעים.");
     } finally {
       setBusy(false);
     }
   }
-
   async function unsubscribe() {
     if (!token || !endpoint) return;
     setBusy(true);
@@ -129,7 +216,10 @@ export default function WebPushControls({ compact = false }: { compact?: boolean
       {showInstall && <ol className="mt-5 list-decimal space-y-2 pr-6 text-slate-700">
         <li>פתחו את MentorLink בדפדפן.</li><li>לחצו על כפתור השיתוף.</li><li>בחרו ״הוספה למסך הבית״.</li><li>אשרו את הוספת MentorLink.</li><li>פתחו את MentorLink דרך האייקון החדש במסך הבית.</li><li>היכנסו לחשבון החונך.</li><li>לחצו ״הפעלת התראות״.</li><li>בחלון של האייפון לחצו ״אפשר״.</li>
       </ol>}
-      {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
+      {(message || diagnosticCode) && <div role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">
+        <p>{message || "לא ניתן להכין את שירות ההתראות כרגע."}</p>
+        {diagnosticCode && <p className="mt-1 text-xs font-medium text-slate-500" dir="ltr">קוד אבחון: {diagnosticCode}</p>}
+      </div>}
     </section>
   );
 }

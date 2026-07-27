@@ -17,6 +17,10 @@ test("notification permission is requested only by explicit activation", () => {
   assert.ok(enableStart >= 0 && permissionCall > enableStart && permissionCall < unsubscribeStart);
   assert.match(controls, /onClick=\{enable\}/);
   assert.doesNotMatch(controls.slice(0, enableStart), /requestPermission/);
+  assert.match(
+    controls,
+    /Notification\.permission === "granted"[\s\S]*\? "granted"[\s\S]*Notification\.requestPermission\(\)/,
+  );
 });
 
 test("Web Push is feature-detected and iOS activation waits for standalone mode", () => {
@@ -28,6 +32,39 @@ test("Web Push is feature-detected and iOS activation waits for standalone mode"
   assert.match(controls, /disabled=\{busy \|\| !supported \|\| \(isIos && !standalone\)\}/);
 });
 
+test("activation validates configuration and reports only safe stage diagnostics", () => {
+  assert.match(subscriptions, /parsePublicVapidKey/);
+  assert.match(subscriptions, /publicKey: configured && publicKey\.ok \? publicKey\.key : null/);
+  for (const code of [
+    "SW_REGISTER_FAILED",
+    "SW_NOT_READY",
+    "VAPID_INVALID",
+    "SUBSCRIBE_FAILED",
+    "API_POST_FAILED",
+  ]) {
+    assert.match(controls, new RegExp(code));
+  }
+  assert.match(controls, /errorName: safeErrorName\(error\)/);
+  assert.doesNotMatch(
+    controls.slice(0, controls.indexOf("export default function")),
+    /endpoint|p256dh|auth_key/i,
+  );
+});
+
+test("activation reuses an existing iPhone subscription before creating one", () => {
+  const enableStart = controls.indexOf("async function enable()");
+  const getExisting = controls.indexOf("registration.pushManager.getSubscription()", enableStart);
+  const subscribe = controls.indexOf("registration.pushManager.subscribe({", enableStart);
+  const post = controls.indexOf('method: "POST"', subscribe);
+  assert.ok(getExisting >= 0 && subscribe > getExisting && post > subscribe);
+  assert.match(controls.slice(enableStart), /getSubscription\(\)[\s\S]*\?\? await registration\.pushManager\.subscribe/);
+});
+
+test("service-worker readiness is bounded and registration requests root scope", () => {
+  assert.match(controls, /register\("\/sw\.js", \{ scope: "\/" \}\)/);
+  assert.match(controls, /serviceWorkerReady\(timeoutMilliseconds = 10_000\)/);
+  assert.match(controls, /registration\.update\(\)/);
+});
 test("subscription APIs always authenticate and scope endpoints to the signed-in user", () => {
   for (const source of [subscriptions, testRoute]) assert.match(source, /authenticateMeetingUser/);
   assert.match(subscriptions, /existing\.data\.user_id !== user\.id/);
