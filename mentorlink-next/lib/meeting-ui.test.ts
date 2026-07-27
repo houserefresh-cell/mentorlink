@@ -67,7 +67,7 @@ test("every disabled meeting state has visible Hebrew guidance matching the API 
 test("availability guidance distinguishes no slots from no selected slot", () => {
   const flow = read("app/_components/MeetingRequestFlow.tsx");
   assert.match(flow, /החונך עדיין לא הגדיר מועדים זמינים לפגישה\./);
-  assert.match(flow, /config\.slots\.length > 0 && !slot && mode/);
+  assert.match(flow, /hasSelectableSlots && !slot && mode/);
   assert.match(flow, /יש לבחור מועד לפגישה\./);
   assert.match(flow, /aria-live="polite"/);
 });

@@ -34,6 +34,7 @@ type Detail = {
   parentConsent: Record<string, unknown> | null;
   isMinor: boolean | null;
   photoUrl: string | null;
+  pendingChanges: Array<{ id: string; fieldName: string; currentValue: unknown; requestedValue: unknown; requestedAt: string }>;
 };
 
 const LABELS: Record<string, string> = {
@@ -75,11 +76,12 @@ async function authorizedGet(path: string) {
   });
   const body = await response.json();
   if (!response.ok) throw new Error(response.status === 401 ? "AUTHENTICATION_REQUIRED" : body.error ?? "Request failed");
-  return body as { mentors?: Summary[]; publicationMentors?: Summary[]; mentor?: Detail };
+  return body as { mentors?: Summary[]; fieldChangeMentors?: Summary[]; publicationMentors?: Summary[]; mentor?: Detail };
 }
 
 export default function AdminMentorsClient({ userId }: { userId?: string }) {
   const [mentors, setMentors] = useState<Summary[] | null>(null);
+  const [fieldChangeMentors, setFieldChangeMentors] = useState<Summary[] | null>(null);
   const [publicationMentors, setPublicationMentors] = useState<Summary[] | null>(null);
   const [mentor, setMentor] = useState<Detail | null>(null);
   const [error, setError] = useState("");
@@ -91,6 +93,7 @@ export default function AdminMentorsClient({ userId }: { userId?: string }) {
         if (userId) setMentor(body.mentor ?? null);
         else {
           setMentors(body.mentors ?? []);
+          setFieldChangeMentors(body.fieldChangeMentors ?? []);
           setPublicationMentors(body.publicationMentors ?? []);
         }
       })
@@ -112,18 +115,19 @@ export default function AdminMentorsClient({ userId }: { userId?: string }) {
         </header>
         {error ? <ErrorPanel message={error} /> : null}
         {!error && userId && !mentor ? <Loading /> : null}
-        {!error && !userId && (mentors === null || publicationMentors === null) ? <Loading /> : null}
+        {!error && !userId && (mentors === null || fieldChangeMentors === null || publicationMentors === null) ? <Loading /> : null}
         {!error && mentor ? <DetailView mentor={mentor} /> : null}
-        {!error && mentors && publicationMentors ? <QueueView pending={mentors} publication={publicationMentors} /> : null}
+        {!error && mentors && fieldChangeMentors && publicationMentors ? <QueueView pending={mentors} fieldChanges={fieldChangeMentors} publication={publicationMentors} /> : null}
       </div>
     </main>
   );
 }
 
-function QueueView({ pending, publication }: { pending: Summary[]; publication: Summary[] }) {
+function QueueView({ pending, fieldChanges, publication }: { pending: Summary[]; fieldChanges: Summary[]; publication: Summary[] }) {
   return (
     <div className="space-y-10">
       <QueueSection title="Pending mentor reviews" empty="There are no mentor profiles awaiting review." mentors={pending} />
+      <QueueSection title="Pending critical field changes" empty="There are no critical field changes awaiting review." mentors={fieldChanges} />
       <QueueSection title="Publication management" empty="There are no approved or published mentors to manage." mentors={publication} />
     </div>
   );
@@ -155,7 +159,24 @@ function DetailView({ mentor }: { mentor: Detail }) {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [pendingChanges, setPendingChanges] = useState(mentor.pendingChanges ?? []);
 
+async function reviewField(changeId: string, action: "approve" | "reject") {
+    const reason = action === "reject" ? window.prompt("Rejection reason")?.trim() ?? "" : "";
+    if (action === "reject" && reason.length < 3) return;
+    setBusy(true); setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/mentors/${mentor.userId}/fields/${changeId}`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Unable to review field");
+      setPendingChanges((current) => current.filter((change) => change.id !== changeId));
+      setMessage({ type: "success", text: action === "approve" ? "The field change was approved." : "The field change was rejected; the approved value remains public." });
+    } catch (reason) { setMessage({ type: "error", text: reason instanceof Error ? reason.message : "Unable to review field" }); }
+    finally { setBusy(false); }
+  }
   async function review(action: "approve" | "reject") {
     await submit(
       `/api/admin/mentors/${mentor.userId}`,
@@ -224,6 +245,13 @@ function DetailView({ mentor }: { mentor: Detail }) {
           )}
         </ReviewSection>
       ) : null}
+      {pendingChanges.length ? <ReviewSection title="Pending critical field changes">
+        <div className="grid gap-4">{pendingChanges.map((change) => <article key={change.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="font-bold">{LABELS[change.fieldName] ?? change.fieldName}</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2"><div><p className="text-xs font-bold uppercase text-slate-500">Current approved value</p><p className="mt-1 break-words">{formatValue(change.currentValue)}</p></div><div><p className="text-xs font-bold uppercase text-slate-500">Requested value</p><p className="mt-1 break-words">{formatValue(change.requestedValue)}</p></div></div>
+          <div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => void reviewField(change.id, "approve")} className="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-50">Approve field</button><button disabled={busy} onClick={() => void reviewField(change.id, "reject")} className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50">Reject field</button></div>
+        </article>)}</div>
+      </ReviewSection> : null}
       <ReviewSection title="Personal profile"><RecordFields value={mentor.profile} /></ReviewSection>
       <ReviewSection title="Mentoring subjects">{mentor.subjects.length ? <div className="grid gap-3">{mentor.subjects.map((subject) => <div key={subject.subjectId} className="rounded-xl bg-slate-50 p-4"><p className="font-bold">{subject.customSubject || subject.subjectName || "Unnamed subject"}</p><p className="mt-1 text-sm text-slate-600">Age groups: {subject.ageGroups.join(", ") || "Not saved"}</p></div>)}</div> : <EmptyValue />}</ReviewSection>
       <ReviewSection title="Availability"><RecordFields value={mentor.availability} /></ReviewSection>

@@ -39,7 +39,7 @@ test("availability management is mentor-only and owner-scoped", () => {
   assert.match(availabilityRoute, /user\.role !== "mentor"/);
   assert.match(availabilityRoute, /\.eq\("mentor_user_id", user\.id\)/);
   assert.match(availabilityRoute, /Asia\/Jerusalem/);
-  assert.match(availabilityRoute, /MEETING_DURATIONS/);
+  assert.match(availabilityRoute, /isMeetingDuration/);
   assert.match(availabilityRoute, /MEETING_MODES/);
 });
 

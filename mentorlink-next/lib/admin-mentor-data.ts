@@ -40,6 +40,7 @@ export type AdminMentorDetail = {
   parentConsent: Record<string, unknown> | null;
   isMinor: boolean | null;
   photoUrl: string | null;
+  pendingChanges: Array<{ id: string; fieldName: string; currentValue: unknown; requestedValue: unknown; requestedAt: string }>;
 };
 
 function check(context: string, error: { message: string } | null) {
@@ -104,6 +105,19 @@ export async function getPendingMentors(
   return results.filter((mentor) => isPendingQueueStatus(mentor.status));
 }
 
+export async function getPendingFieldChangeMentors(
+  administratorUserId: string,
+  admin: AdminReviewDataClient,
+) {
+  const changes = await admin.from("mentor_public_pending_changes")
+    .select("mentor_user_id").eq("status", "pending");
+  check("Unable to load pending field reviews", changes.error);
+  const ids = [...new Set((changes.data ?? []).map((change) => change.mentor_user_id))]
+    .filter((id) => id !== administratorUserId);
+  if (!ids.length) return [];
+  const candidates = await summaries(administratorUserId, admin, ["published"]);
+  return candidates.filter((mentor) => ids.includes(mentor.userId));
+}
 export function getPublicationMentors(
   administratorUserId: string,
   admin: AdminReviewDataClient,
@@ -133,10 +147,11 @@ export async function getAdminMentorDetail(
     admin.from("mentor_experience").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_preferences").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_parent_consents").select("status, parent_name, parent_relationship, details_confirmed, participation_confirmed, contact_confirmed, consent_requested_at, consented_at, declined_at, consent_version").eq("user_id", userId).maybeSingle(),
+    admin.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", userId).eq("status", "pending").order("requested_at"),
   ]);
   const failure = results.find((result) => result.error);
   check("Unable to load mentor review", failure?.error ?? null);
-  const [profileResult, subjectsResult, availability, locations, experience, preferences, parentConsent] = results;
+  const [profileResult, subjectsResult, availability, locations, experience, preferences, parentConsent, pendingChanges] = results;
   const profile = (profileResult.data as Record<string, unknown> | null) ?? null;
   const subjects = ((subjectsResult.data ?? []) as Array<{
     subject_id: number;
@@ -171,5 +186,6 @@ export async function getAdminMentorDetail(
     parentConsent: (parentConsent.data as Record<string, unknown> | null) ?? null,
     isMinor: minor(profile?.birth_date),
     photoUrl,
+    pendingChanges: ((pendingChanges.data ?? []) as Array<{ id: string; field_name: string; current_value: unknown; requested_value: unknown; requested_at: string }>).map((change) => ({ id: change.id, fieldName: change.field_name, currentValue: change.current_value, requestedValue: change.requested_value, requestedAt: change.requested_at })),
   };
 }

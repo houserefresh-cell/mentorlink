@@ -2,7 +2,7 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { overlapsYomKippur, YOM_KIPPUR_MESSAGE } from "@/lib/israel-calendar";
 import { loadPublishedSchedulingMentor, loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
-import { isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
+import { isCurrentGeneratedSlot, isMeetingDuration, meetingEndAt } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/web-push-delivery";
 
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid mentor selection" }, { status: 400 });
     }
     const requestedStart = new Date(requestedStartAt);
-    if (!Number.isFinite(requestedStart.getTime()) || !MEETING_DURATIONS.includes(duration as never)) {
+    if (!Number.isFinite(requestedStart.getTime()) || !isMeetingDuration(duration)) {
       return Response.json({ error: "Invalid meeting request" }, { status: 400 });
     }
     const requestedEnd = meetingEndAt(requestedStart, duration)!;

@@ -2,7 +2,7 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { overlapsYomKippur, YOM_KIPPUR_MESSAGE } from "@/lib/israel-calendar";
 import { loadSlots } from "@/lib/meeting-data";
 import { createMeetingNotification, sendMeetingEmail } from "@/lib/meeting-notifications";
-import { canTransition, isCurrentGeneratedSlot, meetingEndAt, MEETING_DURATIONS } from "@/lib/meeting-scheduling-core";
+import { canTransition, isCurrentGeneratedSlot, isMeetingDuration, meetingEndAt } from "@/lib/meeting-scheduling-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/web-push-delivery";
 
@@ -60,7 +60,7 @@ export async function PATCH(
         !Number.isFinite(requestedEnd.getTime()) ||
         !expectedEnd ||
         requestedEnd.getTime() !== expectedEnd.getTime() ||
-        !MEETING_DURATIONS.includes(current.requested_duration_minutes as never)
+        !isMeetingDuration(current.requested_duration_minutes)
       ) {
         return Response.json({ error: "Invalid meeting interval" }, { status: 422 });
       }
@@ -81,7 +81,7 @@ export async function PATCH(
       const startAt = clean(payload.proposedStartAt, 40);
       const duration = Number(payload.proposedDurationMinutes);
       const proposedStart = new Date(startAt);
-      if (!startAt || !Number.isFinite(proposedStart.getTime()) || !MEETING_DURATIONS.includes(duration as never)) {
+      if (!startAt || !Number.isFinite(proposedStart.getTime()) || !isMeetingDuration(duration)) {
         return Response.json({ error: "Invalid alternative slot" }, { status: 400 });
       }
       const proposedEnd = new Date(proposedStart.getTime() + duration * 60_000);

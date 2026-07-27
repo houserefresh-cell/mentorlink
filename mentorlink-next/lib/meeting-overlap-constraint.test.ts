@@ -5,9 +5,8 @@ import { canTransition, meetingEndAt } from "./meeting-scheduling-core.ts";
 
 const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read(
-  "supabase/migrations/202607270010_create_parent_mentor_meeting_requests.sql",
-);
+const migration = read("supabase/migrations/202607270010_create_parent_mentor_meeting_requests.sql");
+const fieldMigration = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
 const createRoute = read("app/api/meeting-requests/route.ts");
 const actionRoute = read("app/api/meeting-requests/[requestId]/route.ts");
 const dataLoader = read("lib/meeting-data.ts");
@@ -27,8 +26,10 @@ test("accepted meeting stores a canonical requested start and matching end", () 
 });
 
 test("unsupported durations cannot produce a canonical end", () => {
-  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 20), null);
-  assert.match(migration, /requested_duration_minutes in \(30, 45, 60, 90\)/);
+  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 12), null);
+  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 75)?.toISOString(), "2026-08-10T13:15:00.000Z");
+  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 100)?.toISOString(), "2026-08-10T13:40:00.000Z");
+  assert.match(fieldMigration, /requested_duration_minutes between 15 and 180/);
 });
 
 test("overlap exclusion uses only stored columns and a half-open interval", () => {

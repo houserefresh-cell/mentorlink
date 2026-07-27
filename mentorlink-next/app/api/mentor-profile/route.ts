@@ -1,0 +1,66 @@
+import { revalidatePath } from "next/cache";
+import { authenticateMeetingUser } from "@/lib/meeting-auth";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
+
+const CRITICAL_FIELDS = ["first_name", "last_name", "bio", "birth_date", "profile_photo_path"] as const;
+const SAFE_FIELDS = ["grade", "school", "city", "phone", "languages"] as const;
+const text = (value: unknown, maximum: number) => typeof value === "string" && value.trim().length <= maximum ? value.trim() : "";
+
+export async function GET(request: Request) {
+  const user = await authenticateMeetingUser(request.headers.get("authorization"));
+  if (!user) return Response.json({ error: "Authentication required" }, { status: 401 });
+  if (user.role !== "mentor") return Response.json({ error: "Mentor role required" }, { status: 403 });
+  const client = createSupabaseAdmin();
+  const [profile, publication, pending] = await Promise.all([
+    client.from("mentor_profiles").select("first_name, last_name, birth_date, grade, school, city, phone, languages, bio, profile_photo_path").eq("user_id", user.id).maybeSingle(),
+    client.from("mentor_publication").select("status").eq("user_id", user.id).maybeSingle(),
+    client.from("mentor_public_pending_changes").select("field_name, requested_value").eq("mentor_user_id", user.id).eq("status", "pending"),
+  ]);
+  if (profile.error || publication.error || pending.error) return Response.json({ error: "Unable to load mentor profile" }, { status: 500 });
+  return Response.json({ profile: profile.data, publicationStatus: publication.data?.status ?? "draft", pendingChanges: pending.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+}
+
+export async function PUT(request: Request) {
+  const user = await authenticateMeetingUser(request.headers.get("authorization"));
+  if (!user) return Response.json({ error: "Authentication required" }, { status: 401 });
+  if (user.role !== "mentor") return Response.json({ error: "Mentor role required" }, { status: 403 });
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return Response.json({ error: "Invalid request" }, { status: 400 }); }
+  const client = createSupabaseAdmin();
+  const [profile, publication] = await Promise.all([
+    client.from("mentor_profiles").select("*").eq("user_id", user.id).maybeSingle(),
+    client.from("mentor_publication").select("status").eq("user_id", user.id).maybeSingle(),
+  ]);
+  if (profile.error || publication.error) return Response.json({ error: "Unable to load profile state" }, { status: 500 });
+  const normalized: Record<string, unknown> = {
+    first_name: text(body.first_name, 80), last_name: text(body.last_name, 80),
+    birth_date: text(body.birth_date, 10), grade: text(body.grade, 80), school: text(body.school, 160),
+    city: text(body.city, 120), phone: text(body.phone, 40),
+    languages: Array.isArray(body.languages) ? body.languages.map((value) => text(value, 80)).filter(Boolean).slice(0, 20) : [],
+    bio: text(body.bio, 1000),
+  };
+  if (!normalized.first_name || !normalized.last_name || !normalized.birth_date || !normalized.bio || !(normalized.languages as string[]).length) return Response.json({ error: "Invalid profile", code: "INVALID_PROFILE" }, { status: 400 });
+  const published = publication.data?.status === "published";
+  const immediate: Record<string, unknown> = {};
+  for (const field of SAFE_FIELDS) immediate[field] = normalized[field];
+  const pendingFields: string[] = [];
+  if (published && profile.data) {
+    for (const field of CRITICAL_FIELDS.filter((field) => field !== "profile_photo_path")) {
+      if (JSON.stringify(profile.data[field]) === JSON.stringify(normalized[field])) continue;
+      const existing = await client.from("mentor_public_pending_changes").select("id").eq("mentor_user_id", user.id).eq("field_name", field).eq("status", "pending").maybeSingle();
+      const change = { current_value: profile.data[field], requested_value: normalized[field], requested_at: new Date().toISOString() };
+      const result = existing.data
+        ? await client.from("mentor_public_pending_changes").update(change).eq("id", existing.data.id)
+        : await client.from("mentor_public_pending_changes").insert({ mentor_user_id: user.id, field_name: field, ...change });
+      if (result.error) return Response.json({ error: "Unable to stage profile change", code: "PENDING_CHANGE_FAILED" }, { status: 500 });
+      pendingFields.push(field);
+    }
+  } else {
+    for (const field of CRITICAL_FIELDS.filter((field) => field !== "profile_photo_path")) immediate[field] = normalized[field];
+  }
+  if (!profile.data) return Response.json({ error: "Mentor profile not found", code: "PROFILE_NOT_FOUND" }, { status: 404 });
+  const saved = await client.from("mentor_profiles").update({ ...immediate, updated_at: new Date().toISOString() }).eq("user_id", user.id);
+  if (saved.error) return Response.json({ error: "Unable to save profile", code: "PROFILE_SAVE_FAILED" }, { status: 500 });
+  revalidatePath("/");
+  return Response.json({ saved: true, pendingFields, publicationStatus: publication.data?.status ?? "draft" });
+}

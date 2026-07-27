@@ -5,7 +5,10 @@ import {
   overlapsYomKippur,
 } from "./israel-calendar.ts";
 
-export const MEETING_DURATIONS = [30, 45, 60, 90] as const;
+export const MEETING_DURATIONS = [30, 45, 60, 75, 90] as const;
+export function isMeetingDuration(value: number) {
+  return Number.isInteger(value) && value >= 15 && value <= 180 && value % 5 === 0;
+}
 export const MEETING_MODES = ["פרונטלי", "אונליין"] as const;
 export const MEETING_STATUSES = [
   "pending",
@@ -82,7 +85,7 @@ export function generateBookableSlots(input: {
         const start = new Date(startMs);
         if (start <= input.now) continue;
         const durations = window.supported_durations
-          .filter((duration) => MEETING_DURATIONS.includes(duration as never))
+          .filter(isMeetingDuration)
           .filter((duration) => {
             const end = new Date(startMs + duration * 60_000);
             return (
@@ -120,7 +123,7 @@ export function isCurrentGeneratedSlot(
 }
 
 export function meetingEndAt(startAt: string | Date, durationMinutes: number) {
-  if (!MEETING_DURATIONS.includes(durationMinutes as never)) return null;
+  if (!isMeetingDuration(durationMinutes)) return null;
   const start = startAt instanceof Date ? startAt : new Date(startAt);
   if (!Number.isFinite(start.getTime())) return null;
   return new Date(start.getTime() + durationMinutes * 60_000);

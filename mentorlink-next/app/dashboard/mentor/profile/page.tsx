@@ -26,6 +26,8 @@ export default function MentorProfilePage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [pendingFields, setPendingFields] = useState<string[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -43,54 +45,22 @@ export default function MentorProfilePage() {
     let active = true;
 
     async function loadProfile() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!active) {
-        return;
-      }
-
-      if (userError || !user) {
-        router.replace("/login");
-        return;
-      }
-
-      setUserId(user.id);
-
-      const { data, error: profileError } = await supabase
-        .from("mentor_profiles")
-        .select(
-          "first_name, last_name, birth_date, grade, school, city, phone, languages, bio",
-        )
-        .eq("user_id", user.id)
-        .maybeSingle<MentorProfile>();
-
-      if (!active) {
-        return;
-      }
-
-      if (profileError) {
-        setFirstName(user.user_metadata?.first_name ?? "");
-        setLastName(user.user_metadata?.last_name ?? "");
-        setMessage({
-          type: "error",
-          text: `לא ניתן לטעון את הפרופיל: ${profileError.message}`,
-        });
-        setLoading(false);
-        return;
-      }
-
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      const user = session.session?.user;
+      const token = session.session?.access_token;
+      if (!active) return;
+      if (sessionError || !user || !token) { router.replace("/login"); return; }
+      setUserId(user.id); setAccessToken(token);
+      const response = await fetch("/api/mentor-profile", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!active) return;
+      if (!response.ok) { setMessage({ type: "error", text: "לא ניתן לטעון את הפרופיל." }); setLoading(false); return; }
+      const data = body.profile as MentorProfile | null;
       setFirstName(data?.first_name ?? user.user_metadata?.first_name ?? "");
       setLastName(data?.last_name ?? user.user_metadata?.last_name ?? "");
-      setBirthDate(data?.birth_date ?? "");
-      setGrade(data?.grade ?? "");
-      setSchool(data?.school ?? "");
-      setCity(data?.city ?? "");
-      setPhone(data?.phone ?? "");
-      setLanguages(data?.languages?.join(", ") ?? "");
-      setBio(data?.bio ?? "");
+      setBirthDate(data?.birth_date ?? ""); setGrade(data?.grade ?? ""); setSchool(data?.school ?? "");
+      setCity(data?.city ?? ""); setPhone(data?.phone ?? ""); setLanguages(data?.languages?.join(", ") ?? ""); setBio(data?.bio ?? "");
+      setPendingFields((body.pendingChanges ?? []).map((change: { field_name: string }) => change.field_name));
       setLoading(false);
     }
 
@@ -130,40 +100,24 @@ export default function MentorProfilePage() {
 
     const normalizedFirstName = firstName.trim();
     const normalizedLastName = lastName.trim();
-    const { error: profileError } = await supabase
-      .from("mentor_profiles")
-      .upsert(
-        {
-          user_id: userId,
-          first_name: normalizedFirstName,
-          last_name: normalizedLastName,
-          birth_date: birthDate,
-          grade: grade.trim(),
-          school: school.trim(),
-          city: city.trim(),
-          phone: phone.trim(),
-          languages: normalizedLanguages,
-          bio: bio.trim(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    if (profileError) {
-      setMessage({
-        type: "error",
-        text: `לא ניתן לשמור את הפרופיל: ${profileError.message}`,
-      });
-      setSaving(false);
-      return;
-    }
-
-    const { error: metadataError } = await supabase.auth.updateUser({
-      data: {
-        first_name: normalizedFirstName,
-        last_name: normalizedLastName,
-      },
+    const response = await fetch("/api/mentor-profile", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        first_name: normalizedFirstName, last_name: normalizedLastName, birth_date: birthDate,
+        grade: grade.trim(), school: school.trim(), city: city.trim(), phone: phone.trim(),
+        languages: normalizedLanguages, bio: bio.trim(),
+      }),
     });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage({ type: "error", text: `${result.error ?? "לא ניתן לשמור את הפרופיל."} (${result.code ?? "PROFILE_SAVE_FAILED"})` });
+      setSaving(false); return;
+    }
+    const nextPending = result.pendingFields ?? [];
+    setPendingFields(nextPending);
+    const namePending = nextPending.includes("first_name") || nextPending.includes("last_name");
+    const { error: metadataError } = namePending ? { error: null } : await supabase.auth.updateUser({ data: { first_name: normalizedFirstName, last_name: normalizedLastName } });
 
     setFirstName(normalizedFirstName);
     setLastName(normalizedLastName);
@@ -182,7 +136,7 @@ export default function MentorProfilePage() {
     } else {
       setMessage({
         type: "success",
-        text: "הפרטים נשמרו בהצלחה.",
+        text: nextPending.length ? "השינוי ממתין לאישור." : "השינויים נשמרו.",
       });
     }
 
@@ -239,7 +193,7 @@ export default function MentorProfilePage() {
           className="rounded-3xl border border-blue-100 bg-white p-8 shadow-xl md:p-10"
         >
           <div className="grid gap-5 md:grid-cols-2">
-            <FormField label="שם פרטי" htmlFor="firstName">
+            <FormField label="שם פרטי" htmlFor="firstName">{pendingFields.includes("first_name") && <PendingLabel />}
               <input
                 id="firstName"
                 type="text"
@@ -251,7 +205,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="שם משפחה" htmlFor="lastName">
+            <FormField label="שם משפחה" htmlFor="lastName">{pendingFields.includes("last_name") && <PendingLabel />}
               <input
                 id="lastName"
                 type="text"
@@ -263,7 +217,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="תאריך לידה" htmlFor="birthDate">
+            <FormField label="תאריך לידה" htmlFor="birthDate">{pendingFields.includes("birth_date") && <PendingLabel />}
               <input
                 id="birthDate"
                 type="date"
@@ -339,7 +293,7 @@ export default function MentorProfilePage() {
           </div>
 
           <div className="mt-5">
-            <FormField label="תיאור קצר על עצמי" htmlFor="bio">
+            <FormField label="תיאור קצר על עצמי" htmlFor="bio">{pendingFields.includes("bio") && <PendingLabel />}
               <textarea
                 id="bio"
                 value={bio}
@@ -398,3 +352,5 @@ function FormField({
     </div>
   );
 }
+
+function PendingLabel() { return <span className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">ממתין לאישור</span>; }
