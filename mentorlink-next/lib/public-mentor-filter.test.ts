@@ -6,6 +6,7 @@ import { ALL_CITIES, filterPublicMentors } from "./public-mentor-filter.ts";
 
 const mentors: PublicMentor[] = [
   {
+    bookingId: "booking-public-id",
     displayName: "נועה כ׳",
     city: "רעננה",
     subjects: ["מתמטיקה"],
@@ -16,6 +17,7 @@ const mentors: PublicMentor[] = [
     availability: ["אחר הצהריים"],
   },
   {
+    bookingId: "booking-public-id",
     displayName: "דניאל ל׳",
     city: "חיפה",
     subjects: ["אנגלית"],

@@ -1,4 +1,5 @@
 export type PublicMentor = {
+  bookingId: string;
   displayName: string;
   city: string | null;
   subjects: string[];
@@ -9,7 +10,7 @@ export type PublicMentor = {
   availability: string[];
 };
 
-export type PublishedRow = { user_id: string; status: string };
+export type PublishedRow = { user_id: string; status: string; public_booking_id: string };
 export type ProfileRow = {
   user_id: string;
   first_name: string | null;
@@ -68,7 +69,9 @@ export function mapPublishedMentors(input: {
       const experience = input.experiences.find((row) => row.user_id === profile.user_id);
       const preferences = input.preferences.find((row) => row.user_id === profile.user_id);
       const availability = input.availability.find((row) => row.user_id === profile.user_id);
+      const publication = input.publications.find((row) => row.user_id === profile.user_id);
       return {
+        bookingId: publication?.public_booking_id ?? "",
         displayName: publicDisplayName(profile.first_name, profile.last_name),
         city: profile.city?.trim() || null,
         subjects: unique(subjects.map((row) => {

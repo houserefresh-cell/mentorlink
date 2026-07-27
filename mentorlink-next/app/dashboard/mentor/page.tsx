@@ -11,13 +11,14 @@ const CARDS = [
   { key: "onboarding", title: "מסע הרשמה", description: "השלמת הפרופיל בשלבים קצרים ונוחים למובייל.", href: "/dashboard/mentor/onboarding" },
   { key: "profile", title: "פרטים אישיים", description: "שם, לימודים, שפות ותיאור קצר.", href: "/dashboard/mentor/profile" },
   { key: "subjects", title: "מקצועות ותחומים", description: "תחומי החונכות ושכבות הגיל.", href: "/dashboard/mentor/subjects" },
-  { key: "availability", title: "זמינות", description: "ימים, שעות וסוגי מפגשים.", href: "/dashboard/mentor/availability" },
+  { key: "availability", title: "זמינות", description: "ימים, שעות וסוגי מפגשים.", href: "/dashboard/mentor/scheduling" },
   { key: "locations", title: "אזורי פעילות ובתי ספר", description: "אזורים, מוסדות ומקומות מפגש.", href: "/dashboard/mentor/locations" },
   { key: "experience", title: "ניסיון ויכולות", description: "רקע, חוזקות וסגנון חונכות.", href: "/dashboard/mentor/experience" },
   { key: "preferences", title: "העדפות התאמה", description: "העדפות שיעזרו ליצור התאמה טובה.", href: "/dashboard/mentor/preferences" },
   { key: "photo", title: "תמונת פרופיל", description: "תמונה ברורה ואמינה למשפחות.", href: "/dashboard/mentor/photo" },
   { key: "parentConsent", title: "אישור הורה", description: "אישור הורה לחונך שטרם מלאו לו 18.", href: "/dashboard/mentor/parent-consent" },
   { key: "preview", title: "תצוגה מקדימה ופרסום", description: "בדיקה ושליחת הפרופיל לאישור.", href: "/dashboard/mentor/preview" },
+  { key: "meetingRequests", title: "בקשות לפגישה", description: "בקשות חדשות, פגישות מאושרות והיסטוריה.", href: "/dashboard/mentor/meeting-requests" },
 ] as const;
 
 type ConsentCardStatus = "הושלם" | "ממתין לאישור" | "חסר" | "לא נדרש";

@@ -27,7 +27,8 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push(await getDashboardPath(data.user.id));
+    const returnTo = new URLSearchParams(window.location.search).get("returnTo");
+    router.push(returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : await getDashboardPath(data.user.id));
   }
 
   async function continueWithGoogle() {
@@ -36,7 +37,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?flow=login`,
+        redirectTo: `${window.location.origin}/auth/callback?flow=login&returnTo=${encodeURIComponent(new URLSearchParams(window.location.search).get("returnTo") ?? "")}`,
       },
     });
     if (error) {

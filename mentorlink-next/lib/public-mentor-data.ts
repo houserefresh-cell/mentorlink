@@ -15,7 +15,7 @@ import {
 export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   const publications = await admin
     .from("mentor_publication")
-    .select("user_id, status")
+    .select("user_id, status, public_booking_id")
     .eq("status", "published");
   if (publications.error) throw new Error("Unable to load published mentors");
   const ids = ((publications.data ?? []) as PublishedRow[]).map((row) => row.user_id);

@@ -146,7 +146,8 @@ function AuthCallbackContent() {
         : isParentRegistration
           ? "/dashboard/parent"
           : await getDashboardPath(user.id);
-      router.replace(dashboardPath);
+      const returnTo = searchParams.get("returnTo");
+      router.replace(returnTo?.startsWith("/") && !returnTo.startsWith("//") && (isParentRegistration || user.user_metadata?.role === "parent") ? returnTo : dashboardPath);
     }
 
     void finish();

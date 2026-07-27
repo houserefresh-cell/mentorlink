@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import type { PublicMentor } from "@/lib/public-mentor-core";
+import MeetingRequestFlow from "./MeetingRequestFlow";
 import { ALL_CITIES, filterPublicMentors } from "@/lib/public-mentor-filter";
 
 export default function PublicMentorDirectory({ mentors }: { mentors: PublicMentor[] }) {
@@ -166,6 +167,7 @@ function MentorDetailsDialog({
         <DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} />
         <DetailsValues title="אופן המפגש" values={mentor.meetingModes} />
         <DetailsValues title="זמינות כללית" values={mentor.availability} />
+        <MeetingRequestFlow mentorBookingId={mentor.bookingId} mentorDisplayName={mentor.displayName} />
       </div>
     </dialog>
   );

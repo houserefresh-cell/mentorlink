@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { getDashboardPath } from "../../../lib/auth-routing";
+import MeetingRequestsPanel from "../_components/MeetingRequestsPanel";
 
 export default function ParentDashboardPage() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function ParentDashboardPage() {
           <h2 className="text-2xl font-extrabold">ברוכים הבאים ל־MentorLink</h2>
           <p className="mt-3 text-slate-600">כלי החיפוש וההתאמה להורים יתווספו בהמשך הפיילוט.</p>
         </div>
+        <MeetingRequestsPanel role="parent" />
       </section>
     </main>
   );

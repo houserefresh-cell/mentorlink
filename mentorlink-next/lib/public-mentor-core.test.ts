@@ -38,7 +38,7 @@ const base = {
 for (const status of ["approved", "paused", "pending_review", "rejected", "draft"]) {
   test(`${status} mentor is not publicly returned`, () => {
     assert.deepEqual(mapPublishedMentors({
-      publications: [{ user_id: profile.user_id, status }],
+      publications: [{ user_id: profile.user_id, status, public_booking_id: "booking-public-id" }],
       ...base,
     }), []);
   });
@@ -46,10 +46,11 @@ for (const status of ["approved", "paused", "pending_review", "rejected", "draft
 
 test("published mentor is mapped to a strict safe public object", () => {
   const [mentor] = mapPublishedMentors({
-    publications: [{ user_id: profile.user_id, status: "published" }],
+    publications: [{ user_id: profile.user_id, status: "published", public_booking_id: "booking-public-id" }],
     ...base,
   });
   assert.deepEqual(mentor, {
+    bookingId: "booking-public-id",
     displayName: "נועה כ׳",
     city: "רעננה",
     subjects: ["מתמטיקה"],
