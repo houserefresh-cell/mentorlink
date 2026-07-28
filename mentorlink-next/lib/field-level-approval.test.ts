@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const migration = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
+const migration013 = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
+const migration014 = read("supabase/migrations/202607280014_allow_city_phone_pending_review.sql");
+const migration = migration013 + "\n" + migration014;
 const profileApi = read("app/api/mentor-profile/route.ts");
 const photoApi = read("app/api/mentor-profile/photo/route.ts");
 const adminAction = read("app/api/admin/mentors/[userId]/fields/[changeId]/route.ts");
@@ -11,11 +13,18 @@ const profileUi = read("app/dashboard/mentor/profile/page.tsx");
 const publicLoader = read("lib/public-mentor-data.ts");
 
 test("critical public fields are staged while safe structured fields save immediately", () => {
-  for (const field of ["first_name", "last_name", "bio", "birth_date", "profile_photo_path"]) assert.match(migration, new RegExp(field));
+  assert.match(profileApi, /const CRITICAL_FIELDS = \[[^\]]*"city"[^\]]*"phone"[^\]]*\] as const;/);
+  assert.match(profileApi, /const SAFE_FIELDS = \["grade", "school", "languages"\] as const;/);
+
+  for (const field of ["first_name", "last_name", "bio", "birth_date", "city", "phone", "profile_photo_path"]) {
+    assert.match(migration, new RegExp(field));
+  }
+
   assert.match(migration, /custom_subject:/);
-  for (const field of ["grade", "school", "city", "phone", "languages"]) assert.match(profileApi, new RegExp(`SAFE_FIELDS[\\s\\S]*${field}`));
   assert.match(profileApi, /publication\.data\?\.status === "published"/);
   assert.match(profileApi, /mentor_public_pending_changes/);
+  assert.match(profileApi, /\.update\(\{ requested_value: normalized\[field\], requested_at: requestedAt \}\)/);
+  assert.doesNotMatch(profileApi, /\.update\(\{ current_value:/);
   assert.doesNotMatch(profileApi, /mentor_publication"\)\.update/);
 });
 
@@ -38,8 +47,12 @@ test("mentor labels only affected fields and photo changes use protected review"
 });
 
 test("administrator reviews one field with old versus new and conditional status", () => {
-  assert.match(adminUi, /Current approved value/); assert.match(adminUi, /Requested value/);
-  assert.match(adminUi, /Approve field/); assert.match(adminUi, /Reject field/);
+  assert.match(adminUi, /הערך המאושר כעת/);
+  assert.match(adminUi, /הערך החדש שהתבקש/);
+  assert.match(adminUi, /הבקשה נשלחה/);
+  assert.match(adminUi, /אישור השינוי/);
+  assert.match(adminUi, /דחיית השינוי/);
+  assert.match(adminAction, /new Set\(\[[^\]]*"city"[^\]]*"phone"/);
   assert.match(adminAction, /authorizeAdministrator/);
   assert.match(adminAction, /\.eq\("status", "pending"\)/);
   assert.match(adminAction, /customSubjectId/);

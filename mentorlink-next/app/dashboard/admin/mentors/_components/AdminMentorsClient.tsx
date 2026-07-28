@@ -38,9 +38,9 @@ type Detail = {
 };
 
 const LABELS: Record<string, string> = {
-  first_name: "First name", last_name: "Last name", birth_date: "Birth date",
-  grade: "Grade", school: "School", city: "City", phone: "Phone",
-  languages: "Languages", bio: "Biography", weekly_schedule: "Weekly schedule",
+  first_name: "שם פרטי", last_name: "שם משפחה", birth_date: "תאריך לידה",
+  grade: "כיתה", school: "בית ספר", city: "עיר מגורים", phone: "מספר טלפון",
+  languages: "שפות", bio: "אודות החונך", weekly_schedule: "זמינות שבועית",
   flexible_availability: "Flexible availability", available_on_holidays: "Available on holidays",
   recurring_meetings: "Recurring meetings", one_time_meetings: "One-time meetings",
   time_preferences: "Preferred times", activity_areas: "Activity areas",
@@ -245,11 +245,24 @@ async function reviewField(changeId: string, action: "approve" | "reject") {
           )}
         </ReviewSection>
       ) : null}
-      {pendingChanges.length ? <ReviewSection title="Pending critical field changes">
+      {pendingChanges.length ? <ReviewSection title="שינויים הממתינים לאישור">
         <div className="grid gap-4">{pendingChanges.map((change) => <article key={change.id} className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <h3 className="font-bold">{LABELS[change.fieldName] ?? change.fieldName}</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2"><div><p className="text-xs font-bold uppercase text-slate-500">Current approved value</p><p className="mt-1 break-words">{formatValue(change.currentValue)}</p></div><div><p className="text-xs font-bold uppercase text-slate-500">Requested value</p><p className="mt-1 break-words">{formatValue(change.requestedValue)}</p></div></div>
-          <div className="mt-4 flex gap-2"><button disabled={busy} onClick={() => void reviewField(change.id, "approve")} className="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-50">Approve field</button><button disabled={busy} onClick={() => void reviewField(change.id, "reject")} className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50">Reject field</button></div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-bold text-slate-500">הערך המאושר כעת</p>
+              <p className="mt-1 break-words">{formatValue(change.currentValue)}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-500">הערך החדש שהתבקש</p>
+              <p className="mt-1 break-words">{formatValue(change.requestedValue)}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-slate-600">הבקשה נשלחה: {formatDate(change.requestedAt)}</p>
+          <div className="mt-4 flex gap-2">
+            <button disabled={busy} onClick={() => void reviewField(change.id, "approve")} className="rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-50">אישור השינוי</button>
+            <button disabled={busy} onClick={() => void reviewField(change.id, "reject")} className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white disabled:opacity-50">דחיית השינוי</button>
+          </div>
         </article>)}</div>
       </ReviewSection> : null}
       <ReviewSection title="Personal profile"><RecordFields value={mentor.profile} /></ReviewSection>
@@ -302,7 +315,7 @@ function formatValue(value: unknown) {
 function formatDate(value: string | null) {
   if (!value) return "date unavailable";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
 }
 function Loading() { return <p className="rounded-2xl bg-white p-8 text-slate-600">Loading…</p>; }
 function EmptyValue() { return <p className="text-slate-500">No saved information.</p>; }

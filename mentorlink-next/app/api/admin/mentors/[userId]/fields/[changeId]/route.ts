@@ -1,10 +1,10 @@
-﻿import { revalidatePath } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { adminApiError } from "@/lib/admin-api";
 import { authorizeAdministrator } from "@/lib/admin-authorization";
 import { isUuid } from "@/lib/admin-authorization-core";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
-const ALLOWED_FIELDS = new Set(["first_name", "last_name", "bio", "birth_date", "profile_photo_path"]);
+const ALLOWED_FIELDS = new Set(["first_name", "last_name", "bio", "birth_date", "city", "phone", "profile_photo_path"]);
 const customSubjectId = (field: string) => /^custom_subject:(\d+)$/.exec(field)?.[1] ?? null;
 export async function PATCH(request: Request, { params }: { params: Promise<{ userId: string; changeId: string }> }) {
   try {

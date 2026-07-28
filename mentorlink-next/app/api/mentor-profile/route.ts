@@ -2,8 +2,8 @@ import { revalidatePath } from "next/cache";
 import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
-const CRITICAL_FIELDS = ["first_name", "last_name", "bio", "birth_date", "profile_photo_path"] as const;
-const SAFE_FIELDS = ["grade", "school", "city", "phone", "languages"] as const;
+const CRITICAL_FIELDS = ["first_name", "last_name", "bio", "birth_date", "city", "phone", "profile_photo_path"] as const;
+const SAFE_FIELDS = ["grade", "school", "languages"] as const;
 const text = (value: unknown, maximum: number) => typeof value === "string" && value.trim().length <= maximum ? value.trim() : "";
 
 export async function GET(request: Request) {
@@ -43,17 +43,17 @@ export async function PUT(request: Request) {
   const published = publication.data?.status === "published";
   const immediate: Record<string, unknown> = {};
   for (const field of SAFE_FIELDS) immediate[field] = normalized[field];
-  const pendingFields: string[] = [];
+  const changedPendingFields: string[] = [];
   if (published && profile.data) {
     for (const field of CRITICAL_FIELDS.filter((field) => field !== "profile_photo_path")) {
       if (JSON.stringify(profile.data[field]) === JSON.stringify(normalized[field])) continue;
       const existing = await client.from("mentor_public_pending_changes").select("id").eq("mentor_user_id", user.id).eq("field_name", field).eq("status", "pending").maybeSingle();
-      const change = { current_value: profile.data[field], requested_value: normalized[field], requested_at: new Date().toISOString() };
+      const requestedAt = new Date().toISOString();
       const result = existing.data
-        ? await client.from("mentor_public_pending_changes").update(change).eq("id", existing.data.id)
-        : await client.from("mentor_public_pending_changes").insert({ mentor_user_id: user.id, field_name: field, ...change });
+        ? await client.from("mentor_public_pending_changes").update({ requested_value: normalized[field], requested_at: requestedAt }).eq("id", existing.data.id).eq("status", "pending")
+        : await client.from("mentor_public_pending_changes").insert({ mentor_user_id: user.id, field_name: field, current_value: profile.data[field], requested_value: normalized[field], requested_at: requestedAt });
       if (result.error) return Response.json({ error: "Unable to stage profile change", code: "PENDING_CHANGE_FAILED" }, { status: 500 });
-      pendingFields.push(field);
+      changedPendingFields.push(field);
     }
   } else {
     for (const field of CRITICAL_FIELDS.filter((field) => field !== "profile_photo_path")) immediate[field] = normalized[field];
@@ -61,6 +61,8 @@ export async function PUT(request: Request) {
   if (!profile.data) return Response.json({ error: "Mentor profile not found", code: "PROFILE_NOT_FOUND" }, { status: 404 });
   const saved = await client.from("mentor_profiles").update({ ...immediate, updated_at: new Date().toISOString() }).eq("user_id", user.id);
   if (saved.error) return Response.json({ error: "Unable to save profile", code: "PROFILE_SAVE_FAILED" }, { status: 500 });
+  const remainingPending = await client.from("mentor_public_pending_changes").select("field_name").eq("mentor_user_id", user.id).eq("status", "pending");
+  const pendingFields = remainingPending.error ? changedPendingFields : (remainingPending.data ?? []).map((change) => change.field_name);
   revalidatePath("/");
   return Response.json({ saved: true, pendingFields, publicationStatus: publication.data?.status ?? "draft" });
 }
