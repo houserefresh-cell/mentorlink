@@ -28,6 +28,7 @@ export default function MentorProfilePage() {
   const [userId, setUserId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [pendingFields, setPendingFields] = useState<string[]>([]);
+  const [initialValues, setInitialValues] = useState<MentorProfile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -60,6 +61,17 @@ export default function MentorProfilePage() {
       setLastName(data?.last_name ?? user.user_metadata?.last_name ?? "");
       setBirthDate(data?.birth_date ?? ""); setGrade(data?.grade ?? ""); setSchool(data?.school ?? "");
       setCity(data?.city ?? ""); setPhone(data?.phone ?? ""); setLanguages(data?.languages?.join(", ") ?? ""); setBio(data?.bio ?? "");
+      setInitialValues({
+        first_name: data?.first_name ?? user.user_metadata?.first_name ?? "",
+        last_name: data?.last_name ?? user.user_metadata?.last_name ?? "",
+        birth_date: data?.birth_date ?? "",
+        grade: data?.grade ?? "",
+        school: data?.school ?? "",
+        city: data?.city ?? "",
+        phone: data?.phone ?? "",
+        languages: data?.languages ?? [],
+        bio: data?.bio ?? "",
+      });
       setPendingFields((body.pendingChanges ?? []).map((change: { field_name: string }) => change.field_name));
       setLoading(false);
     }
@@ -70,6 +82,22 @@ export default function MentorProfilePage() {
       active = false;
     };
   }, [router]);
+
+  const currentValues: MentorProfile = {
+    first_name: firstName.trim(),
+    last_name: lastName.trim(),
+    birth_date: birthDate,
+    grade: grade.trim(),
+    school: school.trim(),
+    city: city.trim(),
+    phone: phone.trim(),
+    languages: languages.split(",").map((language) => language.trim()).filter(Boolean),
+    bio: bio.trim(),
+  };
+
+  const hasChanges =
+    initialValues !== null &&
+    JSON.stringify(currentValues) !== JSON.stringify(initialValues);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -127,6 +155,17 @@ export default function MentorProfilePage() {
     setPhone(phone.trim());
     setLanguages(normalizedLanguages.join(", "));
     setBio(bio.trim());
+    setInitialValues({
+      first_name: normalizedFirstName,
+      last_name: normalizedLastName,
+      birth_date: birthDate,
+      grade: grade.trim(),
+      school: school.trim(),
+      city: city.trim(),
+      phone: phone.trim(),
+      languages: normalizedLanguages,
+      bio: bio.trim(),
+    });
 
     if (metadataError) {
       setMessage({
@@ -307,7 +346,7 @@ export default function MentorProfilePage() {
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !hasChanges}
             className="mt-7 w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {saving ? "שומר..." : "שמירת פרטים"}
