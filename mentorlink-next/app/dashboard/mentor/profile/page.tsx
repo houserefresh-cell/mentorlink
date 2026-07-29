@@ -22,12 +22,28 @@ type MentorProfile = {
   bio: string | null;
 };
 
+type PendingChange = {
+  id: string;
+  field_name: string;
+  current_value: unknown;
+  requested_value: unknown;
+  requested_at: string;
+};
+
+const PENDING_FIELD_LABELS: Record<string, string> = {
+  first_name: "שם פרטי",
+  last_name: "שם משפחה",
+  birth_date: "תאריך לידה",
+  bio: "תיאור קצר על עצמי",
+};
+
 export default function MentorProfilePage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [pendingFields, setPendingFields] = useState<string[]>([]);
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [initialValues, setInitialValues] = useState<MentorProfile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -72,7 +88,11 @@ export default function MentorProfilePage() {
         languages: data?.languages ?? [],
         bio: data?.bio ?? "",
       });
-      setPendingFields((body.pendingChanges ?? []).map((change: { field_name: string }) => change.field_name));
+      const loadedPendingChanges: PendingChange[] = Array.isArray(body.pendingChanges)
+        ? body.pendingChanges
+        : [];
+      setPendingChanges(loadedPendingChanges);
+      setPendingFields(loadedPendingChanges.map((change) => change.field_name));
       setLoading(false);
     }
 
@@ -142,7 +162,14 @@ export default function MentorProfilePage() {
       setMessage({ type: "error", text: `${result.error ?? "לא ניתן לשמור את הפרופיל."} (${result.code ?? "PROFILE_SAVE_FAILED"})` });
       setSaving(false); return;
     }
-    const nextPending = result.pendingFields ?? [];
+    const nextPendingChanges: PendingChange[] = Array.isArray(result.pendingChanges)
+      ? result.pendingChanges
+      : [];
+    const nextPending: string[] = Array.isArray(result.pendingFields)
+      ? result.pendingFields
+      : nextPendingChanges.map((change) => change.field_name);
+
+    setPendingChanges(nextPendingChanges);
     setPendingFields(nextPending);
     const namePending = nextPending.includes("first_name") || nextPending.includes("last_name");
     const { error: metadataError } = namePending ? { error: null } : await supabase.auth.updateUser({ data: { first_name: normalizedFirstName, last_name: normalizedLastName } });
@@ -344,6 +371,65 @@ export default function MentorProfilePage() {
             </FormField>
           </div>
 
+          {pendingChanges.length > 0 && (
+            <section
+              aria-labelledby="pending-changes-title"
+              className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5"
+            >
+              <h2
+                id="pending-changes-title"
+                className="text-lg font-extrabold text-amber-950"
+              >
+                שינויים שממתינים לאישור
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                הפרטים החדשים נשמרו ונשלחו לבדיקה. עד לאישור, הפרופיל הציבורי
+                ממשיך להציג את הערכים המאושרים.
+              </p>
+
+              <div className="mt-4 space-y-4">
+                {pendingChanges.map((change) => (
+                  <article
+                    key={change.id}
+                    className="rounded-xl border border-amber-200 bg-white p-4"
+                  >
+                    <h3 className="font-bold text-slate-900">
+                      {PENDING_FIELD_LABELS[change.field_name] ??
+                        change.field_name}
+                    </h3>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs font-bold text-slate-500">
+                          הערך המאושר כרגע
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-slate-800">
+                          {formatPendingValue(change.current_value)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-blue-50 p-3">
+                        <p className="text-xs font-bold text-blue-700">
+                          הערך שביקשת
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-blue-950">
+                          {formatPendingValue(change.requested_value)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {change.requested_at && (
+                      <p className="mt-3 text-xs text-slate-500">
+                        נשלח לבדיקה: {formatPendingDate(change.requested_at)}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
           <button
             type="submit"
             disabled={saving || !hasChanges}
@@ -368,6 +454,34 @@ export default function MentorProfilePage() {
       </section>
     </main>
   );
+}
+
+function formatPendingValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "לא הוגדר";
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map(String).join(", ") : "לא הוגדר";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "כן" : "לא";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function formatPendingDate(value: string) {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("he-IL");
 }
 
 function FormField({

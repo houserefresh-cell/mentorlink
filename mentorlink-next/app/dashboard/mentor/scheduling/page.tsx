@@ -19,7 +19,6 @@ export default function SchedulingAvailabilityPage() {
   const [blackouts, setBlackouts] = useState<Blackout[]>([]);
   const [form, setForm] = useState({ weekday: 0, startTime: "16:00", endTime: "18:00", meetingMode: "אונליין", durations: [60], effectiveStartDate: "", effectiveEndDate: "" });
   const [blockedDate, setBlockedDate] = useState("");
-  const [customDuration, setCustomDuration] = useState("");
   const [blockedEndDate, setBlockedEndDate] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -110,7 +109,6 @@ export default function SchedulingAvailabilityPage() {
         <label className="grid gap-2 font-bold">עד שעה<input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} className="rounded-xl border p-3" /></label>
 <label className="grid gap-2 font-bold">מתאריך (לא חובה)<input type="date" value={form.effectiveStartDate} onChange={(event) => setForm({ ...form, effectiveStartDate: event.target.value })} className="rounded-xl border p-3" /></label><label className="grid gap-2 font-bold">עד תאריך (לא חובה)<input type="date" value={form.effectiveEndDate} onChange={(event) => setForm({ ...form, effectiveEndDate: event.target.value })} className="rounded-xl border p-3" /></label>
         <fieldset className="sm:col-span-2"><legend className="font-bold">משכים נתמכים</legend><div className="mt-2 flex flex-wrap gap-2">{DURATIONS.map((duration) => <button type="button" key={duration} onClick={() => setForm({ ...form, durations: form.durations.includes(duration) ? form.durations.filter((item) => item !== duration) : [...form.durations, duration] })} className={`min-h-11 rounded-xl border px-4 py-2 font-bold ${form.durations.includes(duration) ? "bg-blue-700 text-white" : ""}`}>{duration} דקות</button>)}</div>
-          <div className="mt-3 flex flex-wrap items-end gap-2"><label className="grid gap-1 font-bold">משך מותאם אישית (15–180 דקות, בקפיצות של 5)<input type="number" min={15} max={180} step={5} value={customDuration} onChange={(event) => setCustomDuration(event.target.value)} className="min-h-11 rounded-xl border p-3" /></label><button type="button" onClick={() => { const value = Number(customDuration); if (!Number.isInteger(value) || value < 15 || value > 180 || value % 5 !== 0) { setMessage("משך מותאם חייב להיות בין 15 ל־180 דקות ובקפיצות של 5. (INVALID_DURATION)"); return; } setForm({ ...form, durations: [...new Set([...form.durations, value])] }); setCustomDuration(""); }} className="min-h-11 rounded-xl border px-4 py-2 font-bold">הוספת משך</button></div>
         </fieldset>
         <button type="button" onClick={addWindow} disabled={busy} className="min-h-12 rounded-xl bg-blue-700 font-black text-white disabled:bg-slate-400 sm:col-span-2">{busy ? "שומר..." : editingId ? "עדכון חלון זמינות" : "הוספת חלון זמינות"}</button>
       </div>
