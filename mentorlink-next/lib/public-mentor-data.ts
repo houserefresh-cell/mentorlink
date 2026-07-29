@@ -44,5 +44,5 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
 export const getPublishedMentors = unstable_cache(
   loadPublishedMentors,
   ["public-published-mentors"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: ["public-mentors"] },
 );
