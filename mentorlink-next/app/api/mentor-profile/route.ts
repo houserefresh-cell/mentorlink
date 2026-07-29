@@ -15,10 +15,27 @@ export async function GET(request: Request) {
   const [profile, publication, pending] = await Promise.all([
     client.from("mentor_profiles").select("first_name, last_name, birth_date, grade, school, city, phone, languages, bio, profile_photo_path").eq("user_id", user.id).maybeSingle(),
     client.from("mentor_publication").select("status").eq("user_id", user.id).maybeSingle(),
-    client.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", user.id).eq("status", "pending"),
+    client.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", user.id).eq("status", "pending").in("field_name", Array.from(CANCELABLE_FIELDS)),
   ]);
   if (profile.error || publication.error || pending.error) return Response.json({ error: "Unable to load mentor profile" }, { status: 500 });
-  return Response.json({ profile: profile.data, publicationStatus: publication.data?.status ?? "draft", pendingChanges: pending.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+
+  const approvedProfile = profile.data as Record<string, unknown> | null;
+  const stalePendingIds = (pending.data ?? [])
+    .filter((change) => JSON.stringify(approvedProfile?.[change.field_name]) === JSON.stringify(change.requested_value))
+    .map((change) => change.id);
+
+  if (stalePendingIds.length) {
+    const removed = await client
+      .from("mentor_public_pending_changes")
+      .delete()
+      .eq("mentor_user_id", user.id)
+      .eq("status", "pending")
+      .in("id", stalePendingIds);
+    if (removed.error) return Response.json({ error: "Unable to remove stale pending changes", code: "PENDING_CHANGE_CANCEL_FAILED" }, { status: 500 });
+  }
+
+  const visiblePending = (pending.data ?? []).filter((change) => !stalePendingIds.includes(change.id));
+  return Response.json({ profile: profile.data, publicationStatus: publication.data?.status ?? "draft", pendingChanges: visiblePending }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(request: Request) {
@@ -78,7 +95,7 @@ export async function PUT(request: Request) {
   if (!profile.data) return Response.json({ error: "Mentor profile not found", code: "PROFILE_NOT_FOUND" }, { status: 404 });
   const saved = await client.from("mentor_profiles").update({ ...immediate, updated_at: new Date().toISOString() }).eq("user_id", user.id);
   if (saved.error) return Response.json({ error: "Unable to save profile", code: "PROFILE_SAVE_FAILED" }, { status: 500 });
-  const remainingPending = await client.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", user.id).eq("status", "pending");
+  const remainingPending = await client.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", user.id).eq("status", "pending").in("field_name", Array.from(CANCELABLE_FIELDS));
   const pendingFields = remainingPending.error ? changedPendingFields : (remainingPending.data ?? []).map((change) => change.field_name);
   revalidatePath("/");
   return Response.json({ saved: true, pendingFields, pendingChanges: remainingPending.data ?? [], publicationStatus: publication.data?.status ?? "draft" });

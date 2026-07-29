@@ -35,6 +35,8 @@ const PENDING_FIELD_LABELS: Record<string, string> = {
   last_name: "שם משפחה",
   birth_date: "תאריך לידה",
   bio: "תיאור קצר על עצמי",
+  city: "עיר מגורים",
+  phone: "טלפון",
 };
 
 export default function MentorProfilePage() {
@@ -56,6 +58,7 @@ export default function MentorProfilePage() {
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cancellingField, setCancellingField] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
   useEffect(() => {
@@ -209,6 +212,53 @@ export default function MentorProfilePage() {
     setSaving(false);
   }
 
+  function restoreApprovedValue(field: string, value: unknown) {
+    const approvedValue = value === null || value === undefined ? "" : String(value);
+
+    switch (field) {
+      case "first_name": setFirstName(approvedValue); break;
+      case "last_name": setLastName(approvedValue); break;
+      case "birth_date": setBirthDate(approvedValue); break;
+      case "bio": setBio(approvedValue); break;
+      case "city": setCity(approvedValue); break;
+      case "phone": setPhone(approvedValue); break;
+    }
+  }
+
+  async function cancelPendingChange(change: PendingChange) {
+    if (!accessToken || cancellingField) return;
+
+    setCancellingField(change.field_name);
+    setMessage(null);
+
+    const response = await fetch(
+      `/api/mentor-profile?field=${encodeURIComponent(change.field_name)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setMessage({
+        type: "error",
+        text: `לא ניתן לבטל את השינוי הממתין. (${result.code ?? "PENDING_CHANGE_CANCEL_FAILED"})`,
+      });
+      setCancellingField(null);
+      return;
+    }
+
+    const approvedValue = Object.prototype.hasOwnProperty.call(result, "approvedValue")
+      ? result.approvedValue
+      : change.current_value;
+    restoreApprovedValue(change.field_name, approvedValue);
+    setInitialValues((values) => values ? { ...values, [change.field_name]: approvedValue } : values);
+    setPendingChanges((changes) => changes.filter((item) => item.id !== change.id));
+    setPendingFields((fields) => fields.filter((field) => field !== change.field_name));
+    setMessage({ type: "success", text: "השינוי הממתין בוטל." });
+    setCancellingField(null);
+  }
   if (loading) {
     return (
       <main
@@ -317,7 +367,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="עיר מגורים" htmlFor="city">
+            <FormField label="עיר מגורים" htmlFor="city">{pendingFields.includes("city") && <PendingLabel />}
               <input
                 id="city"
                 type="text"
@@ -329,7 +379,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="טלפון" htmlFor="phone">
+            <FormField label="טלפון" htmlFor="phone">{pendingFields.includes("phone") && <PendingLabel />}
               <input
                 id="phone"
                 type="tel"
@@ -424,6 +474,16 @@ export default function MentorProfilePage() {
                         נשלח לבדיקה: {formatPendingDate(change.requested_at)}
                       </p>
                     )}
+                    <button
+                      type="button"
+                      disabled={cancellingField !== null}
+                      onClick={() => cancelPendingChange(change)}
+                      className="mt-4 rounded-lg border border-amber-300 px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cancellingField === change.field_name
+                        ? "מבטל..."
+                        : "ביטול השינוי"}
+                    </button>
                   </article>
                 ))}
               </div>
