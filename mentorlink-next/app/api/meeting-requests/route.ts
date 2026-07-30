@@ -109,7 +109,7 @@ export async function GET(request: Request) {
     const client = createSupabaseAdmin();
     const column = user.role === "parent" ? "parent_user_id" : "mentor_user_id";
     const { data, error } = await client.from("meeting_requests")
-      .select("id, mentor_user_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, created_at")
+      .select("id, mentor_user_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at")
       .eq(column, user.id)
       .order("created_at", { ascending: false });
     if (error) throw new Error("query failed");

@@ -1,18 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
-  id: string; mentor_display_name?: string; subject: string; child_first_name: string;
-  child_grade_or_age: string; help_goal: string; meeting_mode: string;
-  requested_start_at: string; requested_duration_minutes: number; parent_message: string | null;
-  status: string; mentor_response: string | null; proposed_start_at: string | null;
-};
-const STATUS: Record<string, string> = {
-  pending: "ממתינה", accepted: "אושרה", declined: "נדחתה",
-  alternative_proposed: "הוצע מועד חלופי", cancelled: "בוטלה",
+  id: string;
+  mentor_display_name?: string;
+  subject: string;
+  child_first_name: string;
+  child_grade_or_age: string;
+  help_goal: string;
+  meeting_mode: string;
+  requested_start_at: string;
+  requested_duration_minutes: number;
+  parent_message: string | null;
+  status: string;
+  mentor_response: string | null;
+  proposed_start_at: string | null;
+  proposed_duration_minutes: number | null;
+  confirmed_start_at: string | null;
+  confirmed_end_at: string | null;
+  confirmed_duration_minutes: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export default function MeetingRequestsPanel({ role }: { role: "parent" | "mentor" }) {
@@ -23,60 +34,237 @@ export default function MeetingRequestsPanel({ role }: { role: "parent" | "mento
   const [busyId, setBusyId] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
-  const load = useCallback(async function load(accessToken: string) {
-    const response = await fetch("/api/meeting-requests", { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  const load = useCallback(async (accessToken: string) => {
+    const response = await fetch("/api/meeting-requests", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
     const body = await response.json();
     setRequests(body.requests ?? []);
-    const nextBookingId = body.schedulingMentorBookingId ?? "";
-    if (role === "mentor" && nextBookingId) {
-      const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${nextBookingId}`);
+
+    const bookingId = body.schedulingMentorBookingId ?? "";
+    if (role === "mentor" && bookingId) {
+      const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${bookingId}`);
       const slotsBody = await slotsResponse.json();
       setSlots(slotsBody.slots ?? []);
     }
-    const notificationResponse = await fetch("/api/notifications", { headers: { Authorization: `Bearer ${accessToken}` } });
+
+    const notificationResponse = await fetch("/api/notifications", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
     const notificationBody = await notificationResponse.json();
     setUnreadCount(notificationBody.unreadCount ?? 0);
   }, [role]);
-  useEffect(() => { void supabase.auth.getSession().then(({ data }) => {
-    const accessToken = data.session?.access_token ?? "";
-    setToken(accessToken);
-    if (accessToken) void load(accessToken);
-  }); }, [load]);
-  async function act(id: string, action: string) {
-    if (!confirm("להמשיך בפעולה?")) return;
-    setBusyId(id);
-    try {
-    const response = await fetch(`/api/meeting-requests/${id}`, {
-      method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      const accessToken = data.session?.access_token ?? "";
+      setToken(accessToken);
+      if (accessToken) void load(accessToken);
     });
-    setMessage(response.ok ? "הבקשה עודכנה." : "לא ניתן לעדכן את הבקשה.");
-    if (response.ok) await load(token);
-    } finally { setBusyId(""); }
+  }, [load]);
+
+  async function act(id: string, action: string, confirmation: string) {
+    if (!window.confirm(confirmation)) return;
+    setBusyId(id);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/meeting-requests/${id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action }),
+      });
+      const body = await response.json().catch(() => ({}));
+      setMessage(response.ok ? "הבקשה עודכנה." : body.error ?? "לא ניתן לעדכן את הבקשה.");
+      if (response.ok) await load(token);
+    } finally {
+      setBusyId("");
+    }
   }
+
   async function proposeNext(item: Meeting) {
     const selection = alternatives[item.id];
-    if (!selection) { setMessage("יש לבחור מועד חלופי."); return; }
+    if (!selection) {
+      setMessage("יש לבחור מועד חלופי.");
+      return;
+    }
     const [proposedStartAt, durationText] = selection.split("|");
-    if (!confirm(`להציע את המועד ${formatDate(proposedStartAt)}?`)) return;
+    if (!window.confirm(`להציע את המועד ${formatDate(proposedStartAt)}?`)) return;
     setBusyId(item.id);
+    setMessage("");
     try {
       const response = await fetch(`/api/meeting-requests/${item.id}`, {
-        method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "propose_alternative", proposedStartAt, proposedDurationMinutes: Number(durationText) }),
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "propose_alternative",
+          proposedStartAt,
+          proposedDurationMinutes: Number(durationText),
+        }),
       });
-      setMessage(response.ok ? "המועד החלופי הוצע." : "לא ניתן להציע את המועד.");
+      const body = await response.json().catch(() => ({}));
+      setMessage(response.ok ? "המועד החלופי הוצע." : body.error ?? "לא ניתן להציע את המועד.");
       if (response.ok) await load(token);
-    } finally { setBusyId(""); }
+    } finally {
+      setBusyId("");
+    }
   }
+
+  const groups = useMemo(() => groupParentRequests(requests), [requests]);
+
   return (
-    <section dir="rtl" className="mt-8">
-      <div className="flex items-center gap-3"><h2 className="text-2xl font-black">בקשות לפגישה</h2>{unreadCount > 0 && <button type="button" onClick={async () => { await fetch("/api/notifications", { method: "PATCH", headers: { Authorization: `Bearer ${token}` } }); setUnreadCount(0); }} aria-label="סימון ההתראות כנקראו" className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">{unreadCount}</button>}</div>
-      {!requests.length ? <p className="mt-4 rounded-2xl bg-white p-5 text-slate-600">אין בקשות לפגישה.</p> : <div className="mt-4 grid gap-4">{requests.map((item) => <article key={item.id} className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-2"><h3 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h3><span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800">{STATUS[item.status] ?? item.status}</span></div><p className="mt-2">{item.subject} · {item.meeting_mode} · {formatDate(item.requested_start_at)} · {item.requested_duration_minutes} דקות</p>{role === "mentor" && <><p className="mt-2 text-slate-700">{item.help_goal}</p>{item.parent_message && <p className="mt-2 text-slate-600">{item.parent_message}</p>}</>}{item.mentor_response && <p className="mt-2 rounded-xl bg-slate-50 p-3">{item.mentor_response}</p>}{item.proposed_start_at && <p className="mt-2 font-bold">מועד חלופי: {formatDate(item.proposed_start_at)}</p>}<div className="mt-4 flex flex-wrap gap-2">{role === "mentor" && item.status === "pending" && <><button type="button" disabled={busyId === item.id} onClick={() => act(item.id, "accept")} className="rounded-xl bg-green-700 disabled:opacity-50 px-4 py-2 font-bold text-white">אישור</button><button type="button" disabled={busyId === item.id} onClick={() => act(item.id, "decline")} className="rounded-xl bg-red-700 disabled:opacity-50 px-4 py-2 font-bold text-white">דחייה</button><select aria-label="בחירת מועד חלופי" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 px-3"><option value="">בחירת מועד חלופי</option>{slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.requested_start_at).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}</select><button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => proposeNext(item)} className="rounded-xl border border-blue-300 px-4 py-2 font-bold text-blue-800 disabled:opacity-50">הצעת המועד הזמין הבא</button></>}{role === "parent" && ["pending", "alternative_proposed"].includes(item.status) && <button type="button" disabled={busyId === item.id} onClick={() => act(item.id, "cancel")} className="rounded-xl border border-red-200 px-4 py-2 font-bold text-red-700">ביטול</button>}</div></article>)}</div>}
+    <section dir="rtl" className="mt-8" aria-labelledby="meeting-requests-title">
+      {role === "parent" ? (
+        <>
+          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="parent-action-title">
+            <h2 id="parent-action-title" className="text-2xl font-black text-amber-950">בקשות שממתינות לתשובתך</h2>
+            <p className="mt-2 text-sm text-amber-900">מועדים חלופיים שהחונך הציע וממתינים לאישור או לדחייה שלך.</p>
+            <h3 className="mt-4 text-lg font-black text-amber-950">דורשות פעולה ממני</h3>
+            <RequestList requests={groups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} empty="אין כרגע בקשות שממתינות לתשובתך." />
+          </section>
+
+          <div className="mt-8 flex items-center gap-3">
+            <h2 id="meeting-requests-title" className="text-2xl font-black">הבקשות והפגישות שלי</h2>
+            <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
+          </div>
+          <div className="mt-5 space-y-7">
+            <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup title="מאושרות וקרובות" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup title="התקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup title="היסטוריה" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-3">
+            <h2 id="meeting-requests-title" className="text-2xl font-black">בקשות לפגישה</h2>
+            <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
+          </div>
+          <RequestList requests={requests} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} empty="אין בקשות לפגישה." />
+        </>
+      )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
     </section>
   );
 }
+
+type ListProps = {
+  requests: Meeting[];
+  role: "parent" | "mentor";
+  busyId: string;
+  slots: Slot[];
+  alternatives: Record<string, string>;
+  setAlternatives: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  act: (id: string, action: string, confirmation: string) => Promise<void>;
+  proposeNext: (item: Meeting) => Promise<void>;
+};
+
+function RequestGroup({ title, ...props }: ListProps & { title: string }) {
+  return (
+    <section aria-labelledby={`group-${title}`}>
+      <h3 id={`group-${title}`} className="text-xl font-black text-slate-900">{title}</h3>
+      <RequestList {...props} empty="אין בקשות בקטגוריה זו." />
+    </section>
+  );
+}
+
+function RequestList({ requests, empty, ...props }: ListProps & { empty: string }) {
+  if (!requests.length) return <p className="mt-3 rounded-2xl bg-white p-5 text-slate-600">{empty}</p>;
+  return <div className="mt-3 grid gap-4">{requests.map((item) => <MeetingCard key={item.id} item={item} {...props} />)}</div>;
+}
+
+function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext }: Omit<ListProps, "requests"> & { item: Meeting }) {
+  const confirmedStart = item.confirmed_start_at;
+  const confirmedDuration = item.confirmed_duration_minutes;
+  const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
+        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800">{statusLabel(item, role)}</span>
+      </div>
+      <p className="mt-2">{item.subject} · {item.meeting_mode}</p>
+      <p className="mt-2 text-sm text-slate-600">המועד המקורי: {formatDate(item.requested_start_at)} · {item.requested_duration_minutes} דקות</p>
+      {item.proposed_start_at && item.proposed_duration_minutes ? (
+        <p className="mt-2 rounded-xl bg-amber-50 p-3 font-bold text-amber-950">המועד החלופי: {formatDate(item.proposed_start_at)} · {item.proposed_duration_minutes} דקות</p>
+      ) : null}
+      {item.status === "accepted" && confirmedStart && confirmedDuration ? (
+        <p className="mt-2 rounded-xl bg-emerald-50 p-3 font-black text-emerald-900">המועד שאושר: {formatDate(confirmedStart)} · {confirmedDuration} דקות</p>
+      ) : null}
+      {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
+      {role === "mentor" ? <><p className="mt-2 text-slate-700">{item.help_goal}</p>{item.parent_message && <p className="mt-2 text-slate-600">{item.parent_message}</p>}</> : null}
+      {item.mentor_response && <p className="mt-2 rounded-xl bg-slate-50 p-3">{item.mentor_response}</p>}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {role === "parent" && item.status === "alternative_proposed" ? (
+          <>
+            <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept_alternative", "לאשר את המועד החלופי?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור המועד החלופי</button>
+            <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "decline_alternative", "לדחות את המועד החלופי?")} className="min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700 disabled:opacity-50">דחיית המועד החלופי</button>
+          </>
+        ) : null}
+        {role === "parent" && item.status === "pending" ? (
+          <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "cancel", "לבטל את בקשת הפגישה?")} className="min-h-11 rounded-xl border border-red-200 px-4 py-2 font-bold text-red-700 disabled:opacity-50">ביטול הבקשה</button>
+        ) : null}
+        {role === "mentor" && item.status === "pending" ? (
+          <>
+            <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept", "לאשר את הבקשה?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור</button>
+            <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "decline", "לדחות את הבקשה?")} className="min-h-11 rounded-xl bg-red-700 px-4 py-2 font-bold text-white disabled:opacity-50">דחייה</button>
+            <select aria-label="בחירת מועד חלופי" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 px-3">
+              <option value="">בחירת מועד חלופי</option>
+              {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.requested_start_at).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
+            </select>
+            <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl border border-blue-300 px-4 py-2 font-bold text-blue-800 disabled:opacity-50">הצעת המועד הזמין הבא</button>
+          </>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+function groupParentRequests(requests: Meeting[]) {
+  const now = Date.now();
+  const newestFirst = [...requests].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+  return {
+    actionRequired: newestFirst.filter((item) => item.status === "alternative_proposed"),
+    waitingForMentor: newestFirst.filter((item) => item.status === "pending"),
+    upcoming: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) >= now),
+    completed: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) < now),
+    closed: newestFirst.filter((item) => ["declined", "cancelled"].includes(item.status)),
+    history: newestFirst.filter((item) => !["alternative_proposed", "pending", "accepted", "declined", "cancelled"].includes(item.status)),
+  };
+}
+
+function effectiveStart(item: Meeting) {
+  return new Date(item.confirmed_start_at ?? item.requested_start_at).getTime();
+}
+
+function statusLabel(item: Meeting, role: "parent" | "mentor") {
+  if (item.status === "alternative_proposed") return role === "parent" ? "ממתין לאישורך" : "ממתין לאישור ההורה";
+  if (item.status === "accepted") return "מאושרת";
+  if (item.status === "declined" && item.proposed_start_at) return role === "mentor" ? "ההורה דחה את המועד החלופי" : "המועד החלופי נדחה";
+  if (item.status === "declined") return "נדחתה";
+  if (item.status === "cancelled") return "בוטלה";
+  return "ממתינה לתשובת החונך";
+}
+
+function NotificationBadge({ count, token, clear }: { count: number; token: string; clear: () => void }) {
+  if (count <= 0) return null;
+  return <button type="button" onClick={async () => { await fetch("/api/notifications", { method: "PATCH", headers: { Authorization: `Bearer ${token}` } }); clear(); }} aria-label="סימון ההתראות כנקראו" className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">{count}</button>;
+}
+
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }

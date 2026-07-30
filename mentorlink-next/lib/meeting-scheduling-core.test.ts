@@ -52,5 +52,8 @@ test("meeting lifecycle rejects stale or unauthorized transitions", () => {
   assert.equal(canTransition("mentor", "pending", "accept"), true);
   assert.equal(canTransition("mentor", "accepted", "decline"), false);
   assert.equal(canTransition("parent", "pending", "cancel"), true);
-  assert.equal(canTransition("parent", "accepted", "cancel"), false);
+  assert.equal(canTransition("parent", "alternative_proposed", "cancel"), false);
+  assert.equal(canTransition("parent", "alternative_proposed", "accept_alternative"), true);
+  assert.equal(canTransition("parent", "alternative_proposed", "decline_alternative"), true);
+  assert.equal(canTransition("parent", "accepted", "accept_alternative"), false);
 });

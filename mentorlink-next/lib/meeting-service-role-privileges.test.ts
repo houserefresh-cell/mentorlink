@@ -8,6 +8,9 @@ const read = (path: string) =>
 const migration = read(
   "supabase/migrations/202607270011_restrict_meeting_service_role_privileges.sql",
 );
+const confirmedIntervalMigration = read(
+  "supabase/migrations/202607300017_add_confirmed_meeting_interval.sql",
+);
 const availabilityRoute = read("app/api/mentor-availability/route.ts");
 const meetingRoutes =
   read("app/api/meeting-requests/route.ts") +
@@ -114,5 +117,15 @@ test("notifications retain select, insert and read_at update only", () => {
   assert.match(
     migration,
     /grant update \(read_at\)\s+on public\.notifications\s+to service_role/s,
+  );
+});
+test("confirmed interval migration grants only its three lifecycle columns", () => {
+  assert.match(
+    confirmedIntervalMigration,
+    /grant update \(\s*confirmed_start_at,\s*confirmed_end_at,\s*confirmed_duration_minutes\s*\)\s*on public\.meeting_requests\s*to service_role/s,
+  );
+  assert.doesNotMatch(
+    confirmedIntervalMigration,
+    /grant (?:all|select|insert|delete|truncate|references|trigger|maintain)|to (?:anon|authenticated)|disable row level security/i,
   );
 });

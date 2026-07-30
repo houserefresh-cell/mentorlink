@@ -44,8 +44,8 @@ export default function ParentDashboardPage() {
           <h2 className="text-2xl font-extrabold">ברוכים הבאים ל־MentorLink</h2>
           <p className="mt-3 text-slate-600">כלי החיפוש וההתאמה להורים יתווספו בהמשך הפיילוט.</p>
         </div>
-        <MentorInquiriesPanel role="parent" />
         <MeetingRequestsPanel role="parent" />
+        <MentorInquiriesPanel role="parent" />
       </section>
     </main>
   );

@@ -33,6 +33,11 @@ test("meeting actions enforce ownership, conditional transitions, availability a
   assert.match(actionRoute, /loadSlots/);
   assert.match(actionRoute, /publication\.data\?\.status !== "published"/);
   assert.match(actionRoute, /23P01/);
+  assert.match(actionRoute, /accept_alternative/);
+  assert.match(actionRoute, /decline_alternative/);
+  assert.match(actionRoute, /confirmed_start_at/);
+  assert.match(actionRoute, /confirmed_end_at/);
+  assert.match(actionRoute, /confirmed_duration_minutes/);
 });
 
 test("availability management is mentor-only and owner-scoped", () => {

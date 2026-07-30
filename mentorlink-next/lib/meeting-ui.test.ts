@@ -71,3 +71,20 @@ test("availability guidance distinguishes no slots from no selected slot", () =>
   assert.match(flow, /יש לבחור מועד לפגישה\./);
   assert.match(flow, /aria-live="polite"/);
 });
+test("parent alternative proposal is actionable and active requests are grouped first", () => {
+  const panel = read("app/dashboard/_components/MeetingRequestsPanel.tsx");
+  const parentDashboard = read("app/dashboard/parent/page.tsx");
+  assert.match(panel, /id="parent-action-title"/);
+  assert.match(panel, /id="meeting-requests-title"/);
+  assert.match(panel, /act\(item\.id, "accept_alternative"/);
+  assert.match(panel, /act\(item\.id, "decline_alternative"/);
+  assert.match(panel, /item\.status === "alternative_proposed"/);
+  assert.match(panel, /confirmed_start_at/);
+  assert.match(panel, /groups\.actionRequired/);
+  assert.match(panel, /groups\.waitingForMentor/);
+  assert.match(panel, /groups\.upcoming/);
+  assert.match(panel, /groups\.completed/);
+  assert.match(panel, /groups\.closed/);
+  assert.match(panel, /groups\.history/);
+  assert.ok(parentDashboard.indexOf("<MeetingRequestsPanel") < parentDashboard.indexOf("<MentorInquiriesPanel"));
+});
