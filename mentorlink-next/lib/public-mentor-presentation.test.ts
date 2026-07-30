@@ -55,10 +55,10 @@ test("native details dialog supports Escape, accessible naming, and focus return
 
 test("filters and live result count remain accessible on mobile", () => {
   assert.match(source, /htmlFor="mentor-search"/);
-  assert.match(source, /htmlFor="mentor-city"/);
+  assert.match(source, /id="mentor-city" label=/);
   assert.match(source, /role="status"/);
   assert.match(source, /aria-live="polite"/);
-  assert.match(source, /חונכים נמצאו/);
+  assert.match(source, /נמצאו \{filtered\.length\} חונכים/);
   assert.match(source, /min-h-12/);
   assert.match(source, /w-\[min\(calc\(100%_-_2rem\),34rem\)\]/);
 });

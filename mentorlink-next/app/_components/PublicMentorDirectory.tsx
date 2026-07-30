@@ -1,103 +1,101 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 import MeetingRequestFlow from "./MeetingRequestFlow";
 import MentorInquiryFlow from "./MentorInquiryFlow";
-import { ALL_CITIES, filterPublicMentors } from "@/lib/public-mentor-filter";
+import { ALL_CITIES, ALL_OPTIONS, filterPublicMentors, normalizeMentorSearch } from "@/lib/public-mentor-filter";
 
 type DirectoryAction = "details" | "inquiry" | "meeting";
 type ActiveInteraction = { mentor: PublicMentor; action: DirectoryAction };
-export default function PublicMentorDirectory({ mentors, expandableFilters = false }: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
-  const [search, setSearch] = useState("");
-  const [city, setCity] = useState(ALL_CITIES);
-  const [activeInteraction, setActiveInteraction] = useState<ActiveInteraction | null>(null);
-  const originRef = useRef<HTMLButtonElement | null>(null);
-  const openInteraction = useCallback((mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement | null = null) => {
-    originRef.current = origin;
-    setActiveInteraction({ mentor, action });
-  }, []);
-  const closeInteraction = useCallback(() => {
-    setActiveInteraction(null);
-    queueMicrotask(() => originRef.current?.focus());
-  }, []);
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const action = params.get("action");
-    if (action !== "details" && action !== "inquiry" && action !== "meeting") return;
-    const mentor = mentors.find((candidate) => candidate.bookingId === params.get("mentor"));
-    if (mentor) queueMicrotask(() => openInteraction(mentor, action));
-  }, [mentors, openInteraction]);
-  const cities = useMemo(
-    () => [...new Set(mentors.map((mentor) => mentor.city).filter((value): value is string => Boolean(value)))]
-      .sort((first, second) => first.localeCompare(second, "he")),
-    [mentors],
-  );
-  const filtered = useMemo(
-    () => filterPublicMentors(mentors, search, city),
-    [city, mentors, search],
-  );
-  const resetFilters = () => {
-    setSearch("");
-    setCity(ALL_CITIES);
-  };
+const INITIAL_BATCH = 8;
 
-  return (
-    <section dir="rtl" aria-label="חיפוש חונכים" className="mx-auto w-full max-w-7xl overflow-x-clip">
-      <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:p-5">
-        <div className={`grid grid-cols-1 gap-4 ${expandableFilters ? "" : "md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.36fr)]"}`}>
-          <label htmlFor="mentor-search" className="min-w-0 text-sm font-black text-slate-700">
-            חיפוש לפי שם או תחום
-            <span className="relative mt-2 block">
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400">
-                <circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />
-              </svg>
-              <input id="mentor-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="לדוגמה: מתמטיקה" className="min-h-12 w-full rounded-2xl border border-slate-300 bg-white py-3 pr-12 pl-4 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
-            </span>
-          </label>
-          {expandableFilters ? <details className="rounded-2xl border border-slate-200 bg-white p-3"><summary className="cursor-pointer list-none font-black text-blue-800 marker:content-none">מסננים נוספים</summary><div className="mt-4"><label htmlFor="mentor-city" className="min-w-0 text-sm font-black text-slate-700">
-            עיר
-            <select id="mentor-city" value={city} onChange={(event) => setCity(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
-              <option value={ALL_CITIES}>{ALL_CITIES}</option>
-              {cities.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-          </label></div></details> : <label htmlFor="mentor-city" className="min-w-0 text-sm font-black text-slate-700">
-            עיר
-            <select id="mentor-city" value={city} onChange={(event) => setCity(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
-              <option value={ALL_CITIES}>{ALL_CITIES}</option>
-              {cities.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
-          </label>}        </div>
-      </div>
-
-      <div className="mt-5 flex min-h-8 flex-wrap items-center justify-between gap-3">
-        <p role="status" aria-live="polite" className="text-sm font-bold text-slate-600">
-          חונכים נמצאו: <strong className="text-base font-black text-slate-950">{filtered.length}</strong>
-        </p>
-        {(search || city !== ALL_CITIES) && (
-          <button type="button" onClick={resetFilters} className="min-h-11 rounded-xl px-4 py-2 text-sm font-black text-blue-700 transition hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">
-            ניקוי הסינון
-          </button>
-        )}
-      </div>
-
-      {filtered.length ? (
-        <div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),17.5rem))] justify-center gap-4">
-          {filtered.map((mentor, index) => (
-            <MentorCard key={`${mentor.bookingId}-${index}`} mentor={mentor} onOpen={openInteraction} />
-          ))}
-        </div>
-      ) : (
-        <EmptyState hasMentors={mentors.length > 0} onReset={resetFilters} />
-      )}
-
-      {activeInteraction?.action === "details" && <MentorDetailsDialog mentor={activeInteraction.mentor} onClose={closeInteraction} />}
-      {activeInteraction?.action === "inquiry" && <MentorInquiryFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} subjects={activeInteraction.mentor.subjects} open onClose={closeInteraction} />}
-      {activeInteraction?.action === "meeting" && <MeetingRequestFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} open onClose={closeInteraction} />}
-    </section>
-  );
+export default function PublicMentorDirectory(props: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
+  return <Suspense fallback={<DirectoryLoading />}><DirectoryWithParams {...props} /></Suspense>;
 }
 
+function DirectoryWithParams(props: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
+  const searchParams = useSearchParams();
+  return <DirectoryContent key={searchParams.toString()} {...props} queryString={searchParams.toString()} />;
+}
+
+function DirectoryContent({ mentors, expandableFilters = false, queryString }: { mentors: PublicMentor[]; expandableFilters?: boolean; queryString: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useMemo(() => new URLSearchParams(queryString), [queryString]);
+  const search = searchParams.get("q") ?? "";
+  const city = searchParams.get("city") ?? ALL_CITIES;
+  const subject = searchParams.get("subject") ?? ALL_OPTIONS;
+  const meetingMode = searchParams.get("mode") ?? ALL_OPTIONS;
+  const [draftSearch, setDraftSearch] = useState(search);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
+  const [activeInteraction, setActiveInteraction] = useState<ActiveInteraction | null>(null);
+  const originRef = useRef<HTMLButtonElement | null>(null);
+
+  const openInteraction = useCallback((mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement | null = null) => { originRef.current = origin; setActiveInteraction({ mentor, action }); }, []);
+  const closeInteraction = useCallback(() => { setActiveInteraction(null); queueMicrotask(() => originRef.current?.focus()); }, []);
+
+  useEffect(() => {
+    const action = searchParams.get("action");
+    if (action !== "details" && action !== "inquiry" && action !== "meeting") return;
+    const mentor = mentors.find((candidate) => candidate.bookingId === searchParams.get("mentor"));
+    if (mentor) queueMicrotask(() => openInteraction(mentor, action));
+  }, [mentors, openInteraction, searchParams]);
+
+  const cities = useMemo(() => uniqueSorted(mentors.map((mentor) => mentor.city)), [mentors]);
+  const subjects = useMemo(() => uniqueSorted(mentors.flatMap((mentor) => mentor.subjects)), [mentors]);
+  const meetingModes = useMemo(() => uniqueSorted(mentors.flatMap((mentor) => mentor.meetingModes)), [mentors]);
+  const filtered = useMemo(() => filterPublicMentors(mentors, search, city, subject, meetingMode), [city, meetingMode, mentors, search, subject]);
+  const visible = filtered.slice(0, visibleCount);
+  const hasActiveSearch = Boolean(normalizeMentorSearch(search));
+  const hasActiveFilters = city !== ALL_CITIES || subject !== ALL_OPTIONS || meetingMode !== ALL_OPTIONS;
+  const hasActiveCriteria = hasActiveSearch || hasActiveFilters;
+
+
+  function updateUrl(values: { q?: string; city?: string; subject?: string; mode?: string }) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("action");
+    params.delete("mentor");
+    const next = { q: search, city, subject, mode: meetingMode, ...values };
+    if (normalizeMentorSearch(next.q)) params.set("q", normalizeMentorSearch(next.q)); else params.delete("q");
+    if (next.city !== ALL_CITIES) params.set("city", next.city); else params.delete("city");
+    if (next.subject !== ALL_OPTIONS) params.set("subject", next.subject); else params.delete("subject");
+    if (next.mode !== ALL_OPTIONS) params.set("mode", next.mode); else params.delete("mode");
+    router.push(`${pathname}${params.size ? `?${params.toString()}` : ""}`, { scroll: false });
+  }
+
+  function submitSearch(event: React.FormEvent) { event.preventDefault(); updateUrl({ q: normalizeMentorSearch(draftSearch) }); }
+  function changeCity(value: string) { updateUrl({ city: value }); }
+  function changeSubject(value: string) { updateUrl({ subject: value }); }
+  function changeMode(value: string) { updateUrl({ mode: value }); }
+  function clearAll() { updateUrl({ q: "", city: ALL_CITIES, subject: ALL_OPTIONS, mode: ALL_OPTIONS }); }
+
+  const chips = [
+    hasActiveSearch ? { label: `חיפוש: ${search}`, clear: () => updateUrl({ q: "" }) } : null,
+    city !== ALL_CITIES ? { label: `עיר: ${city}`, clear: () => changeCity(ALL_CITIES) } : null,
+    subject !== ALL_OPTIONS ? { label: `תחום: ${subject}`, clear: () => changeSubject(ALL_OPTIONS) } : null,
+    meetingMode !== ALL_OPTIONS ? { label: `אופן מפגש: ${meetingMode}`, clear: () => changeMode(ALL_OPTIONS) } : null,
+  ].filter((chip): chip is { label: string; clear: () => void } => Boolean(chip));
+
+  return <section dir="rtl" aria-label="חיפוש חונכים" className="mx-auto w-full max-w-7xl overflow-x-clip">
+    <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:p-5">
+      <form role="search" onSubmit={submitSearch} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <label htmlFor="mentor-search" className="min-w-0 text-sm font-black text-slate-700">חיפוש לפי שם, עיר או תחום<input id="mentor-search" name="q" type="search" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="לדוגמה: מתמטיקה" className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
+        <button type="submit" className="min-h-12 rounded-2xl bg-blue-700 px-8 py-3 font-black text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">חיפוש</button>
+      </form>
+      {expandableFilters && (cities.length > 0 || subjects.length > 0 || meetingModes.length > 0) && <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-3"><summary className="cursor-pointer list-none font-black text-blue-800 marker:content-none">מסננים נוספים</summary><div className="mt-4 grid gap-4 md:grid-cols-3">{cities.length > 0 && <FilterSelect id="mentor-city" label="עיר" value={city} allLabel={ALL_CITIES} options={cities} onChange={changeCity} />}{subjects.length > 0 && <FilterSelect id="mentor-subject" label="תחום או מקצוע" value={subject} allLabel={ALL_OPTIONS} options={subjects} onChange={changeSubject} />}{meetingModes.length > 0 && <FilterSelect id="mentor-mode" label="אופן מפגש" value={meetingMode} allLabel={ALL_OPTIONS} options={meetingModes} onChange={changeMode} />}</div></details>}
+      {!expandableFilters && cities.length > 0 && <div className="mt-4"><FilterSelect id="mentor-city" label="עיר" value={city} allLabel={ALL_CITIES} options={cities} onChange={changeCity} /></div>}
+      {chips.length > 0 && <div aria-label="מסננים פעילים" className="mt-4 flex flex-wrap items-center gap-2">{chips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} aria-label={`הסרת ${chip.label}`} className="min-h-10 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">{chip.label} <span aria-hidden="true">×</span></button>)}<button type="button" onClick={clearAll} className="min-h-10 px-3 py-2 text-sm font-black text-blue-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">ניקוי החיפוש</button></div>}
+    </div>
+    <div className="mt-6 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-slate-950">{hasActiveCriteria ? "תוצאות החיפוש" : "חונכים זמינים"}</h2><p role="status" aria-live="polite" className="mt-1 text-sm font-bold text-slate-600">נמצאו {filtered.length} חונכים</p></div>{hasActiveCriteria && <button type="button" onClick={clearAll} className="min-h-11 rounded-xl border border-blue-200 bg-white px-4 py-2 font-black text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">ניקוי החיפוש</button>}</div>
+    {filtered.length ? <><div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),17.5rem))] justify-center gap-4">{visible.map((mentor,index)=><MentorCard key={`${mentor.bookingId}-${index}`} mentor={mentor} onOpen={openInteraction}/>)}</div>{visible.length < filtered.length && <div className="mt-7 text-center"><button type="button" onClick={() => setVisibleCount((count) => count + INITIAL_BATCH)} className="min-h-12 rounded-xl border border-blue-700 bg-white px-6 py-3 font-black text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">הצגת חונכים נוספים</button></div>}</> : <EmptyState hasMentors={mentors.length > 0} onReset={clearAll}/>}
+    {activeInteraction?.action === "details" && <MentorDetailsDialog mentor={activeInteraction.mentor} onClose={closeInteraction}/>} {activeInteraction?.action === "inquiry" && <MentorInquiryFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} subjects={activeInteraction.mentor.subjects} open onClose={closeInteraction}/>} {activeInteraction?.action === "meeting" && <MeetingRequestFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} open onClose={closeInteraction}/>}
+  </section>;
+}
+function DirectoryLoading(){return <div role="status" className="rounded-3xl border border-slate-200 bg-white p-8 text-center font-bold text-slate-600">טוען חונכים...</div>}
+function FilterSelect({id,label,value,allLabel,options,onChange}:{id:string;label:string;value:string;allLabel:string;options:string[];onChange:(value:string)=>void}){return <label htmlFor={id} className="text-sm font-black text-slate-700">{label}<select id={id} value={value} onChange={(event)=>onChange(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-normal focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option value={allLabel}>{allLabel}</option>{options.map((option)=><option key={option} value={option}>{option}</option>)}</select></label>}
+function uniqueSorted(values:Array<string|null>){return [...new Set(values.filter((value):value is string=>Boolean(value)))].sort((a,b)=>a.localeCompare(b,"he"))}
 function MentorCard({ mentor, onOpen }: { mentor: PublicMentor; onOpen: (mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement) => void }) {
   const initial = Array.from(mentor.displayName.trim())[0] || "מ";
   const shortIntroduction = mentor.introduction && mentor.introduction.length > 90 ? `${mentor.introduction.slice(0, 87).trimEnd()}…` : mentor.introduction;

@@ -1,41 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
 import type { PublicMentor } from "./public-mentor-core.ts";
-import { ALL_CITIES, filterPublicMentors } from "./public-mentor-filter.ts";
-
-const mentors: PublicMentor[] = [
-  {
-    bookingId: "booking-public-id",
-    displayName: "נועה כ׳",
-    city: "רעננה",
-    subjects: ["מתמטיקה"],
-    introduction: "אוהבת לעזור ולהסביר",
-    experience: ["הדרכה"],
-    ageGroups: ["חטיבת ביניים"],
-    meetingModes: ["פרונטלי"],
-    availability: ["אחר הצהריים"],
-  },
-  {
-    bookingId: "booking-public-id",
-    displayName: "דניאל ל׳",
-    city: "חיפה",
-    subjects: ["אנגלית"],
-    introduction: null,
-    experience: [],
-    ageGroups: [],
-    meetingModes: [],
-    availability: [],
-  },
-];
-
-test("public mentor filtering preserves free-text and city behavior", () => {
-  assert.deepEqual(filterPublicMentors(mentors, "מתמטיקה", ALL_CITIES), [mentors[0]]);
-  assert.deepEqual(filterPublicMentors(mentors, "", "חיפה"), [mentors[1]]);
-  assert.deepEqual(filterPublicMentors(mentors, "הדרכה", "רעננה"), [mentors[0]]);
-  assert.deepEqual(filterPublicMentors(mentors, "אנגלית", "רעננה"), []);
-});
-
-test("public mentor filtering is trimmed and case-insensitive", () => {
-  assert.deepEqual(filterPublicMentors(mentors, "  דניאל  ", ALL_CITIES), [mentors[1]]);
-});
+import { ALL_CITIES, ALL_OPTIONS, filterPublicMentors, normalizeMentorSearch } from "./public-mentor-filter.ts";
+const mentors: PublicMentor[]=[{bookingId:"one",displayName:"נועה כ׳",city:"רעננה",subjects:["מתמטיקה"],introduction:"",experience:["הדרכה"],ageGroups:[],meetingModes:["פרונטלי"],availability:[]},{bookingId:"two",displayName:"Daniel L׳",city:"חיפה",subjects:["אנגלית"],introduction:null,experience:[],ageGroups:[],meetingModes:["אונליין"],availability:[]}];
+test("search supports safe public name city subject and mentoring area",()=>{assert.deepEqual(filterPublicMentors(mentors,"נועה",ALL_CITIES),[mentors[0]]);assert.deepEqual(filterPublicMentors(mentors,"חיפה",ALL_CITIES),[mentors[1]]);assert.deepEqual(filterPublicMentors(mentors,"מתמטיקה",ALL_CITIES),[mentors[0]]);assert.deepEqual(filterPublicMentors(mentors,"הדרכה",ALL_CITIES),[mentors[0]])});
+test("normalization trims repeated spaces and ignores Latin case",()=>{assert.equal(normalizeMentorSearch("  Daniel   L׳ "),"daniel l׳");assert.deepEqual(filterPublicMentors(mentors,"  DANIEL   L׳ ",ALL_CITIES),[mentors[1]])});
+test("city subject and meeting-mode filters combine",()=>{assert.deepEqual(filterPublicMentors(mentors,"","רעננה","מתמטיקה","פרונטלי"),[mentors[0]]);assert.deepEqual(filterPublicMentors(mentors,"","רעננה","מתמטיקה","אונליין"),[]);assert.deepEqual(filterPublicMentors(mentors,"",ALL_CITIES,ALL_OPTIONS,"אונליין"),[mentors[1]])});
