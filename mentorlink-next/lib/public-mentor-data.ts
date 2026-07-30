@@ -22,7 +22,7 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   if (!ids.length) return [];
 
   const [profiles, subjects, experiences, preferences, availability] = await Promise.all([
-    admin.from("mentor_profiles").select("user_id, first_name, last_name, city, bio").in("user_id", ids),
+    admin.from("mentor_profiles").select("user_id, first_name, last_name, city, bio, birth_date").in("user_id", ids),
     admin.from("mentor_subjects").select("user_id, custom_subject, age_groups, subjects(name)").in("user_id", ids),
     admin.from("mentor_experience").select("user_id, experience_types, mentoring_types").in("user_id", ids),
     admin.from("mentor_preferences").select("user_id, preferred_age_groups, meeting_modes").in("user_id", ids),

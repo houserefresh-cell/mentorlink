@@ -53,12 +53,13 @@ test("native details dialog supports Escape, accessible naming, and focus return
   assert.match(source, /originRef\.current\?\.focus\(\)/);
 });
 
-test("filters and live result count remain accessible on mobile", () => {
-  assert.match(source, /htmlFor="mentor-search"/);
-  assert.match(source, /id="mentor-city" label=/);
+test("structured filters and live result count remain accessible on mobile", () => {
+  assert.match(source, /htmlFor="mentor-min-age"/);
+  assert.match(source, /htmlFor="mentor-max-age"/);
+  assert.match(source, /aria-expanded=\{open\}/);
   assert.match(source, /role="status"/);
   assert.match(source, /aria-live="polite"/);
-  assert.match(source, /נמצאו \{filtered\.length\} חונכים/);
+  assert.match(source, /נמצאו \{matching\.length\} חונכים/);
   assert.match(source, /min-h-12/);
-  assert.match(source, /w-\[min\(calc\(100%_-_2rem\),34rem\)\]/);
+  assert.match(source, /overflow-x-clip/);
 });

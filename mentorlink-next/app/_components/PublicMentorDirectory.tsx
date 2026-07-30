@@ -1,101 +1,40 @@
 "use client";
-
 import { Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 import MeetingRequestFlow from "./MeetingRequestFlow";
 import MentorInquiryFlow from "./MentorInquiryFlow";
-import { ALL_CITIES, ALL_OPTIONS, filterPublicMentors, normalizeMentorSearch } from "@/lib/public-mentor-filter";
-
-type DirectoryAction = "details" | "inquiry" | "meeting";
-type ActiveInteraction = { mentor: PublicMentor; action: DirectoryAction };
-const INITIAL_BATCH = 8;
-
-export default function PublicMentorDirectory(props: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
-  return <Suspense fallback={<DirectoryLoading />}><DirectoryWithParams {...props} /></Suspense>;
+import { ALL_CITIES, ALL_MODES, ALL_SUBJECTS, MAX_MENTOR_AGE, MEETING_MODES, MIN_MENTOR_AGE, REGIONAL_CITIES, filterPublicMentors, getOfferedSubjectOptions, normalizeCity, parseOptionalAge, validateAgeInputs } from "@/lib/public-mentor-filter";
+type DirectoryAction="details"|"inquiry"|"meeting";type ActiveInteraction={mentor:PublicMentor;action:DirectoryAction};const INITIAL_BATCH=8;
+export default function PublicMentorDirectory(props:{mentors:PublicMentor[];expandableFilters?:boolean}){return <Suspense fallback={<DirectoryLoading/>}><DirectoryWithParams {...props}/></Suspense>}
+function DirectoryWithParams(props:{mentors:PublicMentor[];expandableFilters?:boolean}){const searchParams=useSearchParams();return <DirectoryContent key={searchParams.toString()} {...props} queryString={searchParams.toString()}/>}
+function unique(values:string[]){return [...new Set(values)]}
+function DirectoryContent({mentors,expandableFilters=false,queryString}:{mentors:PublicMentor[];expandableFilters?:boolean;queryString:string}){
+ const router=useRouter(),pathname=usePathname(),params=useMemo(()=>new URLSearchParams(queryString),[queryString]);
+ const subjectOptions=useMemo(()=>getOfferedSubjectOptions(mentors),[mentors]);
+ const appliedCities=unique(params.getAll("city").map((value)=>REGIONAL_CITIES.find((city)=>normalizeCity(city)===normalizeCity(value))).filter((value):value is typeof REGIONAL_CITIES[number]=>Boolean(value)));
+ const appliedSubjects=unique(params.getAll("subject").filter((value)=>subjectOptions.includes(value)));
+ const appliedModes=unique(params.getAll("mode").filter((value)=>MEETING_MODES.includes(value as typeof MEETING_MODES[number])));
+ const rawMin=parseOptionalAge(params.get("minAge")),rawMax=parseOptionalAge(params.get("maxAge")),validUrlRange=rawMin===null||rawMax===null||rawMin<=rawMax,appliedMin=validUrlRange?rawMin:null,appliedMax=validUrlRange?rawMax:null,explicit=params.get("search")==="1";
+ const [cities,setCities]=useState<string[]>(appliedCities),[subjects,setSubjects]=useState<string[]>(appliedSubjects),[modes,setModes]=useState<string[]>(appliedModes),[minAge,setMinAge]=useState(appliedMin===null?"":String(appliedMin)),[maxAge,setMaxAge]=useState(appliedMax===null?"":String(appliedMax)),[ageError,setAgeError]=useState("");
+ const [visibleCount,setVisibleCount]=useState(INITIAL_BATCH),[activeInteraction,setActiveInteraction]=useState<ActiveInteraction|null>(null);const originRef=useRef<HTMLButtonElement|null>(null);
+ const openInteraction=useCallback((mentor:PublicMentor,action:DirectoryAction,origin:HTMLButtonElement|null=null)=>{originRef.current=origin;setActiveInteraction({mentor,action})},[]);const closeInteraction=useCallback(()=>{setActiveInteraction(null);queueMicrotask(()=>originRef.current?.focus())},[]);
+ useEffect(()=>{const action=params.get("action");if(action!=="details"&&action!=="inquiry"&&action!=="meeting")return;const mentor=mentors.find((candidate)=>candidate.bookingId===params.get("mentor"));if(mentor)queueMicrotask(()=>openInteraction(mentor,action))},[mentors,openInteraction,params]);
+ const matching=explicit?filterPublicMentors(mentors,appliedCities,appliedSubjects,appliedModes,appliedMin,appliedMax):mentors;
+ const visible=matching.slice(0,visibleCount);
+ function submit(){setVisibleCount(INITIAL_BATCH);const error=validateAgeInputs(minAge,maxAge);setAgeError(error??"");if(error)return;const next=new URLSearchParams();next.set("search","1");for(const city of unique(cities))next.append("city",city);for(const subject of unique(subjects))next.append("subject",subject);for(const mode of unique(modes))next.append("mode",mode);if(minAge)next.set("minAge",minAge);if(maxAge)next.set("maxAge",maxAge);router.push(`${pathname}?${next}`,{scroll:false})}
+ function clearSearch(){router.push(pathname,{scroll:false})}
+ function remove(group:"city"|"subject"|"mode",value:string){if(group==="city")setCities((items)=>items.filter((item)=>item!==value));if(group==="subject")setSubjects((items)=>items.filter((item)=>item!==value));if(group==="mode")setModes((items)=>items.filter((item)=>item!==value))}
+ const chips=[...cities.map((value)=>({group:"city" as const,value})),...subjects.map((value)=>({group:"subject" as const,value})),...modes.map((value)=>({group:"mode" as const,value}))];
+ return <section dir="rtl" aria-label="גילוי חונכים" className="mx-auto w-full max-w-7xl overflow-x-clip">
+  {expandableFilters&&<div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:p-5"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"><MultiSelectPanel id="cities" label="עיר או יישוב" allLabel={ALL_CITIES} options={[...REGIONAL_CITIES]} values={cities} onApply={setCities}/>{subjectOptions.length>0&&<MultiSelectPanel id="subjects" label="מקצוע או תחום" allLabel={ALL_SUBJECTS} options={subjectOptions} values={subjects} onApply={setSubjects}/>}<MultiSelectPanel id="modes" label="אופן מפגש" allLabel={ALL_MODES} options={[...MEETING_MODES]} values={modes} onApply={setModes}/><div className="rounded-xl border border-slate-200 bg-white p-3"><span className="block text-sm font-black text-slate-700">מרחק מהבית</span><button type="button" disabled className="mt-2 min-h-11 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 text-right text-slate-500">ללא הגבלת מרחק</button><p className="mt-2 text-xs text-slate-500">סינון מרחק יהיה זמין לאחר הוספת נתוני מיקום מדויקים ובטוחים.</p></div></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><label htmlFor="mentor-min-age" className="text-sm font-black text-slate-700">גיל מינימלי<input id="mentor-min-age" inputMode="numeric" type="number" min={MIN_MENTOR_AGE} max={MAX_MENTOR_AGE} step="1" value={minAge} onChange={(event)=>setMinAge(event.target.value)} aria-describedby={ageError?"mentor-age-error":undefined} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"/></label><label htmlFor="mentor-max-age" className="text-sm font-black text-slate-700">גיל מקסימלי<input id="mentor-max-age" inputMode="numeric" type="number" min={MIN_MENTOR_AGE} max={MAX_MENTOR_AGE} step="1" value={maxAge} onChange={(event)=>setMaxAge(event.target.value)} aria-describedby={ageError?"mentor-age-error":undefined} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 px-3 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"/></label></div>{ageError&&<p id="mentor-age-error" role="alert" className="mt-2 font-bold text-red-700">{ageError}</p>}<div aria-label="מסננים שנבחרו" className="mt-4 flex flex-wrap gap-2">{chips.map((chip)=><button key={`${chip.group}-${chip.value}`} type="button" onClick={()=>remove(chip.group,chip.value)} className="min-h-10 rounded-full bg-blue-100 px-3 text-sm font-bold text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">{chip.value} ×</button>)}{minAge&&<button type="button" onClick={()=>setMinAge("")} className="min-h-10 rounded-full bg-blue-100 px-3 text-sm font-bold text-blue-800">מגיל {minAge} ×</button>}{maxAge&&<button type="button" onClick={()=>setMaxAge("")} className="min-h-10 rounded-full bg-blue-100 px-3 text-sm font-bold text-blue-800">עד גיל {maxAge} ×</button>}</div><div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={submit} className="min-h-12 rounded-xl bg-blue-700 px-8 font-black text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">חיפוש</button>{explicit&&<button type="button" onClick={clearSearch} className="min-h-12 rounded-xl border border-blue-200 bg-white px-6 font-black text-blue-700">ניקוי החיפוש</button>}</div></div>}
+  <div className="mt-6"><h2 className="text-2xl font-black">{explicit?"תוצאות החיפוש":expandableFilters?"חונכים מוצעים עבורכם":"חונכים זמינים"}</h2>{!explicit&&expandableFilters&&<p className="mt-1 text-sm text-slate-600">המלצות כלליות מתוך החונכים שפורסמו, עד שיושלמו פרטי הילד והעדפות החיפוש.</p>}<p role="status" aria-live="polite" className="mt-1 text-sm font-bold text-slate-600">נמצאו {matching.length} חונכים</p></div>
+  {matching.length?<><div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),17.5rem))] justify-center gap-4">{visible.map((mentor,index)=><MentorCard key={`${mentor.bookingId}-${index}`} mentor={mentor} onOpen={openInteraction}/>)}</div>{visible.length<matching.length&&<div className="mt-7 text-center"><button type="button" onClick={()=>setVisibleCount((count)=>count+INITIAL_BATCH)} className="min-h-12 rounded-xl border border-blue-700 px-6 font-black text-blue-700">הצגת חונכים נוספים</button></div>}</>:<EmptyState hasMentors={mentors.length>0} onReset={clearSearch}/>}
+  {activeInteraction?.action==="details"&&<MentorDetailsDialog mentor={activeInteraction.mentor} onClose={closeInteraction}/>} {activeInteraction?.action==="inquiry"&&<MentorInquiryFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} subjects={activeInteraction.mentor.subjects} open onClose={closeInteraction}/>} {activeInteraction?.action==="meeting"&&<MeetingRequestFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} open onClose={closeInteraction}/>}
+ </section>
 }
-
-function DirectoryWithParams(props: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
-  const searchParams = useSearchParams();
-  return <DirectoryContent key={searchParams.toString()} {...props} queryString={searchParams.toString()} />;
-}
-
-function DirectoryContent({ mentors, expandableFilters = false, queryString }: { mentors: PublicMentor[]; expandableFilters?: boolean; queryString: string }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useMemo(() => new URLSearchParams(queryString), [queryString]);
-  const search = searchParams.get("q") ?? "";
-  const city = searchParams.get("city") ?? ALL_CITIES;
-  const subject = searchParams.get("subject") ?? ALL_OPTIONS;
-  const meetingMode = searchParams.get("mode") ?? ALL_OPTIONS;
-  const [draftSearch, setDraftSearch] = useState(search);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH);
-  const [activeInteraction, setActiveInteraction] = useState<ActiveInteraction | null>(null);
-  const originRef = useRef<HTMLButtonElement | null>(null);
-
-  const openInteraction = useCallback((mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement | null = null) => { originRef.current = origin; setActiveInteraction({ mentor, action }); }, []);
-  const closeInteraction = useCallback(() => { setActiveInteraction(null); queueMicrotask(() => originRef.current?.focus()); }, []);
-
-  useEffect(() => {
-    const action = searchParams.get("action");
-    if (action !== "details" && action !== "inquiry" && action !== "meeting") return;
-    const mentor = mentors.find((candidate) => candidate.bookingId === searchParams.get("mentor"));
-    if (mentor) queueMicrotask(() => openInteraction(mentor, action));
-  }, [mentors, openInteraction, searchParams]);
-
-  const cities = useMemo(() => uniqueSorted(mentors.map((mentor) => mentor.city)), [mentors]);
-  const subjects = useMemo(() => uniqueSorted(mentors.flatMap((mentor) => mentor.subjects)), [mentors]);
-  const meetingModes = useMemo(() => uniqueSorted(mentors.flatMap((mentor) => mentor.meetingModes)), [mentors]);
-  const filtered = useMemo(() => filterPublicMentors(mentors, search, city, subject, meetingMode), [city, meetingMode, mentors, search, subject]);
-  const visible = filtered.slice(0, visibleCount);
-  const hasActiveSearch = Boolean(normalizeMentorSearch(search));
-  const hasActiveFilters = city !== ALL_CITIES || subject !== ALL_OPTIONS || meetingMode !== ALL_OPTIONS;
-  const hasActiveCriteria = hasActiveSearch || hasActiveFilters;
-
-
-  function updateUrl(values: { q?: string; city?: string; subject?: string; mode?: string }) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("action");
-    params.delete("mentor");
-    const next = { q: search, city, subject, mode: meetingMode, ...values };
-    if (normalizeMentorSearch(next.q)) params.set("q", normalizeMentorSearch(next.q)); else params.delete("q");
-    if (next.city !== ALL_CITIES) params.set("city", next.city); else params.delete("city");
-    if (next.subject !== ALL_OPTIONS) params.set("subject", next.subject); else params.delete("subject");
-    if (next.mode !== ALL_OPTIONS) params.set("mode", next.mode); else params.delete("mode");
-    router.push(`${pathname}${params.size ? `?${params.toString()}` : ""}`, { scroll: false });
-  }
-
-  function submitSearch(event: React.FormEvent) { event.preventDefault(); updateUrl({ q: normalizeMentorSearch(draftSearch) }); }
-  function changeCity(value: string) { updateUrl({ city: value }); }
-  function changeSubject(value: string) { updateUrl({ subject: value }); }
-  function changeMode(value: string) { updateUrl({ mode: value }); }
-  function clearAll() { updateUrl({ q: "", city: ALL_CITIES, subject: ALL_OPTIONS, mode: ALL_OPTIONS }); }
-
-  const chips = [
-    hasActiveSearch ? { label: `חיפוש: ${search}`, clear: () => updateUrl({ q: "" }) } : null,
-    city !== ALL_CITIES ? { label: `עיר: ${city}`, clear: () => changeCity(ALL_CITIES) } : null,
-    subject !== ALL_OPTIONS ? { label: `תחום: ${subject}`, clear: () => changeSubject(ALL_OPTIONS) } : null,
-    meetingMode !== ALL_OPTIONS ? { label: `אופן מפגש: ${meetingMode}`, clear: () => changeMode(ALL_OPTIONS) } : null,
-  ].filter((chip): chip is { label: string; clear: () => void } => Boolean(chip));
-
-  return <section dir="rtl" aria-label="חיפוש חונכים" className="mx-auto w-full max-w-7xl overflow-x-clip">
-    <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:p-5">
-      <form role="search" onSubmit={submitSearch} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <label htmlFor="mentor-search" className="min-w-0 text-sm font-black text-slate-700">חיפוש לפי שם, עיר או תחום<input id="mentor-search" name="q" type="search" value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="לדוגמה: מתמטיקה" className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" /></label>
-        <button type="submit" className="min-h-12 rounded-2xl bg-blue-700 px-8 py-3 font-black text-white shadow-sm transition hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">חיפוש</button>
-      </form>
-      {expandableFilters && (cities.length > 0 || subjects.length > 0 || meetingModes.length > 0) && <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-3"><summary className="cursor-pointer list-none font-black text-blue-800 marker:content-none">מסננים נוספים</summary><div className="mt-4 grid gap-4 md:grid-cols-3">{cities.length > 0 && <FilterSelect id="mentor-city" label="עיר" value={city} allLabel={ALL_CITIES} options={cities} onChange={changeCity} />}{subjects.length > 0 && <FilterSelect id="mentor-subject" label="תחום או מקצוע" value={subject} allLabel={ALL_OPTIONS} options={subjects} onChange={changeSubject} />}{meetingModes.length > 0 && <FilterSelect id="mentor-mode" label="אופן מפגש" value={meetingMode} allLabel={ALL_OPTIONS} options={meetingModes} onChange={changeMode} />}</div></details>}
-      {!expandableFilters && cities.length > 0 && <div className="mt-4"><FilterSelect id="mentor-city" label="עיר" value={city} allLabel={ALL_CITIES} options={cities} onChange={changeCity} /></div>}
-      {chips.length > 0 && <div aria-label="מסננים פעילים" className="mt-4 flex flex-wrap items-center gap-2">{chips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} aria-label={`הסרת ${chip.label}`} className="min-h-10 rounded-full border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">{chip.label} <span aria-hidden="true">×</span></button>)}<button type="button" onClick={clearAll} className="min-h-10 px-3 py-2 text-sm font-black text-blue-700 underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">ניקוי החיפוש</button></div>}
-    </div>
-    <div className="mt-6 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-2xl font-black text-slate-950">{hasActiveCriteria ? "תוצאות החיפוש" : "חונכים זמינים"}</h2><p role="status" aria-live="polite" className="mt-1 text-sm font-bold text-slate-600">נמצאו {filtered.length} חונכים</p></div>{hasActiveCriteria && <button type="button" onClick={clearAll} className="min-h-11 rounded-xl border border-blue-200 bg-white px-4 py-2 font-black text-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">ניקוי החיפוש</button>}</div>
-    {filtered.length ? <><div className="mt-5 grid grid-cols-[repeat(auto-fit,minmax(min(100%,17rem),17.5rem))] justify-center gap-4">{visible.map((mentor,index)=><MentorCard key={`${mentor.bookingId}-${index}`} mentor={mentor} onOpen={openInteraction}/>)}</div>{visible.length < filtered.length && <div className="mt-7 text-center"><button type="button" onClick={() => setVisibleCount((count) => count + INITIAL_BATCH)} className="min-h-12 rounded-xl border border-blue-700 bg-white px-6 py-3 font-black text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">הצגת חונכים נוספים</button></div>}</> : <EmptyState hasMentors={mentors.length > 0} onReset={clearAll}/>}
-    {activeInteraction?.action === "details" && <MentorDetailsDialog mentor={activeInteraction.mentor} onClose={closeInteraction}/>} {activeInteraction?.action === "inquiry" && <MentorInquiryFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} subjects={activeInteraction.mentor.subjects} open onClose={closeInteraction}/>} {activeInteraction?.action === "meeting" && <MeetingRequestFlow mentorBookingId={activeInteraction.mentor.bookingId} mentorDisplayName={activeInteraction.mentor.displayName} open onClose={closeInteraction}/>}
-  </section>;
-}
+function MultiSelectPanel({id,label,allLabel,options,values,onApply}:{id:string;label:string;allLabel:string;options:string[];values:string[];onApply:(values:string[])=>void}){const[open,setOpen]=useState(false),[draft,setDraft]=useState(values);return <div className="relative"><button id={`${id}-button`} type="button" aria-expanded={open} aria-controls={`${id}-panel`} onClick={()=>{setDraft(values);setOpen((value)=>!value)}} className="min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-right font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">{values.length?`${label}: ${values.length}`:allLabel}</button>{open&&<div id={`${id}-panel`} role="group" aria-labelledby={`${id}-button`} className="absolute z-30 mt-2 max-h-80 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl"><button type="button" aria-pressed={draft.length===0} onClick={()=>setDraft([])} className={`min-h-11 w-full rounded-xl px-3 text-right font-bold ${draft.length===0?"bg-blue-700 text-white":"hover:bg-slate-100"}`}>{allLabel}</button>{options.map((option)=><label key={option} className={`mt-1 flex min-h-11 cursor-pointer items-center gap-3 rounded-xl px-3 ${draft.includes(option)?"bg-blue-100 text-blue-900":"hover:bg-slate-100"}`}><input type="checkbox" checked={draft.includes(option)} onChange={()=>setDraft((items)=>items.includes(option)?items.filter((item)=>item!==option):[...items,option])} className="h-5 w-5 accent-blue-700"/>{option}</label>)}<div className="sticky bottom-0 mt-3 flex gap-2 bg-white pt-2"><button type="button" onClick={()=>{onApply(unique(draft));setOpen(false)}} className="min-h-11 flex-1 rounded-xl bg-blue-700 font-black text-white">החלה</button><button type="button" onClick={()=>{setDraft([]);onApply([]);setOpen(false)}} className="min-h-11 rounded-xl border px-3 font-bold">ניקוי</button></div></div>}</div>}
 function DirectoryLoading(){return <div role="status" className="rounded-3xl border border-slate-200 bg-white p-8 text-center font-bold text-slate-600">טוען חונכים...</div>}
-function FilterSelect({id,label,value,allLabel,options,onChange}:{id:string;label:string;value:string;allLabel:string;options:string[];onChange:(value:string)=>void}){return <label htmlFor={id} className="text-sm font-black text-slate-700">{label}<select id={id} value={value} onChange={(event)=>onChange(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-normal focus:border-blue-500 focus:ring-4 focus:ring-blue-100"><option value={allLabel}>{allLabel}</option>{options.map((option)=><option key={option} value={option}>{option}</option>)}</select></label>}
-function uniqueSorted(values:Array<string|null>){return [...new Set(values.filter((value):value is string=>Boolean(value)))].sort((a,b)=>a.localeCompare(b,"he"))}
 function MentorCard({ mentor, onOpen }: { mentor: PublicMentor; onOpen: (mentor: PublicMentor, action: DirectoryAction, origin: HTMLButtonElement) => void }) {
   const initial = Array.from(mentor.displayName.trim())[0] || "מ";
   const shortIntroduction = mentor.introduction && mentor.introduction.length > 90 ? `${mentor.introduction.slice(0, 87).trimEnd()}…` : mentor.introduction;

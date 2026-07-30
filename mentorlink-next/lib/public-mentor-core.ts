@@ -2,6 +2,7 @@ export type PublicMentor = {
   bookingId: string;
   displayName: string;
   city: string | null;
+  age?: number | null;
   subjects: string[];
   introduction: string | null;
   experience: string[];
@@ -17,6 +18,7 @@ export type ProfileRow = {
   last_name: string | null;
   city: string | null;
   bio: string | null;
+  birth_date: string | null;
 };
 export type SubjectRow = {
   user_id: string;
@@ -41,6 +43,15 @@ export type AvailabilityRow = {
   time_preferences: string[] | null;
 };
 
+function publicAgeFromBirthDate(birthDate: string, now = new Date()) {
+  const [birthYear, birthMonth, birthDay] = birthDate.split("-").map(Number);
+  if (!birthYear || !birthMonth || !birthDay) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(now);
+  const current = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const year = current("year"), month = current("month"), day = current("day");
+  if (!year || !month || !day) return null;
+  return year - birthYear - (month < birthMonth || (month === birthMonth && day < birthDay) ? 1 : 0);
+}
 function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
 }
@@ -74,6 +85,7 @@ export function mapPublishedMentors(input: {
         bookingId: publication?.public_booking_id ?? "",
         displayName: publicDisplayName(profile.first_name, profile.last_name),
         city: profile.city?.trim() || null,
+        age: profile.birth_date ? publicAgeFromBirthDate(profile.birth_date) : null,
         subjects: unique(subjects.map((row) => {
           const joined = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
           return row.custom_subject || joined?.name;
