@@ -1,0 +1,1 @@
+﻿export default function ParentAccountPage() { return <section className="mx-auto max-w-4xl"><h1 className="text-3xl font-black">החשבון שלי</h1><p className="mt-4 rounded-2xl border border-slate-200 bg-white p-6 text-slate-600">ניהול פרטי החשבון יהיה זמין בקרוב.</p></section>; }

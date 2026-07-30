@@ -48,8 +48,9 @@ export default function MeetingRequestFlow({
   const [goal, setGoal] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [status, setStatus] = useState("");
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [loadingLater, setLoadingLater] = useState(false);
 
 
@@ -114,7 +115,7 @@ export default function MeetingRequestFlow({
   }
 
   async function submit() {
-    if (busy || !accessToken || !complete || !slot) return;
+    if (busy || submitted || !accessToken || !complete || !slot) return;
     setBusy(true);
     setStatus("");
     const response = await fetch("/api/meeting-requests", {
@@ -138,7 +139,7 @@ export default function MeetingRequestFlow({
     });
     if (response.ok) {
       setStatus("בקשת הפגישה נשלחה לחונך וממתינה לאישור.");
-      setIdempotencyKey(crypto.randomUUID());
+      setSubmitted(true);
     } else {
       const body = await response.json().catch(() => ({}));
       setStatus(body.error ?? "לא ניתן לשלוח את הבקשה.");
@@ -186,7 +187,7 @@ export default function MeetingRequestFlow({
                 {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>{childName} · {grade}</p></div>}
                 {hasSelectableSlots && !slot && mode && <p role="status" className="rounded-xl bg-amber-50 p-3 font-bold text-amber-900">יש לבחור מועד לפגישה.</p>}
                 {!complete && <div role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black">כדי לשלוח את הבקשה:</p><ul className="mt-2 list-inside list-disc text-sm text-slate-700">{missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></div>}
-                <button type="button" disabled={!complete || busy} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:bg-slate-400">{busy ? "שולח..." : "שליחת בקשת פגישה"}</button>
+                <button type="button" disabled={!complete || busy || submitted} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-400">{submitted ? "הבקשה נשלחה" : busy ? "שולח..." : "שליחת בקשת פגישה"}</button>
                 {status && <p role="status" className="rounded-xl bg-blue-50 p-4 text-center font-bold">{status}</p>}
               </div>
             )}

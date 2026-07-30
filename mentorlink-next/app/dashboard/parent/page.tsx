@@ -1,52 +1,6 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "../../../lib/supabase";
-import { getDashboardPath } from "../../../lib/auth-routing";
-import MeetingRequestsPanel from "../_components/MeetingRequestsPanel";
-import MentorInquiriesPanel from "../_components/MentorInquiriesPanel";
-
-export default function ParentDashboardPage() {
-  const router = useRouter();
-  const [name, setName] = useState("");
-
-  useEffect(() => {
-    async function load() {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) {
-        router.replace("/login");
-        return;
-      }
-      const dashboardPath = await getDashboardPath(data.user.id);
-      if (dashboardPath !== "/dashboard/parent") {
-        router.replace(dashboardPath);
-        return;
-      }
-      setName(data.user.user_metadata?.first_name ?? "");
-    }
-    load();
-  }, [router]);
-
-  return (
-    <main dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/" className="text-2xl font-extrabold text-blue-600">MentorLink</Link>
-          <button type="button" onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }} className="rounded-xl border border-slate-300 px-4 py-2 font-bold">התנתקות</button>
-        </div>
-      </header>
-      <section className="mx-auto max-w-6xl px-6 py-12">
-        <p className="font-bold text-blue-600">האזור האישי להורים</p>
-        <h1 className="mt-2 text-4xl font-extrabold text-slate-900">שלום {name || "הורה"}</h1>
-        <div className="mt-8 rounded-3xl border border-blue-100 bg-white p-8 shadow-lg">
-          <h2 className="text-2xl font-extrabold">ברוכים הבאים ל־MentorLink</h2>
-          <p className="mt-3 text-slate-600">כלי החיפוש וההתאמה להורים יתווספו בהמשך הפיילוט.</p>
-        </div>
-        <MeetingRequestsPanel role="parent" />
-        <MentorInquiriesPanel role="parent" />
-      </section>
-    </main>
-  );
-}
+import PublicMentorDirectory from "@/app/_components/PublicMentorDirectory";
+import { getPublishedMentors } from "@/lib/public-mentor-data";
+import type { PublicMentor } from "@/lib/public-mentor-core";
+import ParentActionSummary from "./_components/ParentActionSummary";
+export default async function ParentHomePage(){let mentors:PublicMentor[]=[];try{mentors=await getPublishedMentors()}catch{console.error("Unable to load the parent mentor directory.")}return <div className="mx-auto max-w-6xl"><ParentActionSummary/><section className="mt-8"><p className="font-black text-blue-700">מציאת חונך</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">מוצאים את החונך המתאים לילדכם</h1><p className="mt-3 max-w-3xl leading-7 text-slate-600">חפשו לפי שם, עיר או תחום. מוצגים כאן רק פרטים ציבוריים של חונכים שפורסמו במערכת.</p><div className="mt-7"><PublicMentorDirectory mentors={mentors} expandableFilters/></div></section><p className="mt-8 text-sm text-slate-500">בקשות שכבר שלחתם זמינות תמיד בעמוד <Link href="/dashboard/parent/requests" className="font-bold text-blue-700 underline">הבקשות והפגישות שלי</Link>.</p></div>}

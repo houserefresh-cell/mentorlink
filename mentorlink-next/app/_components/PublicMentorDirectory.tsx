@@ -8,7 +8,7 @@ import { ALL_CITIES, filterPublicMentors } from "@/lib/public-mentor-filter";
 
 type DirectoryAction = "details" | "inquiry" | "meeting";
 type ActiveInteraction = { mentor: PublicMentor; action: DirectoryAction };
-export default function PublicMentorDirectory({ mentors }: { mentors: PublicMentor[] }) {
+export default function PublicMentorDirectory({ mentors, expandableFilters = false }: { mentors: PublicMentor[]; expandableFilters?: boolean }) {
   const [search, setSearch] = useState("");
   const [city, setCity] = useState(ALL_CITIES);
   const [activeInteraction, setActiveInteraction] = useState<ActiveInteraction | null>(null);
@@ -45,7 +45,7 @@ export default function PublicMentorDirectory({ mentors }: { mentors: PublicMent
   return (
     <section dir="rtl" aria-label="חיפוש חונכים" className="mx-auto w-full max-w-7xl overflow-x-clip">
       <div className="rounded-3xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm sm:p-5">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.36fr)]">
+        <div className={`grid grid-cols-1 gap-4 ${expandableFilters ? "" : "md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.36fr)]"}`}>
           <label htmlFor="mentor-search" className="min-w-0 text-sm font-black text-slate-700">
             חיפוש לפי שם או תחום
             <span className="relative mt-2 block">
@@ -55,14 +55,19 @@ export default function PublicMentorDirectory({ mentors }: { mentors: PublicMent
               <input id="mentor-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="לדוגמה: מתמטיקה" className="min-h-12 w-full rounded-2xl border border-slate-300 bg-white py-3 pr-12 pl-4 text-base font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
             </span>
           </label>
-          <label htmlFor="mentor-city" className="min-w-0 text-sm font-black text-slate-700">
+          {expandableFilters ? <details className="rounded-2xl border border-slate-200 bg-white p-3"><summary className="cursor-pointer list-none font-black text-blue-800 marker:content-none">מסננים נוספים</summary><div className="mt-4"><label htmlFor="mentor-city" className="min-w-0 text-sm font-black text-slate-700">
             עיר
             <select id="mentor-city" value={city} onChange={(event) => setCity(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
               <option value={ALL_CITIES}>{ALL_CITIES}</option>
               {cities.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
-          </label>
-        </div>
+          </label></div></details> : <label htmlFor="mentor-city" className="min-w-0 text-sm font-black text-slate-700">
+            עיר
+            <select id="mentor-city" value={city} onChange={(event) => setCity(event.target.value)} className="mt-2 min-h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-normal text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
+              <option value={ALL_CITIES}>{ALL_CITIES}</option>
+              {cities.map((value) => <option key={value} value={value}>{value}</option>)}
+            </select>
+          </label>}        </div>
       </div>
 
       <div className="mt-5 flex min-h-8 flex-wrap items-center justify-between gap-3">

@@ -59,8 +59,8 @@ test("every disabled meeting state has visible Hebrew guidance matching the API 
     "יש לבחור כיתה או גיל.", "בחמישה תווים לפחות.",
   ]) assert.match(flow, new RegExp(message.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(flow, /missingRequirements\.length === 0/);
-  assert.match(flow, /disabled=\{!complete \|\| busy\}/);
-  assert.match(flow, /if \(busy \|\| !accessToken/);
+  assert.match(flow, /disabled=\{!complete \|\| busy \|\| submitted\}/);
+  assert.match(flow, /if \(busy \|\| submitted \|\| !accessToken/);
   assert.match(flow, /parentMessage: message/);
 });
 
@@ -73,7 +73,7 @@ test("availability guidance distinguishes no slots from no selected slot", () =>
 });
 test("parent alternative proposal is actionable and active requests are grouped first", () => {
   const panel = read("app/dashboard/_components/MeetingRequestsPanel.tsx");
-  const parentDashboard = read("app/dashboard/parent/page.tsx");
+  const parentDashboard = read("app/dashboard/parent/requests/page.tsx");
   assert.match(panel, /id="parent-action-title"/);
   assert.match(panel, /id="meeting-requests-title"/);
   assert.match(panel, /act\(item\.id, "accept_alternative"/);

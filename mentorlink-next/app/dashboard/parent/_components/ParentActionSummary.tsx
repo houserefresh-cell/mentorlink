@@ -1,0 +1,4 @@
+"use client";
+import Link from "next/link";
+import { useParentDashboard } from "./ParentDashboardShell";
+export default function ParentActionSummary(){const{actionRequiredCount}=useParentDashboard();if(!actionRequiredCount)return null;return <section aria-labelledby="parent-action-summary" className="rounded-2xl border border-amber-300 bg-amber-50 p-5 shadow-sm"><h2 id="parent-action-summary" className="text-xl font-black text-amber-950">יש בקשות שממתינות לתשובתך</h2><p className="mt-2 text-amber-900">{actionRequiredCount===1?"בקשה אחת דורשת אישור או דחייה של מועד חלופי.":`${actionRequiredCount} בקשות דורשות אישור או דחייה של מועד חלופי.`}</p><Link href="/dashboard/parent/requests" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-amber-900 px-4 py-2 font-black text-white">מעבר לבקשות</Link></section>}
