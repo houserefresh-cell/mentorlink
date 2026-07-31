@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Mentor authentication required" }, { status: 401 });
   }
 
-  let body: { name?: unknown; category?: unknown };
+  let body: { name?: unknown; category?: unknown; addToProfile?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -78,6 +78,13 @@ export async function POST(request: Request) {
   }
 
   const category = body.category;
+  const addToProfile = body.addToProfile === undefined ? true : body.addToProfile;
+  if (typeof addToProfile !== "boolean") {
+    return Response.json(
+      { error: "Invalid profile selection", code: "INVALID_ADD_TO_PROFILE" },
+      { status: 400 },
+    );
+  }
   if (
     typeof category !== "string" ||
     !SUBJECT_CATEGORIES.includes(category as SubjectCategory)
@@ -146,16 +153,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const linked = await admin.from("mentor_subjects").upsert(
-    {
-      user_id: user.id,
-      subject_id: inserted.data.id,
-      age_groups: [...AGE_GROUPS],
-      custom_subject: null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,subject_id" },
-  );
+  const linked = addToProfile
+    ? await admin.from("mentor_subjects").upsert(
+        {
+          user_id: user.id,
+          subject_id: inserted.data.id,
+          age_groups: [...AGE_GROUPS],
+          custom_subject: null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id,subject_id" },
+      )
+    : { error: null };
   if (linked.error) {
     return Response.json(
       { error: "המקצוע נוסף למאגר, אך לא ניתן לשייך אותו לפרופיל.", code: "SUBJECT_LINK_FAILED" },
@@ -165,7 +174,10 @@ export async function POST(request: Request) {
 
   revalidatePath("/");
   revalidateTag("public-mentors", { expire: 0 });
-  return Response.json({ subject: inserted.data }, { status: 201 });
+  return Response.json(
+    { subject: inserted.data, addedToProfile: addToProfile },
+    { status: 201 },
+  );
 }
 
 export async function PUT(request: Request) {

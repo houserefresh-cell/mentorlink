@@ -1,2 +1,5 @@
-import Link from "next/link";
-export default function NewMentorActivityPage(){return <div className="mx-auto max-w-3xl rounded-3xl border bg-white p-8 shadow-sm"><h1 className="text-3xl font-black">פתיחת פעילות חדשה</h1><p className="mt-4 leading-7 text-slate-600">טופס יצירת הפעילות ייבנה בשלב הבא. עדיין לא ניתן לפרסם פעילות.</p><p className="mt-3 text-sm text-slate-500">פעילות תהיה עצמאית מהזמינות האישית החוזרת, מעריכת הפרופיל ומבקשות לפגישה אישית.</p><Link href="/dashboard/mentor" className="mt-6 inline-block font-black text-blue-700">חזרה לעמוד הבית</Link></div>}
+import { MentorActivityForm } from "../_components/MentorActivityForm";
+
+export default function NewMentorActivityPage() {
+  return <MentorActivityForm />;
+}
