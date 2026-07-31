@@ -31,6 +31,9 @@ type Activity = {
   accessibility_other: string | null;
   address: string | null;
   location_details: string | null;
+  image_path: string | null;
+  image_url: string | null;
+  image_alt: string | null;
   sessions: Session[];
   registration_counts: { registered: number; waitlisted: number; total: number };
 };
@@ -139,6 +142,19 @@ export function MentorActivitiesManager() {
     }
   }
 
+  async function uploadImage(activity: Activity, file: File) {
+    if (busyId) return;
+    setBusyId(activity.id); setNotice(null);
+    const form = new FormData(); form.set("image", file); form.set("alt", activity.title || "תמונת הפעילות");
+    try {
+      const response = await fetch(`/api/mentor-activities/${activity.id}/image`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error);
+      setNotice({ type: "success", text: "תמונת הפעילות נשמרה." }); await loadActivities(token);
+    } catch (error) { setNotice({ type: "error", text: error instanceof Error ? error.message : "לא ניתן להעלות את התמונה." }); }
+    finally { setBusyId(null); }
+  }
+
   return <section dir="rtl" className="mx-auto max-w-7xl pb-16">
     <header className="flex flex-col gap-5 rounded-3xl bg-gradient-to-l from-violet-700 via-blue-700 to-cyan-600 p-6 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between md:p-8">
       <div><p className="font-bold text-cyan-100">מרכז הפעילויות</p><h1 className="mt-1 text-3xl font-black sm:text-4xl">הפעילויות שלי</h1><p className="mt-2 max-w-2xl text-blue-50">ניהול טיוטות, מועדים והרשמות במקום אחד.</p></div>
@@ -150,14 +166,14 @@ export function MentorActivitiesManager() {
     </div>
     {loading ? <div role="status" className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-3xl bg-slate-200 motion-reduce:animate-none" />)}</div>
       : visible.length === 0 ? <div className="mt-8 rounded-3xl border-2 border-dashed border-blue-300 bg-blue-50 p-10 text-center"><h2 className="text-2xl font-black">{activities.length ? "אין פעילויות בסינון הזה" : "עוד לא פתחת פעילות"}</h2><p className="mt-2 text-slate-600">אפשר להתחיל מטיוטה ולפרסם כשהכול מוכן.</p><Link href="/dashboard/mentor/activities/new" className="mt-6 inline-block rounded-2xl bg-blue-700 px-7 py-4 font-black text-white shadow-md">פתיחת פעילות חדשה</Link></div>
-      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} />)}</div>}
+      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
     {preview && <PreviewDialog activity={preview} onClose={() => { setPreview(null); requestAnimationFrame(() => previewTrigger.current?.focus()); }} />}
     {updatesActivity && <UpdatesDialog activity={updatesActivity} token={token} onClose={() => setUpdatesActivity(null)} />}
     {confirmAction && <ConfirmDialog action={confirmAction} busy={busyId === confirmAction.activity.id} onClose={() => !busyId && setConfirmAction(null)} onConfirm={executeConfirmed} />}
   </section>;
 }
 
-function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void }) {
+function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onImage: (file: File) => void }) {
   const next = nextSession(activity.sessions);
   const registered = activity.registration_counts?.registered ?? 0;
   const waitlisted = activity.registration_counts?.waitlisted ?? 0;
@@ -165,6 +181,8 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
   return <article tabIndex={0} className={`relative z-0 flex h-full flex-col rounded-3xl border p-5 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:z-10 hover:scale-[1.025] hover:-translate-y-1 hover:shadow-xl focus-visible:z-10 focus-visible:scale-[1.025] focus-visible:-translate-y-1 focus-visible:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700 motion-reduce:transform-none motion-reduce:transition-none ${STATUS[activity.status].card}`}>
     <div className="flex items-start justify-between gap-3"><span className={`rounded-full px-3 py-1 text-sm font-black ${STATUS[activity.status].badge}`}>{STATUS[activity.status].label}</span><span className="text-sm font-bold text-slate-600">{activity.subject_name ?? "מקצוע לא זמין"}</span></div>
     <h2 className="mt-4 line-clamp-2 text-2xl font-black text-slate-950">{activity.title || "פעילות ללא כותרת"}</h2>
+    {activity.image_url && <img src={activity.image_url} alt={activity.image_alt || activity.title || "תמונת הפעילות"} className="mt-3 h-36 w-full rounded-2xl object-cover" />}
+    {(activity.status === "draft" || (activity.status === "published" && registered + waitlisted === 0)) && <label className="mt-3 cursor-pointer rounded-xl border border-violet-300 bg-white/80 px-4 py-2 text-center text-sm font-black text-violet-800">{activity.image_path ? "החלפת תמונת הפעילות" : "הוספת תמונת פעילות"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImage(file); event.currentTarget.value = ""; }} /></label>}
     <DateHighlight activity={activity} session={next} />
     <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Metric label="מיקום" value={location(activity)} /><Metric label="מחיר" value={activity.is_free ? "ללא עלות" : `${activity.price ?? 0} ₪`} /><Metric label="רשומים" value={String(registered)} /><Metric label="רשימת המתנה" value={String(waitlisted)} /><Metric label="מקומות פנויים" value={available == null ? "—" : String(available)} /><Metric label="מכסה" value={activity.max_participants == null ? "—" : String(activity.max_participants)} /></dl>
     <div className="mt-auto flex flex-wrap gap-2 border-t border-black/10 pt-4" aria-label={`פעולות עבור ${activity.title ?? "הפעילות"}`}>

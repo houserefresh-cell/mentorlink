@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 import { getDashboardPath } from "@/lib/auth-routing";
 import { supabase } from "@/lib/supabase";
-const navigation = [{ href: "/dashboard/parent", label: "עמוד הבית" }, { href: "/dashboard/parent/requests", label: "הבקשות והפגישות שלי", badge: true }, { href: "/dashboard/parent/feedback", label: "משובים להשלמה" }, { href: "/dashboard/parent/preferences", label: "פרטי הילד והעדפות" }, { href: "/dashboard/parent/account", label: "החשבון שלי" }];
+const navigation = [{ href: "/dashboard/parent", label: "עמוד הבית" }, { href: "/dashboard/parent/activities", label: "הפעילויות שלי" }, { href: "/dashboard/parent/requests", label: "הבקשות והפגישות שלי", badge: true }, { href: "/dashboard/parent/feedback", label: "משובים להשלמה" }, { href: "/dashboard/parent/preferences", label: "הילדים והעדפות" }, { href: "/dashboard/parent/account", label: "החשבון שלי" }];
 const ParentDashboardContext = createContext({ actionRequiredCount: 0 });
 export function useParentDashboard() { return useContext(ParentDashboardContext); }
 export default function ParentDashboardShell({ children }: { children: React.ReactNode }) {

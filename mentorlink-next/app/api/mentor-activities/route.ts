@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     if (sessions.error || registrations.error || subjects.error) throw new Error("activity children failed");
     return Response.json({ activities: (activities.data ?? []).map((activity) => ({
       ...activity,
+      image_url: activity.image_path ? client.storage.from("activity-images").getPublicUrl(activity.image_path).data.publicUrl : null,
       subject_name: (subjects.data ?? []).find((subject) => subject.id === activity.subject_id)?.name ?? null,
       sessions: (sessions.data ?? []).filter((session) => session.activity_id === activity.id),
       registration_counts: registrationCounts((registrations.data ?? []).filter((registration) => registration.activity_id === activity.id)),

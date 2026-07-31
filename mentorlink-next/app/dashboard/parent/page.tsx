@@ -1,6 +1,6 @@
 import Link from "next/link";
-import PublicMentorDirectory from "@/app/_components/PublicMentorDirectory";
 import { getPublishedMentors } from "@/lib/public-mentor-data";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 import ParentActionSummary from "./_components/ParentActionSummary";
-export default async function ParentHomePage(){let mentors:PublicMentor[]=[];try{mentors=await getPublishedMentors()}catch{console.error("Unable to load the parent mentor directory.")}return <div className="mx-auto max-w-6xl"><ParentActionSummary/><section className="mt-8"><p className="font-black text-blue-700">מציאת חונך</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">מוצאים את החונך המתאים לילדכם</h1><p className="mt-3 max-w-3xl leading-7 text-slate-600">חפשו לפי שם, עיר או תחום. מוצגים כאן רק פרטים ציבוריים של חונכים שפורסמו במערכת.</p><div className="mt-7"><PublicMentorDirectory mentors={mentors} expandableFilters/></div></section><p className="mt-8 text-sm text-slate-500">בקשות שכבר שלחתם זמינות תמיד בעמוד <Link href="/dashboard/parent/requests" className="font-bold text-blue-700 underline">הבקשות והפגישות שלי</Link>.</p></div>}
+import ParentActivityDiscovery from "./_components/ParentActivityDiscovery";
+export default async function ParentHomePage(){let mentors:PublicMentor[]=[];try{mentors=await getPublishedMentors()}catch{console.error("Unable to load the parent mentor directory.")}return <div className="mx-auto max-w-7xl"><ParentActionSummary/><ParentActivityDiscovery mentors={mentors}/><p className="mt-8 text-sm text-slate-500">בקשות שכבר שלחתם זמינות תמיד בעמוד <Link href="/dashboard/parent/requests" className="font-bold text-blue-700 underline">הבקשות והפגישות שלי</Link>.</p></div>}
