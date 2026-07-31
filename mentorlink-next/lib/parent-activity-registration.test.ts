@@ -53,3 +53,22 @@ test("activity images are validated, owner scoped and locked after registration"
   assert.match(imageApi, /registered","waitlisted/);
   assert.match(imageApi, /file\.size>5242880/);
 });
+
+test("child preferences include kindergarten, school and shared subject interests", () => {
+  const preferences = fs.readFileSync("supabase/migrations/202608010027_add_child_activity_preferences.sql", "utf8");
+  assert.match(preferences, /'kindergarten'/);
+  assert.match(preferences, /school_name text/);
+  assert.match(preferences, /parent_child_subject_interests/);
+  assert.match(preferences, /subject_id bigint not null references public\.subjects/);
+  assert.match(preferences, /create or replace function public\.save_parent_child_preferences/);
+  assert.match(preferences, /delete from public\.parent_child_subject_interests where child_id = v_child_id/);
+  assert.match(preferences, /grant execute on function public\.save_parent_child_preferences[^\n]+to service_role/);
+});
+
+test("published upcoming activities remain visible without child preferences", () => {
+  assert.match(activityApi, /select\("id, name, category"\)/);
+  assert.doesNotMatch(activityApi, /\.gt\("registration_deadline"/);
+  assert.match(activityApi, /registrationOpen:/);
+  assert.match(discovery, /if \(!child\) return activities/);
+  assert.match(discovery, /ההרשמה נסגרה/);
+});
