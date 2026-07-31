@@ -72,3 +72,11 @@ test("published upcoming activities remain visible without child preferences", (
   assert.match(discovery, /if \(!child\) return activities/);
   assert.match(discovery, /ההרשמה נסגרה/);
 });
+
+test("mentor cards provide direct access to their activities and registration cards", () => {
+  const directory = fs.readFileSync("app/_components/PublicMentorDirectory.tsx", "utf8");
+  assert.match(directory, /פעילויות של החונך — לצפייה ולהרשמה/);
+  assert.match(directory, /href={`#activity-\${activity\.id}`}/);
+  assert.match(directory, /מעבר לפעילות ולהרשמה/);
+  assert.match(discovery, /id={`activity-\${activity\.id}`}/);
+});
