@@ -118,6 +118,7 @@ export async function PATCH(request: Request) {
     if (subjectIds) {
       const linked = await client.from("mentor_availability_window_subjects").upsert(
         subjectIds.map((subjectId) => ({ window_id: id, subject_id: subjectId })),
+        { onConflict: "window_id,subject_id", ignoreDuplicates: true },
       );
       if (linked.error) throw new Error("subject link failed");
       const removed = await client

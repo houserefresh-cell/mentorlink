@@ -4,6 +4,10 @@ import test from "node:test";
 const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const editor = read("app/dashboard/mentor/scheduling/page.tsx");
 const api = read("app/api/mentor-availability/route.ts");
+
+test("editing availability keeps existing subject links without requiring update privileges", () => {
+  assert.match(api, /onConflict: "window_id,subject_id", ignoreDuplicates: true/);
+});
 const slots = read("app/api/meeting-requests/available-slots/route.ts");
 const flow = read("app/_components/MeetingRequestFlow.tsx");
 const core = read("lib/meeting-scheduling-core.ts");
