@@ -18,8 +18,20 @@ export async function GET(request: Request) {
       client.from("mentor_blackout_periods").select("*").eq("mentor_user_id", user.id).order("starts_at"),
     ]);
     if (windows.error || blackouts.error) throw new Error("query failed");
+    const windowIds = (windows.data ?? []).map((window) => window.id);
+    const links = windowIds.length
+      ? await client.from("mentor_availability_window_subjects").select("window_id, subject_id").in("window_id", windowIds)
+      : { data: [], error: null };
+    if (links.error) throw new Error("subject links failed");
+    const subjectIdsByWindow = new Map<string, number[]>();
+    for (const link of links.data ?? []) {
+      subjectIdsByWindow.set(link.window_id, [...(subjectIdsByWindow.get(link.window_id) ?? []), link.subject_id]);
+    }
     availabilityDiagnostic("load", true, "AVAILABILITY_LOADED");
-    return Response.json({ windows: windows.data ?? [], blackouts: blackouts.data ?? [] }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({
+      windows: (windows.data ?? []).map((window) => ({ ...window, subject_ids: subjectIdsByWindow.get(window.id) ?? [] })),
+      blackouts: blackouts.data ?? [],
+    }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     availabilityDiagnostic("load", false, error instanceof Error ? error.name : "UnknownError");
     return Response.json({ error: "לא ניתן לטעון את הזמינות.", code: "AVAILABILITY_LOAD_FAILED" }, { status: 500 });
@@ -52,6 +64,8 @@ export async function POST(request: Request) {
     }
     const window = validateWindow(payload);
     if (!window) return Response.json({ error: "שעות, אופן הפגישה או המשכים אינם תקינים.", code: "INVALID_WINDOW" }, { status: 400 });
+    const subjectIds = await validateSubjectIds(client, user.id, payload.subjectIds);
+    if (!subjectIds) return Response.json({ error: "יש לבחור לפחות מקצוע אחד מתוך המקצועות שלך.", code: "INVALID_WINDOW_SUBJECTS" }, { status: 400 });
     const duplicate = await client.from("mentor_availability_windows").select("id")
       .eq("mentor_user_id", user.id).eq("weekday", window.weekday)
       .eq("start_time", window.start_time).eq("end_time", window.end_time)
@@ -60,6 +74,13 @@ export async function POST(request: Request) {
     if (duplicate.data) return Response.json({ error: "חלון זמינות זה כבר קיים.", code: "DUPLICATE_WINDOW" }, { status: 409 });
     const result = await client.from("mentor_availability_windows").insert({ mentor_user_id: user.id, ...window }).select("*").single();
     if (result.error) throw new Error("insert failed");
+    const linked = await client.from("mentor_availability_window_subjects").insert(
+      subjectIds.map((subjectId) => ({ window_id: result.data.id, subject_id: subjectId })),
+    );
+    if (linked.error) {
+      await client.from("mentor_availability_windows").delete().eq("id", result.data.id).eq("mentor_user_id", user.id);
+      throw new Error("subject link failed");
+    }
     availabilityDiagnostic("save_window", true, "AVAILABILITY_SAVED");
     return Response.json({ window: result.data }, { status: 201 });
   } catch (error) {
@@ -79,6 +100,12 @@ export async function PATCH(request: Request) {
   if (!/^[0-9a-f-]{36}$/i.test(id) || !window) return Response.json({ error: "חלון הזמינות אינו תקין.", code: "INVALID_WINDOW" }, { status: 400 });
   try {
     const client = createSupabaseAdmin();
+    const subjectIds = payload.subjectIds === undefined
+      ? null
+      : await validateSubjectIds(client, user.id, payload.subjectIds);
+    if (payload.subjectIds !== undefined && !subjectIds) {
+      return Response.json({ error: "יש לבחור לפחות מקצוע אחד מתוך המקצועות שלך.", code: "INVALID_WINDOW_SUBJECTS" }, { status: 400 });
+    }
     const duplicate = await client.from("mentor_availability_windows").select("id")
       .eq("mentor_user_id", user.id).eq("weekday", window.weekday)
       .eq("start_time", window.start_time).eq("end_time", window.end_time)
@@ -88,6 +115,18 @@ export async function PATCH(request: Request) {
     const result = await client.from("mentor_availability_windows").update({ ...window, updated_at: new Date().toISOString() }).eq("id", id).eq("mentor_user_id", user.id).select("*").maybeSingle();
     if (result.error) throw new Error("update failed");
     if (!result.data) return Response.json({ error: "חלון הזמינות לא נמצא.", code: "WINDOW_NOT_FOUND" }, { status: 404 });
+    if (subjectIds) {
+      const linked = await client.from("mentor_availability_window_subjects").upsert(
+        subjectIds.map((subjectId) => ({ window_id: id, subject_id: subjectId })),
+      );
+      if (linked.error) throw new Error("subject link failed");
+      const removed = await client
+        .from("mentor_availability_window_subjects")
+        .delete()
+        .eq("window_id", id)
+        .not("subject_id", "in", `(${subjectIds.join(",")})`);
+      if (removed.error) throw new Error("subject unlink failed");
+    }
     availabilityDiagnostic("update_window", true, "AVAILABILITY_SAVED");
     return Response.json({ window: result.data });
   } catch (error) {
@@ -122,3 +161,13 @@ function validateWindow(payload: Record<string, unknown>) {
   return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
 }
 function clean(value: unknown, maximum: number) { return typeof value === "string" && value.trim().length <= maximum ? value.trim() : ""; }
+
+async function validateSubjectIds(client: ReturnType<typeof createSupabaseAdmin>, userId: string, value: unknown) {
+  const subjectIds = Array.isArray(value)
+    ? [...new Set(value.map(Number).filter((id) => Number.isInteger(id) && id > 0))]
+    : [];
+  if (!subjectIds.length) return null;
+  const owned = await client.from("mentor_subjects").select("subject_id").eq("user_id", userId).in("subject_id", subjectIds);
+  if (owned.error || (owned.data ?? []).length !== subjectIds.length) return null;
+  return subjectIds;
+}

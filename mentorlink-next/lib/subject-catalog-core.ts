@@ -20,6 +20,16 @@ const BLOCKED_TERMS = [
   "הלוואה",
   "מבצע",
   "פרסום",
+  "איקס",
+  "אחר",
+  "כללי",
+  "כללי מאוד",
+  "משהו",
+  "דברים",
+  "תחום",
+  "מקצוע",
+  "בדיקה",
+  "טסט",
 ];
 
 export function normalizeSubjectName(value: string) {
@@ -61,10 +71,15 @@ export function validateProposedSubject(
   const name = normalizeSubjectName(rawName);
   const key = subjectComparisonKey(name);
 
-  if (name.length < 2 || name.length > 50) {
+  const letters = Array.from(name.matchAll(/\p{L}/gu)).length;
+  if (name.length < 3 || name.length > 50 || letters < 3) {
     return { ok: false as const, code: "INVALID_LENGTH" };
   }
-  if (!/[\p{L}]/u.test(name) || /(.)\1{4,}/u.test(name)) {
+  if (
+    !/^[\p{Script=Hebrew}\p{L}][\p{L}\p{N}\s׳'״"-]*$/u.test(name) ||
+    /(.)\1{3,}/u.test(name) ||
+    /(?:אבגד|asdf|qwer|zxcv)/iu.test(key)
+  ) {
     return { ok: false as const, code: "MEANINGLESS_NAME" };
   }
   if (BLOCKED_TERMS.some((term) => key.includes(subjectComparisonKey(term)))) {

@@ -18,6 +18,7 @@ const window: AvailabilityWindow = {
   effective_start_date: null,
   effective_end_date: null,
   timezone: "Asia/Jerusalem",
+  subjects: ["מתמטיקה"],
 };
 
 test("slots come only from active availability and durations that fit", () => {
@@ -33,6 +34,8 @@ test("slots come only from active availability and durations that fit", () => {
   const last = slots.at(-1)!;
   assert.ok(!last.durations.includes(90));
   assert.equal(isCurrentGeneratedSlot(slots, slots[0].startAt, "אונליין", 30), true);
+  assert.equal(isCurrentGeneratedSlot(slots, slots[0].startAt, "אונליין", 30, "מתמטיקה"), true);
+  assert.equal(isCurrentGeneratedSlot(slots, slots[0].startAt, "אונליין", 30, "אנגלית"), false);
   assert.equal(isCurrentGeneratedSlot(slots, slots[0].startAt, "פרונטלי", 30), false);
 });
 

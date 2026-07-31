@@ -4,7 +4,7 @@ import {
   normalizeSubjectName,
   subjectComparisonKey,
   validateProposedSubject,
-} from "./subject-catalog-core";
+} from "./subject-catalog-core.ts";
 
 test("normalizes whitespace and unsupported punctuation", () => {
   assert.equal(normalizeSubjectName("  כדורגל   !!!  "), "כדורגל");
@@ -22,4 +22,10 @@ test("accepts a meaningful new subject", () => {
     name: "אסטרונומיה",
     normalizedName: "אסטרונומיה",
   });
+});
+
+test("rejects single letters and generic meaningless labels", () => {
+  assert.equal(validateProposedSubject("X", []).code, "INVALID_LENGTH");
+  assert.equal(validateProposedSubject("איקס", []).code, "BLOCKED_CONTENT");
+  assert.equal(validateProposedSubject("תחום", []).code, "BLOCKED_CONTENT");
 });

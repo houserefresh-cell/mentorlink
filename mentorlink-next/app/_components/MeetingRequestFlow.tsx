@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Slot = { startAt: string; meetingMode: string; durations: number[] };
+type Slot = { startAt: string; meetingMode: string; durations: number[]; subjects: string[] };
 type Config = {
   mentor: {
     bookingId: string;
@@ -80,12 +80,20 @@ export default function MeetingRequestFlow({
     queueMicrotask(() => closeButtonRef.current?.focus());
   }, [open]);
 
+  const subjectSlots = useMemo(
+    () => (config?.slots ?? []).filter((item) => !subject || item.subjects.includes(subject)),
+    [config, subject],
+  );
+  const availableModes = useMemo(
+    () => [...new Set(subjectSlots.map((item) => item.meetingMode))],
+    [subjectSlots],
+  );
   const dates = useMemo(
-    () => [...new Set((config?.slots ?? []).filter((item) => !mode || item.meetingMode === mode).map((item) => dateKey(item.startAt)))],
-    [config, mode],
+    () => [...new Set(subjectSlots.filter((item) => !mode || item.meetingMode === mode).map((item) => dateKey(item.startAt)))],
+    [subjectSlots, mode],
   );
   const selectedDate = slot ? dateKey(slot.startAt) : "";
-  const dateSlots = (config?.slots ?? []).filter(
+  const dateSlots = subjectSlots.filter(
     (item) => item.meetingMode === mode && dateKey(item.startAt) === selectedDate,
   );
   const hasSelectableSlots = Boolean(config?.slots.length);
@@ -177,9 +185,10 @@ export default function MeetingRequestFlow({
               <div className="mt-6 space-y-6">
                 {config.availability.emptyReason === "NO_AVAILABILITY" && <p role="status" className="rounded-xl bg-amber-50 p-4 font-bold text-amber-900">החונך עדיין לא הגדיר מועדים זמינים לפגישה. לא ניתן לקבוע פגישה כרגע.</p>}
                 {config.availability.emptyReason === "NO_OPEN_SLOTS" && <div className="rounded-xl bg-amber-50 p-4 text-amber-900"><p className="font-bold">אין כרגע מועדים פנויים בטווח המוצג.</p>{config.availability.horizonDays < 60 && <button type="button" disabled={loadingLater} onClick={loadLaterDates} className="mt-3 min-h-11 rounded-xl border border-amber-700 px-4 py-2 font-bold">{loadingLater ? "טוען..." : "הצגת מועדים מאוחרים יותר"}</button>}</div>}
-                <Choice title="א. נושא הפגישה" values={config.mentor.subjects} selected={subject} onSelect={(value) => { setSubject(value); }} />
-                <Choice title="ב. אופן הפגישה" values={config.mentor.meetingModes} selected={mode} onSelect={(value) => { setMode(value); setSlot(null); setDuration(0); }} />
-                {mode && <Choice title="ג. בחירת יום" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = config.slots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); setSlot(first ?? null); setDuration(0); }} />}
+                <Choice title="א. נושא הפגישה" values={config.mentor.subjects} selected={subject} onSelect={(value) => { setSubject(value); setMode(""); setSlot(null); setDuration(0); }} />
+                {subject && <Choice title="ב. אופן הפגישה" values={availableModes} selected={mode} onSelect={(value) => { setMode(value); setSlot(null); setDuration(0); }} />}
+                {subject && !availableModes.length && <p role="status" className="rounded-xl bg-amber-50 p-4 font-bold text-amber-900">אין כרגע חלון זמינות שמוגדר למקצוע הזה.</p>}
+                {mode && <Choice title="ג. בחירת יום" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = subjectSlots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); setSlot(first ?? null); setDuration(0); }} />}
                 {selectedDate && <Choice title="שעה" values={dateSlots.map((item) => item.startAt)} selected={slot?.startAt ?? ""} format={formatTime} onSelect={(value) => { setSlot(dateSlots.find((item) => item.startAt === value) ?? null); setDuration(0); }} />}
                 {slot && <Choice title="ד. משך הפגישה" values={slot.durations.map(String)} selected={String(duration || "")} format={(value) => `${value} דקות`} onSelect={(value) => setDuration(Number(value))} />}
                 <fieldset><legend className="mb-2 font-black">ה. פרטי הילד/ה</legend><div className="grid gap-4 sm:grid-cols-2">

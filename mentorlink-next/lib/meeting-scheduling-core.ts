@@ -29,6 +29,7 @@ export type AvailabilityWindow = {
   effective_start_date: string | null;
   effective_end_date: string | null;
   timezone: string;
+  subjects?: string[];
 };
 
 export type TimePeriod = { starts_at: string; ends_at: string };
@@ -36,6 +37,7 @@ export type BookableSlot = {
   startAt: string;
   meetingMode: string;
   durations: number[];
+  subjects: string[];
 };
 
 function addDays(date: string, days: number) {
@@ -100,6 +102,7 @@ export function generateBookableSlots(input: {
             startAt: start.toISOString(),
             meetingMode: window.meeting_mode,
             durations,
+            subjects: window.subjects ?? [],
           });
         }
       }
@@ -113,12 +116,14 @@ export function isCurrentGeneratedSlot(
   startAt: string,
   meetingMode: string,
   duration: number,
+  subject?: string,
 ) {
   return slots.some(
     (slot) =>
       slot.startAt === new Date(startAt).toISOString() &&
       slot.meetingMode === meetingMode &&
-      slot.durations.includes(duration),
+      slot.durations.includes(duration) &&
+      (!subject || slot.subjects.includes(subject)),
   );
 }
 

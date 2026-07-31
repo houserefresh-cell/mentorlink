@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       return Response.json({ error: YOM_KIPPUR_MESSAGE }, { status: 422 });
     }
     const slots = await loadSlots(client, mentor.mentorUserId);
-    if (!isCurrentGeneratedSlot(slots, requestedStartAt, meetingMode, duration)) {
+    if (!isCurrentGeneratedSlot(slots, requestedStartAt, meetingMode, duration, subject)) {
       return Response.json({ error: "המועד אינו זמין עוד." }, { status: 422 });
     }
     const { data, error } = await client.from("meeting_requests").insert({

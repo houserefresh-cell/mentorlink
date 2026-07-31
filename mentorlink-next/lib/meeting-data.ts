@@ -54,8 +54,30 @@ export async function loadSlots(
     client.from("meeting_requests").select("requested_start_at, requested_end_at, confirmed_start_at, confirmed_end_at").eq("mentor_user_id", mentorUserId).eq("status", "accepted"),
   ]);
   if (windows.error || mentorBlackouts.error || administratorBlackouts.error || accepted.error) throw new Error("Scheduling data unavailable");
+  const windowIds = (windows.data ?? []).map((window) => window.id);
+  const linked = windowIds.length
+    ? await client
+      .from("mentor_availability_window_subjects")
+      .select("window_id, subjects(name)")
+      .in("window_id", windowIds)
+    : { data: [], error: null };
+  if (linked.error) throw new Error("Scheduling subjects unavailable");
+  const subjectsByWindow = new Map<string, string[]>();
+  for (const link of linked.data ?? []) {
+    const joined = Array.isArray(link.subjects) ? link.subjects[0] : link.subjects;
+    if (!joined?.name) continue;
+    subjectsByWindow.set(link.window_id, [
+      ...(subjectsByWindow.get(link.window_id) ?? []),
+      joined.name,
+    ]);
+  }
   return generateBookableSlots({
-    windows: (windows.data ?? []) as AvailabilityWindow[],
+    windows: (windows.data ?? [])
+      .filter((window) => subjectsByWindow.has(window.id))
+      .map((window) => ({
+        ...window,
+        subjects: [...new Set(subjectsByWindow.get(window.id) ?? [])],
+      })) as AvailabilityWindow[],
     blackouts: [...(mentorBlackouts.data ?? []), ...(administratorBlackouts.data ?? [])],
     accepted: (accepted.data ?? [])
       .map((meeting) => ({

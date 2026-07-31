@@ -94,7 +94,7 @@ export async function PATCH(
       }
 
       const slots = await loadSlots(client, current.mentor_user_id, now);
-      if (!isCurrentGeneratedSlot(slots, startAt, current.meeting_mode, duration)) {
+      if (!isCurrentGeneratedSlot(slots, startAt, current.meeting_mode, duration, current.subject)) {
         return Response.json({ error: "המועד אינו זמין עוד." }, { status: 422 });
       }
 
@@ -120,7 +120,7 @@ export async function PATCH(
         return Response.json({ error: YOM_KIPPUR_MESSAGE }, { status: 422 });
       }
       const slots = await loadSlots(client, current.mentor_user_id, now);
-      if (!isCurrentGeneratedSlot(slots, startAt, current.meeting_mode, duration)) {
+      if (!isCurrentGeneratedSlot(slots, startAt, current.meeting_mode, duration, current.subject)) {
         return Response.json({ error: "המועד החלופי אינו זמין." }, { status: 422 });
       }
       Object.assign(update, {

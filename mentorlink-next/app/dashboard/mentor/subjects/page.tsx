@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import {
@@ -11,7 +10,7 @@ import {
 
 const AGE_GROUPS = ["א׳–ב׳", "ג׳–ד׳", "ה׳–ו׳", "חטיבת ביניים", "תיכון"];
 
-type Subject = { id: number; name: string; category: SubjectCategory };
+type Subject = { id: number; name: string; category: SubjectCategory; canDelete?: boolean };
 type Message = { type: "success" | "error"; text: string } | null;
 
 export default function MentorSubjectsPage() {
@@ -21,6 +20,7 @@ export default function MentorSubjectsPage() {
   const [selections, setSelections] = useState<Record<number, string[]>>({});
   const [newCategory, setNewCategory] = useState<SubjectCategory>("לימודים");
   const [newName, setNewName] = useState("");
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -66,9 +66,12 @@ export default function MentorSubjectsPage() {
   const grouped = useMemo(
     () => SUBJECT_CATEGORIES.map((category) => ({
       category,
-      subjects: catalog.filter((subject) => subject.category === category),
+      subjects: catalog.filter((subject) =>
+        subject.category === category &&
+        subject.name.toLocaleLowerCase("he").includes(query.trim().toLocaleLowerCase("he")),
+      ),
     })),
-    [catalog],
+    [catalog, query],
   );
 
   function toggleSubject(id: number) {
@@ -109,7 +112,7 @@ export default function MentorSubjectsPage() {
       setAdding(false);
       return;
     }
-    const subject = body.subject as Subject;
+    const subject = { ...(body.subject as Subject), canDelete: true };
     setCatalog((current) => [...current, subject]);
     setSelections((current) => ({ ...current, [subject.id]: [...AGE_GROUPS] }));
     setNewName("");
@@ -149,26 +152,51 @@ export default function MentorSubjectsPage() {
     setSaving(false);
   }
 
+  async function deleteSubject(subject: Subject) {
+    if (!subject.canDelete || !token) return;
+    if (!window.confirm(`למחוק את ${subject.name} מהמקצועות שלך?`)) return;
+    const response = await fetch(`/api/mentor-subjects?subjectId=${subject.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage({ type: "error", text: body.error ?? "לא ניתן למחוק את המקצוע." });
+      return;
+    }
+    setCatalog((current) => body.removedFromCatalog
+      ? current.filter((item) => item.id !== subject.id)
+      : current.map((item) => item.id === subject.id ? { ...item, canDelete: false } : item));
+    setSelections((current) => {
+      const next = { ...current };
+      delete next[subject.id];
+      return next;
+    });
+    setMessage({
+      type: "success",
+      text: body.removedFromCatalog
+        ? `${subject.name} נמחק מהמקצועות שלך ומהמאגר.`
+        : `${subject.name} הוסר מהמקצועות שלך. הוא נשאר במאגר מפני שחונכים נוספים משתמשים בו.`,
+    });
+  }
+
   if (loading) {
     return <main dir="rtl" className="flex min-h-screen items-center justify-center"><p>טוען מקצועות ותחומים...</p></main>;
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-slate-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/" className="text-2xl font-extrabold text-blue-600">MentorLink</Link>
-          <Link href="/dashboard/mentor/profile" className="rounded-xl border px-4 py-2 font-bold">חזרה לפרופיל שלי</Link>
-        </div>
-      </header>
-
-      <section className="mx-auto max-w-5xl px-6 py-10">
-        <p className="font-bold text-blue-600">הפרופיל שלי</p>
+    <main dir="rtl" className="mx-auto max-w-5xl">
+      <section>
+        <p className="font-bold text-blue-600">ניהול שוטף</p>
         <h1 className="mt-2 text-4xl font-extrabold text-slate-900">המקצועות והתחומים שלי</h1>
         <p className="mt-3 text-slate-600">אפשר לבחור כמה תחומים שרוצים. לכל מקצוע סמנו את הגילים המתאימים.</p>
+        <label className="mt-6 block font-bold text-slate-800">
+          חיפוש מקצוע או תחום
+          <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" placeholder="לדוגמה: כדורגל, אנגלית או תכנות" className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3" />
+        </label>
 
         <form onSubmit={save} className="mt-8 space-y-6">
-          {grouped.map(({ category, subjects }) => (
+          {grouped.filter(({ subjects }) => subjects.length).map(({ category, subjects }) => (
             <section key={category} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-2xl font-extrabold text-slate-900">{category}</h2>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -176,10 +204,13 @@ export default function MentorSubjectsPage() {
                   const selected = selections[subject.id] !== undefined;
                   return (
                     <div key={subject.id} className={`rounded-2xl border p-4 ${selected ? "border-blue-400 bg-blue-50" : "border-slate-200"}`}>
-                      <label className="flex cursor-pointer items-center gap-3 font-bold">
-                        <input type="checkbox" checked={selected} onChange={() => toggleSubject(subject.id)} className="h-5 w-5 accent-blue-600" />
-                        {subject.name}
-                      </label>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="flex cursor-pointer items-center gap-3 font-bold">
+                          <input type="checkbox" checked={selected} onChange={() => toggleSubject(subject.id)} className="h-5 w-5 accent-blue-600" />
+                          {subject.name}
+                        </label>
+                        {subject.canDelete && <button type="button" onClick={() => deleteSubject(subject)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-bold text-red-700">מחיקה</button>}
+                      </div>
                       {selected && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           {AGE_GROUPS.map((ageGroup) => (

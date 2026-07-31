@@ -32,7 +32,7 @@ export async function GET(request: Request) {
   const [catalog, selected] = await Promise.all([
     admin
       .from("subjects")
-      .select("id, name, category")
+      .select("id, name, category, created_by")
       .eq("moderation_status", "active")
       .order("category")
       .order("name"),
@@ -47,9 +47,15 @@ export async function GET(request: Request) {
   }
 
   const activeIds = new Set((catalog.data ?? []).map((subject) => subject.id));
+  const selectedIds = new Set((selected.data ?? []).map((choice) => choice.subject_id));
   return Response.json(
     {
-      catalog: catalog.data ?? [],
+      catalog: (catalog.data ?? []).map((subject) => ({
+        id: subject.id,
+        name: subject.name,
+        category: subject.category,
+        canDelete: subject.created_by === user.id && selectedIds.has(subject.id),
+      })),
       selected: (selected.data ?? []).filter((choice) =>
         activeIds.has(choice.subject_id),
       ),
@@ -252,4 +258,76 @@ export async function PUT(request: Request) {
   revalidatePath("/dashboard/mentor/subjects");
   revalidateTag("public-mentors", { expire: 0 });
   return Response.json({ saved: true });
+}
+
+export async function DELETE(request: Request) {
+  const user = await mentor(request);
+  if (!user) {
+    return Response.json({ error: "Mentor authentication required" }, { status: 401 });
+  }
+  const subjectId = Number(new URL(request.url).searchParams.get("subjectId"));
+  if (!Number.isInteger(subjectId) || subjectId <= 0) {
+    return Response.json({ error: "מקצוע לא תקין.", code: "INVALID_SUBJECT" }, { status: 400 });
+  }
+
+  const admin = createSupabaseAdmin();
+  const subject = await admin
+    .from("subjects")
+    .select("id, created_by")
+    .eq("id", subjectId)
+    .maybeSingle();
+  if (subject.error || !subject.data || subject.data.created_by !== user.id) {
+    return Response.json({ error: "ניתן למחוק רק מקצוע שהוספת.", code: "DELETE_FORBIDDEN" }, { status: 403 });
+  }
+
+  const unlinked = await admin
+    .from("mentor_subjects")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("subject_id", subjectId);
+  if (unlinked.error) {
+    return Response.json({ error: "לא ניתן להסיר את המקצוע." }, { status: 500 });
+  }
+
+  const ownWindows = await admin
+    .from("mentor_availability_windows")
+    .select("id")
+    .eq("mentor_user_id", user.id);
+  if (ownWindows.error) {
+    return Response.json({ error: "המקצוע הוסר, אך לא ניתן לעדכן את חלונות הזמינות." }, { status: 500 });
+  }
+  const ownWindowIds = (ownWindows.data ?? []).map((window) => window.id);
+  if (ownWindowIds.length) {
+    const removedWindowLinks = await admin
+      .from("mentor_availability_window_subjects")
+      .delete()
+      .eq("subject_id", subjectId)
+      .in("window_id", ownWindowIds);
+    if (removedWindowLinks.error) {
+      return Response.json({ error: "המקצוע הוסר, אך לא ניתן לעדכן את חלונות הזמינות." }, { status: 500 });
+    }
+  }
+
+  const otherUsage = await admin
+    .from("mentor_subjects")
+    .select("user_id", { count: "exact", head: true })
+    .eq("subject_id", subjectId);
+  if (otherUsage.error) {
+    return Response.json({ error: "המקצוע הוסר מהפרופיל, אך בדיקת המאגר נכשלה." }, { status: 500 });
+  }
+  if ((otherUsage.count ?? 0) === 0) {
+    const removed = await admin
+      .from("subjects")
+      .delete()
+      .eq("id", subjectId)
+      .eq("created_by", user.id);
+    if (removed.error) {
+      return Response.json({ error: "המקצוע הוסר מהפרופיל, אך לא מהמאגר." }, { status: 500 });
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/dashboard/mentor/subjects");
+  revalidateTag("public-mentors", { expire: 0 });
+  return Response.json({ deleted: true, removedFromCatalog: (otherUsage.count ?? 0) === 0 });
 }
