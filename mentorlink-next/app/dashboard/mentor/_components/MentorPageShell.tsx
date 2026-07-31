@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ReactNode } from "react";
 
 export type FormMessage = {
@@ -23,24 +22,7 @@ export function MentorPageShell({
   children: ReactNode;
 }) {
   return (
-    <main
-      dir="rtl"
-      className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-slate-50"
-    >
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-          <Link href="/" className="text-2xl font-extrabold text-blue-600">
-            MentorLink
-          </Link>
-          <Link
-            href="/dashboard/mentor"
-            className="rounded-xl border border-slate-300 px-4 py-2 font-bold text-slate-700 transition hover:bg-slate-100"
-          >
-            חזרה לאזור האישי
-          </Link>
-        </div>
-      </header>
-      <section className="mx-auto w-full max-w-5xl px-6 py-12">
+      <section dir="rtl" className="mx-auto w-full max-w-5xl">
         <div className="mb-8">
           <p className="mb-2 font-bold text-blue-600">{eyebrow}</p>
           <h1 className="text-4xl font-extrabold text-slate-900 md:text-5xl">
@@ -50,7 +32,7 @@ export function MentorPageShell({
         </div>
         {children}
       </section>
-    </main>
+
   );
 }
 

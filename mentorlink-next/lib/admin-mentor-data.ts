@@ -115,7 +115,7 @@ export async function getPendingFieldChangeMentors(
   const ids = [...new Set((changes.data ?? []).map((change) => change.mentor_user_id))]
     .filter((id) => id !== administratorUserId);
   if (!ids.length) return [];
-  const candidates = await summaries(administratorUserId, admin, ["published"]);
+  const candidates = await summaries(administratorUserId, admin, ["approved", "published", "paused"]);
   return candidates.filter((mentor) => ids.includes(mentor.userId));
 }
 export function getPublicationMentors(

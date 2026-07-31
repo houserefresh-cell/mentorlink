@@ -1,0 +1,3 @@
+import Link from "next/link";
+export default function MentorActivitiesPage(){return <Placeholder title="הפעילויות שלי" text="מערכת הפעילויות נמצאת בבנייה ותתווסף בשלב הבא."/>}
+function Placeholder({title,text}:{title:string;text:string}){return <div className="mx-auto max-w-3xl rounded-3xl border bg-white p-8 shadow-sm"><h1 className="text-3xl font-black">{title}</h1><p className="mt-4 leading-7 text-slate-600">{text}</p><p className="mt-3 text-sm text-slate-500">פעילות חונך תהיה עצמאית מהזמינות האישית החוזרת, מעריכת הפרופיל ומחלונות בקשות לפגישה אישית.</p><Link href="/dashboard/mentor" className="mt-6 inline-block font-black text-blue-700">חזרה לעמוד הבית</Link></div>}

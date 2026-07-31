@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { isUpcomingApprovedMeeting, newestFirst, requiresMentorAction, waitsForParentAction } from "@/lib/mentor-dashboard-status";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
@@ -34,35 +35,41 @@ export default function MeetingRequestsPanel({ role }: { role: "parent" | "mento
   const [busyId, setBusyId] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
+  const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">("loading");
 
   const load = useCallback(async (accessToken: string) => {
-    const response = await fetch("/api/meeting-requests", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    });
-    const body = await response.json();
-    setRequests(body.requests ?? []);
-
-    const bookingId = body.schedulingMentorBookingId ?? "";
-    if (role === "mentor" && bookingId) {
-      const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${bookingId}`);
-      const slotsBody = await slotsResponse.json();
-      setSlots(slotsBody.slots ?? []);
+    setLoadState("loading");
+    try {
+      const response = await fetch("/api/meeting-requests", {
+        headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error("MEETINGS_LOAD_FAILED");
+      setRequests(body.requests ?? []);
+      const bookingId = body.schedulingMentorBookingId ?? "";
+      if (role === "mentor" && bookingId) {
+        const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${bookingId}`);
+        const slotsBody = await slotsResponse.json().catch(() => ({}));
+        if (slotsResponse.ok) setSlots(slotsBody.slots ?? []);
+      }
+      const notificationResponse = await fetch("/api/notifications", {
+        headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
+      });
+      if (notificationResponse.ok) {
+        const notificationBody = await notificationResponse.json().catch(() => ({}));
+        setUnreadCount(notificationBody.unreadCount ?? 0);
+      }
+      setLoadState("loaded");
+    } catch {
+      setLoadState("error");
     }
-
-    const notificationResponse = await fetch("/api/notifications", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      cache: "no-store",
-    });
-    const notificationBody = await notificationResponse.json();
-    setUnreadCount(notificationBody.unreadCount ?? 0);
   }, [role]);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
       const accessToken = data.session?.access_token ?? "";
       setToken(accessToken);
-      if (accessToken) void load(accessToken);
+      if (accessToken) void load(accessToken); else setLoadState("error");
     });
   }, [load]);
 
@@ -119,6 +126,10 @@ export default function MeetingRequestsPanel({ role }: { role: "parent" | "mento
   }
 
   const groups = useMemo(() => groupParentRequests(requests), [requests]);
+  const mentorGroups = useMemo(() => groupMentorRequests(requests), [requests]);
+
+  if (loadState === "loading") return <p role="status" className="mt-8 rounded-2xl bg-white p-5 font-bold text-slate-600">טוען פגישות...</p>;
+  if (loadState === "error") return <div role="alert" className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-800"><p className="font-bold">לא ניתן לטעון את הפגישות כרגע.</p><button type="button" disabled={!token} onClick={() => void load(token)} className="mt-3 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold disabled:opacity-50">ניסיון נוסף</button></div>;
 
   return (
     <section dir="rtl" className="mt-8" aria-labelledby="meeting-requests-title">
@@ -149,7 +160,12 @@ export default function MeetingRequestsPanel({ role }: { role: "parent" | "mento
             <h2 id="meeting-requests-title" className="text-2xl font-black">בקשות לפגישה</h2>
             <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
           </div>
-          <RequestList requests={requests} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} empty="אין בקשות לפגישה." />
+          <div className="mt-5 space-y-7">
+            <RequestGroup id="mentor-action" title="בקשות שמחכות לפעולת החונך" requests={mentorGroups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup id="waiting-parent" title="הצעות שמחכות לתשובת ההורה" requests={mentorGroups.waitingForParent} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup id="upcoming-approved" title="פגישות קרובות שאושרו" requests={mentorGroups.upcomingApproved} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup id="meeting-history" title="היסטוריה" requests={mentorGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+          </div>
         </>
       )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
@@ -168,9 +184,9 @@ type ListProps = {
   proposeNext: (item: Meeting) => Promise<void>;
 };
 
-function RequestGroup({ title, ...props }: ListProps & { title: string }) {
+function RequestGroup({ id, title, ...props }: ListProps & { id?: string; title: string }) {
   return (
-    <section aria-labelledby={`group-${title}`}>
+    <section id={id} className="scroll-mt-24" aria-labelledby={`group-${title}`}>
       <h3 id={`group-${title}`} className="text-xl font-black text-slate-900">{title}</h3>
       <RequestList {...props} empty="אין בקשות בקטגוריה זו." />
     </section>
@@ -228,6 +244,15 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       </div>
     </article>
   );
+}
+
+function groupMentorRequests(requests: Meeting[]) {
+  const ordered = newestFirst(requests);
+  const actionRequired = ordered.filter(requiresMentorAction);
+  const waitingForParent = ordered.filter(waitsForParentAction);
+  const upcomingApproved = ordered.filter((item) => isUpcomingApprovedMeeting(item));
+  const visibleIds = new Set([...actionRequired, ...waitingForParent, ...upcomingApproved].map((item) => item.id));
+  return { actionRequired, waitingForParent, upcomingApproved, history: ordered.filter((item) => !visibleIds.has(item.id)) };
 }
 
 function groupParentRequests(requests: Meeting[]) {

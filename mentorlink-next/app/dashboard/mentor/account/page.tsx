@@ -1,0 +1,4 @@
+"use client";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+export default function MentorAccountPage(){const[identity,setIdentity]=useState({name:"",email:""});useEffect(()=>{void supabase.auth.getUser().then(({data})=>setIdentity({name:data.user?.user_metadata?.first_name??"",email:data.user?.email??data.user?.phone??""}))},[]);return <div className="mx-auto max-w-3xl"><h1 className="text-3xl font-black">החשבון שלי</h1><div className="mt-6 rounded-3xl border bg-white p-6 shadow-sm"><dl className="grid gap-4"><div><dt className="text-sm font-bold text-slate-500">שם</dt><dd className="font-black">{identity.name||"לא הוגדר"}</dd></div><div><dt className="text-sm font-bold text-slate-500">פרטי התחברות</dt><dd dir="ltr" className="text-right font-bold">{identity.email||"לא זמינים"}</dd></div></dl><p className="mt-6 rounded-xl bg-blue-50 p-4 text-blue-900">אפשרויות נוספות לניהול החשבון יתווספו בקרוב.</p></div></div>}

@@ -36,6 +36,7 @@ export default function MeetingRequestFlow({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<"resolving" | "resolved">("resolving");
   const [role, setRole] = useState<string | null>(null);
   const [config, setConfig] = useState<Config | null>(null);
   const [configError, setConfigError] = useState("");
@@ -62,6 +63,7 @@ export default function MeetingRequestFlow({
     ]).then(([session, scheduling]) => {
       setAccessToken(session.data.session?.access_token ?? null);
       setRole(session.data.session?.user.user_metadata?.role ?? null);
+      setAuthState("resolved");
       if (scheduling.ok && scheduling.body?.mentor && Array.isArray(scheduling.body?.slots)) {
         setConfig(scheduling.body);
         setConfigError("");
@@ -69,7 +71,7 @@ export default function MeetingRequestFlow({
         setConfig(null);
         setConfigError(scheduling.body?.error ?? "לא ניתן לטעון את המועדים הזמינים.");
       }
-    }).catch(() => setConfigError("לא ניתן לטעון את המועדים הזמינים."));
+    }).catch(() => { setAuthState("resolved"); setConfigError("לא ניתן לטעון את המועדים הזמינים."); });
   }, [mentorBookingId, open]);
 
   useEffect(() => {
@@ -155,7 +157,9 @@ export default function MeetingRequestFlow({
               <h2 className="text-2xl font-black">בקשת פגישה עם {mentorDisplayName}</h2>
               <button ref={closeButtonRef} type="button" onClick={() => dialogRef.current?.close()} aria-label="סגירת בקשת פגישה" className="h-11 w-11 rounded-xl border text-2xl">×</button>
             </div>
-            {!accessToken ? (
+            {authState === "resolving" ? (
+              <p role="status" className="mt-6 rounded-xl bg-slate-50 p-4 font-bold text-slate-700">בודק הרשאה...</p>
+            ) : !accessToken ? (
               <div className="mt-6 rounded-2xl bg-blue-50 p-5">
                 <p className="font-bold">כדי לשלוח בקשת פגישה יש להתחבר כהורה.</p>
                 <div className="mt-4 flex gap-3">
