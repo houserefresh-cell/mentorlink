@@ -1,7 +1,12 @@
 alter table public.meeting_requests
-  add column confirmed_start_at timestamptz,
-  add column confirmed_end_at timestamptz,
-  add column confirmed_duration_minutes integer,
+  add column if not exists confirmed_start_at timestamptz,
+  add column if not exists confirmed_end_at timestamptz,
+  add column if not exists confirmed_duration_minutes integer;
+
+alter table public.meeting_requests
+  drop constraint if exists meeting_requests_confirmed_interval_valid;
+
+alter table public.meeting_requests
   add constraint meeting_requests_confirmed_interval_valid check (
     (
       confirmed_start_at is null
@@ -18,7 +23,7 @@ alter table public.meeting_requests
   );
 
 alter table public.meeting_requests
-  drop constraint meeting_requests_no_accepted_overlap;
+  drop constraint if exists meeting_requests_no_accepted_overlap;
 
 alter table public.meeting_requests
   add constraint meeting_requests_no_accepted_overlap
