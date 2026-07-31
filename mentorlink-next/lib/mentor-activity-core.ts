@@ -6,6 +6,11 @@ export const ACTIVITY_LOCATIONS = [
 ] as const;
 export const ACTIVITY_OVERRUNS = ["none", "5_10_minutes", "15_20_minutes"] as const;
 export const ACTIVITY_PICKUPS = ["school", "after_school", "home", "other"] as const;
+export const ACTIVITY_ACCESSIBILITY = [
+  "wheelchair", "accessible_restrooms", "accessible_parking", "visual_impairment",
+  "hearing_impairment", "written_visual_instructions", "sensory_friendly",
+  "companion_allowed", "other", "unknown",
+] as const;
 export const ACTIVITY_GRADES = [
   "grade_1", "grade_2", "grade_3", "grade_4", "grade_5", "grade_6",
   "grade_7", "grade_8", "grade_9", "grade_10", "grade_11", "grade_12", "graduate",
@@ -102,7 +107,11 @@ export function validateActivityInput(
   const price = payload.price === undefined || payload.price === "" ? 0 : Number(payload.price);
   const deadline = instant(payload.registrationDeadline);
   const equipment = text(payload.equipment, 2000);
-  const accessibility = text(payload.accessibility, 2000);
+  const accessibilityOptions = choices(payload.accessibilityOptions, ACTIVITY_ACCESSIBILITY);
+  const accessibilityOther = text(payload.accessibilityOther, 1000);
+  const accessibility = accessibilityOptions?.length || accessibilityOther
+    ? JSON.stringify({ options: accessibilityOptions ?? [], other: accessibilityOther })
+    : null;
   const cancellationPolicy = text(payload.cancellationPolicy, 2000);
   const pickups = choices(payload.pickupOptions, ACTIVITY_PICKUPS);
   const pickupDetails = text(payload.pickupDetails, 500);
@@ -113,8 +122,8 @@ export function validateActivityInput(
     locationDetails === undefined || minimumParticipants === undefined || maximumParticipants === undefined ||
     minimumAge === undefined || maximumAge === undefined || grades === null ||
     typeof isFree !== "boolean" || !Number.isFinite(price) || deadline === undefined ||
-    equipment === undefined || accessibility === undefined || cancellationPolicy === undefined ||
-    pickups === null || pickupDetails === undefined
+    equipment === undefined || accessibilityOptions === null || accessibilityOther === undefined ||
+    cancellationPolicy === undefined || pickups === null || pickupDetails === undefined
   ) return invalid("INVALID_ACTIVITY", "Activity fields are invalid");
 
   if (title !== null && title.length < 3) return invalid("INVALID_TITLE", "Title is too short");
@@ -127,6 +136,9 @@ export function validateActivityInput(
   if (maximumAge !== null && (maximumAge < 3 || maximumAge > 120 || (minimumAge !== null && maximumAge < minimumAge))) return invalid("INVALID_AUDIENCE", "Maximum age is invalid");
   if ((isFree && price !== 0) || (!isFree && price <= 0) || price > 99_999_999.99) return invalid("INVALID_PRICE", "Price is invalid");
   if (locationType === "online" && address !== null) return invalid("INVALID_LOCATION", "Online activity cannot have an address");
+  if (accessibilityOptions.includes("unknown") && accessibilityOptions.length > 1) return invalid("INVALID_ACCESSIBILITY", "Unknown accessibility cannot be combined");
+  if (accessibilityOther !== null && !accessibilityOptions.includes("other")) return invalid("INVALID_ACCESSIBILITY", "Other accessibility details require the other option");
+  if (accessibilityOptions.includes("other") && accessibilityOther === null) return invalid("INVALID_ACCESSIBILITY", "Other accessibility requires details");
   if (pickupDetails !== null && !pickups.includes("other")) return invalid("INVALID_PICKUP", "Pickup details require the other option");
   if (pickups.includes("other") && pickupDetails === null) return invalid("INVALID_PICKUP", "Other pickup requires details");
 
@@ -150,7 +162,6 @@ export function validateActivityInput(
   if (mode === "published") {
     if (!subjectId || !title || !description || !format || !locationType) return invalid("PUBLISH_INCOMPLETE", "Required publication fields are missing");
     if (minimumParticipants === null || maximumParticipants === null) return invalid("PUBLISH_INCOMPLETE", "Capacity is required");
-    if (minimumAge === null && maximumAge === null && !grades.length) return invalid("PUBLISH_INCOMPLETE", "Audience is required");
     if (!deadline) return invalid("PUBLISH_INCOMPLETE", "Registration deadline is required");
     if (!sessions.length || !sessions.some((session) => new Date(session.starts_at) > now)) return invalid("NO_FUTURE_SESSION", "A future session is required");
     if (new Date(deadline) >= new Date(sessions[0].starts_at)) return invalid("INVALID_DEADLINE", "Registration deadline must precede the first session");

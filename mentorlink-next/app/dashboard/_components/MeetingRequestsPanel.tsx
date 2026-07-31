@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { isUpcomingApprovedMeeting, newestFirst, requiresMentorAction, waitsForParentAction } from "@/lib/mentor-dashboard-status";
@@ -27,7 +28,9 @@ type Meeting = {
   updated_at: string;
 };
 
-export default function MeetingRequestsPanel({ role }: { role: "parent" | "mentor" }) {
+type MentorMeetingView = "mentor-action" | "waiting-parent" | "upcoming-approved" | "history";
+
+export default function MeetingRequestsPanel({ role, view = "mentor-action" }: { role: "parent" | "mentor"; view?: MentorMeetingView }) {
   const [token, setToken] = useState("");
   const [requests, setRequests] = useState<Meeting[]>([]);
   const [message, setMessage] = useState("");
@@ -156,17 +159,14 @@ export default function MeetingRequestsPanel({ role }: { role: "parent" | "mento
         </>
       ) : (
         <>
-          <div className="flex items-center gap-3">
-            <h2 id="meeting-requests-title" className="text-2xl font-black">בקשות לפגישה</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><p className="font-bold text-blue-700">בקשות ופגישות</p><h1 id="meeting-requests-title" className="mt-1 text-3xl font-black">{MENTOR_VIEWS[view].title}</h1></div>
             <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
           </div>
-          <div className="mt-5 space-y-7">
-            <RequestGroup id="mentor-action" title="בקשות שמחכות לפעולת החונך" requests={mentorGroups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup id="waiting-parent" title="הצעות שמחכות לתשובת ההורה" requests={mentorGroups.waitingForParent} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup id="upcoming-approved" title="פגישות קרובות שאושרו" requests={mentorGroups.upcomingApproved} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup id="meeting-history" title="היסטוריה" requests={mentorGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-          </div>
-        </>
+          <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? item.active : item.inactive}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
+          <div className="mt-5">
+            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+          </div>        </>
       )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
     </section>
@@ -202,11 +202,12 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const confirmedStart = item.confirmed_start_at;
   const confirmedDuration = item.confirmed_duration_minutes;
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
+  const visual = meetingVisual(item, role);
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className={`rounded-2xl border border-r-4 p-5 shadow-sm ${visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
-        <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-bold text-blue-800">{statusLabel(item, role)}</span>
+        <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
       </div>
       <p className="mt-2">{item.subject} · {item.meeting_mode}</p>
       <p className="mt-2 text-sm text-slate-600">המועד המקורי: {formatDate(item.requested_start_at)} · {item.requested_duration_minutes} דקות</p>
@@ -234,11 +235,11 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
           <>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept", "לאשר את הבקשה?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור</button>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "decline", "לדחות את הבקשה?")} className="min-h-11 rounded-xl bg-red-700 px-4 py-2 font-bold text-white disabled:opacity-50">דחייה</button>
-            <select aria-label="בחירת מועד חלופי" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-slate-300 px-3">
+            <select aria-label="בחירת מועד חלופי" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-violet-300 bg-white px-3">
               <option value="">בחירת מועד חלופי</option>
               {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.requested_start_at).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
             </select>
-            <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl border border-blue-300 px-4 py-2 font-bold text-blue-800 disabled:opacity-50">הצעת המועד הזמין הבא</button>
+            <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת המועד הזמין הבא</button>
           </>
         ) : null}
       </div>
@@ -246,6 +247,29 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   );
 }
 
+const MENTOR_VIEWS: Record<MentorMeetingView, { title: string; active: string; inactive: string }> = {
+  "mentor-action": { title: "ממתינה לפעולת החונך", active: "border-amber-700 bg-amber-700 text-white", inactive: "border-amber-300 bg-amber-50 text-amber-950" },
+  "waiting-parent": { title: "ממתינה לתגובת ההורה", active: "border-violet-700 bg-violet-700 text-white", inactive: "border-violet-300 bg-violet-50 text-violet-950" },
+  "upcoming-approved": { title: "אושרה", active: "border-emerald-700 bg-emerald-700 text-white", inactive: "border-emerald-300 bg-emerald-50 text-emerald-950" },
+  history: { title: "היסטוריית פגישות", active: "border-slate-700 bg-slate-700 text-white", inactive: "border-slate-300 bg-slate-50 text-slate-800" },
+};
+
+function meetingVisual(item: Meeting, role: "parent" | "mentor") {
+  if (item.status === "accepted" && effectiveStart(item) < Date.now()) return { badge: "border-slate-400 bg-slate-200 text-slate-900", card: "border-slate-400 bg-slate-50" };
+  if (item.status === "accepted") return { badge: "border-emerald-300 bg-emerald-100 text-emerald-950", card: "border-emerald-300 bg-emerald-50/70" };
+  if (item.status === "cancelled") return { badge: "border-rose-400 bg-rose-200 text-rose-950", card: "border-rose-400 bg-rose-50/70" };
+  if (item.status === "declined") return { badge: "border-red-300 bg-red-100 text-red-950", card: "border-red-300 bg-red-50/70" };
+  if (item.status === "alternative_proposed") return { badge: "border-violet-300 bg-violet-100 text-violet-950", card: "border-violet-300 bg-violet-50/70" };
+  if (item.status === "pending" && role === "mentor") return { badge: "border-amber-300 bg-amber-100 text-amber-950", card: "border-amber-300 bg-amber-50/70" };
+  return { badge: "border-blue-300 bg-blue-100 text-blue-950", card: "border-blue-300 bg-blue-50/70" };
+}
+
+function mentorViewRequests(groups: ReturnType<typeof groupMentorRequests>, view: MentorMeetingView) {
+  if (view === "mentor-action") return groups.actionRequired;
+  if (view === "waiting-parent") return groups.waitingForParent;
+  if (view === "upcoming-approved") return groups.upcomingApproved;
+  return groups.history;
+}
 function groupMentorRequests(requests: Meeting[]) {
   const ordered = newestFirst(requests);
   const actionRequired = ordered.filter(requiresMentorAction);
@@ -273,6 +297,7 @@ function effectiveStart(item: Meeting) {
 }
 
 function statusLabel(item: Meeting, role: "parent" | "mentor") {
+  if (item.status === "accepted" && effectiveStart(item) < Date.now()) return "הסתיימה";
   if (item.status === "alternative_proposed") return role === "parent" ? "ממתין לאישורך" : "ממתין לאישור ההורה";
   if (item.status === "accepted") return "מאושרת";
   if (item.status === "declined" && item.proposed_start_at) return role === "mentor" ? "ההורה דחה את המועד החלופי" : "המועד החלופי נדחה";

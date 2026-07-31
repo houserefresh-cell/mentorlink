@@ -33,9 +33,9 @@ test("item route edits, publishes, cancels and restricts deletion", () => {
   assert.match(item, /action === "cancel"/);
   assert.match(item, /canTransitionActivity/);
   assert.match(item, /loaded\.activity\.status !== "draft"/);
-  assert.match(item, /Published activities cannot be deleted/);
+  assert.match(item, /Only drafts or cancelled activities without registrations can be deleted/);
   assert.match(item, /ACTIVITY_HAS_REGISTRATIONS/);
-  assert.match(item, /\.eq\("status", "draft"\)/);
+  assert.match(item, /\.in\("status", \["draft", "cancelled"\]\)/);
 });
 
 test("POST and PATCH save activity and sessions only through the atomic RPC", () => {

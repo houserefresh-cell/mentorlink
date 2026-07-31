@@ -25,7 +25,11 @@ export async function GET(request: Request, context: Context) {
   try {
     const loaded = await contextActivity(request, context);
     if ("response" in loaded) return loaded.response;
-    return Response.json({ activity: loaded.activity }, { headers: { "Cache-Control": "no-store" } });
+    const activeRegistrations = await loaded.client.from("mentor_activity_registrations")
+      .select("id", { count: "exact", head: true }).eq("activity_id", loaded.activityId)
+      .in("status", ["registered", "waitlisted"]);
+    if (activeRegistrations.error) throw new Error("registration count failed");
+    return Response.json({ activity: { ...loaded.activity, edit_locked: (activeRegistrations.count ?? 0) > 0 } }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Unable to load activity", code: "ACTIVITY_LOAD_FAILED" }, { status: 500 });
   }
@@ -43,19 +47,38 @@ export async function PATCH(request: Request, context: Context) {
       if (!canTransitionActivity(loaded.activity.status, "cancelled")) {
         return Response.json({ error: "Activity cannot be cancelled", code: "INVALID_STATUS_TRANSITION" }, { status: 409 });
       }
-      const now = new Date().toISOString();
-      const cancelled = await loaded.client.from("mentor_activities").update({ status: "cancelled", cancelled_at: now, completed_at: null, updated_at: now })
-        .eq("id", loaded.activityId).eq("mentor_user_id", loaded.user.id).eq("status", "published").select("*").maybeSingle();
-      if (cancelled.error) throw new Error("cancel failed");
-      if (!cancelled.data) return Response.json({ error: "Activity changed", code: "ACTIVITY_CHANGED" }, { status: 409 });
-      return Response.json({ activity: { ...cancelled.data, sessions: loaded.activity.sessions } });
+      const reason = typeof payload.reason === "string" ? payload.reason.trim() : "";
+      if (reason.length < 3 || reason.length > 2000) {
+        return Response.json({ error: "Cancellation reason is required", code: "CANCELLATION_REASON_REQUIRED" }, { status: 400 });
+      }
+      const cancelled = await loaded.client.rpc("cancel_mentor_activity_with_update", {
+        p_activity_id: loaded.activityId,
+        p_mentor_user_id: loaded.user.id,
+        p_reason: reason,
+      });
+      if (cancelled.error) {
+        if (cancelled.error.message.includes("ACTIVITY_NOT_OWNED_OR_CANCELLABLE")) {
+          return Response.json({ error: "Activity changed", code: "ACTIVITY_CHANGED" }, { status: 409 });
+        }
+        throw new Error("cancel failed");
+      }
+      const activity = await loadOwnedActivity(loaded.client, loaded.user.id, loaded.activityId);
+      if (!activity) throw new Error("cancelled activity missing");
+      return Response.json({ activity });
     }
 
     if (action !== "edit" && action !== "publish") {
       return Response.json({ error: "Invalid action", code: "INVALID_ACTION" }, { status: 400 });
     }
-    if (loaded.activity.status !== "draft") {
-      return Response.json({ error: "Only draft activities can be edited or published", code: "ACTIVITY_NOT_EDITABLE" }, { status: 409 });
+    if (!["draft", "published"].includes(loaded.activity.status) || (action === "publish" && loaded.activity.status !== "draft")) {
+      return Response.json({ error: "Activity cannot be edited or published", code: "ACTIVITY_NOT_EDITABLE" }, { status: 409 });
+    }
+    const activeRegistrations = await loaded.client.from("mentor_activity_registrations")
+      .select("id", { count: "exact", head: true }).eq("activity_id", loaded.activityId)
+      .in("status", ["registered", "waitlisted"]);
+    if (activeRegistrations.error) throw new Error("registration lock lookup failed");
+    if ((activeRegistrations.count ?? 0) > 0) {
+      return Response.json({ error: "לפעילות זו כבר קיימות הרשמות ולכן פרטיה המרכזיים נעולים. ניתן לשלוח עדכון לנרשמים או לבטל את הפעילות.", code: "ACTIVITY_LOCKED_ACTIVE_REGISTRATIONS" }, { status: 409 });
     }
     const existingPayload = activityPayloadFromRow(loaded.activity);
     const merged: Record<string, unknown> = { ...existingPayload, ...payload };
@@ -80,6 +103,9 @@ export async function PATCH(request: Request, context: Context) {
     if (saved.error || !saved.data) {
       const conflict = rpcConflict(saved.error?.message);
       if (conflict) return Response.json({ error: "Activity conflicts with the mentor calendar", code: conflict }, { status: 409 });
+      if (saved.error?.message.includes("ACTIVITY_LOCKED_ACTIVE_REGISTRATIONS")) {
+        return Response.json({ error: "לפעילות זו כבר קיימות הרשמות ולכן פרטיה המרכזיים נעולים. ניתן לשלוח עדכון לנרשמים או לבטל את הפעילות.", code: "ACTIVITY_LOCKED_ACTIVE_REGISTRATIONS" }, { status: 409 });
+      }
       if (saved.error?.message.includes("ACTIVITY_NOT_OWNED") || saved.error?.message.includes("ACTIVITY_NOT_EDITABLE")) {
         return Response.json({ error: "Activity changed", code: "ACTIVITY_CHANGED" }, { status: 409 });
       }
@@ -97,13 +123,13 @@ export async function DELETE(request: Request, context: Context) {
   try {
     const loaded = await contextActivity(request, context);
     if ("response" in loaded) return loaded.response;
-    if (loaded.activity.status !== "draft") {
-      return Response.json({ error: "Published activities cannot be deleted", code: "ACTIVITY_DELETE_FORBIDDEN" }, { status: 409 });
+    if (!["draft", "cancelled"].includes(loaded.activity.status)) {
+      return Response.json({ error: "Only drafts or cancelled activities without registrations can be deleted", code: "ACTIVITY_DELETE_FORBIDDEN" }, { status: 409 });
     }
     const registrations = await loaded.client.from("mentor_activity_registrations").select("id", { count: "exact", head: true }).eq("activity_id", loaded.activityId);
     if (registrations.error) throw new Error("registration count failed");
     if ((registrations.count ?? 0) > 0) return Response.json({ error: "Activity has registrations", code: "ACTIVITY_HAS_REGISTRATIONS" }, { status: 409 });
-    const removed = await loaded.client.from("mentor_activities").delete().eq("id", loaded.activityId).eq("mentor_user_id", loaded.user.id).eq("status", "draft");
+    const removed = await loaded.client.from("mentor_activities").delete().eq("id", loaded.activityId).eq("mentor_user_id", loaded.user.id).in("status", ["draft", "cancelled"]);
     if (removed.error) throw new Error("delete failed");
     return new Response(null, { status: 204 });
   } catch {

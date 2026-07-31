@@ -34,16 +34,17 @@ test("mentor home never presents unresolved or failed summaries as empty counts"
  assert.match(mentorHome,/summaryState==="loading"[\s\S]*טוען את סיכום הפעילות/);
  assert.match(mentorHome,/summaryState==="error"[\s\S]*לא ניתן לטעון/);
 });
-test("summary destinations target the matching predicate-backed sections",()=>{
- for(const hash of["#mentor-action","#waiting-parent","#upcoming-approved","#active-inquiries"])assert.match(mentorHome,new RegExp(hash));
- for(const id of["mentor-action","waiting-parent","upcoming-approved"])assert.match(meetings,new RegExp(`id="${id}"`));
- assert.match(inquiries,/id="active-inquiries"/);
- assert.match(mentorShell,/filter\(requiresMentorAction\)/);
- assert.match(meetings,/filter\(requiresMentorAction\)/);
-});
-test("availability actions keep their handlers and gain clear affordance",()=>{
+test("summary destinations target the matching predicate-backed views",()=>{
+ for(const view of["?view=mentor-action","?view=waiting-parent","?view=upcoming-approved"])assert.ok(mentorHome.includes(view));
+ assert.ok(mentorHome.includes("#active-inquiries"));
+ assert.ok(meetings.includes("MENTOR_VIEWS[view].title"));
+ assert.ok(meetings.includes("mentorViewRequests(mentorGroups, view)"));
+ assert.ok(inquiries.includes('id="active-inquiries"'));
+ assert.ok(mentorShell.includes("filter(requiresMentorAction)"));
+ assert.ok(meetings.includes("filter(requiresMentorAction)"));
+});test("availability actions keep their handlers and gain clear affordance",()=>{
  assert.match(scheduling,/onClick=\{\(\) => toggle\(window\)\}/);
- assert.match(scheduling,/remove\(window\.id, "window"\)/);
+ assert.match(scheduling,/remove\(window\.id\)/);
  assert.match(scheduling,/cursor-pointer/);assert.match(scheduling,/hover:bg-blue-100/);
  assert.match(scheduling,/focus-visible:outline/);assert.match(scheduling,/disabled:cursor-not-allowed/);
  assert.match(scheduling,/border-red-300 bg-red-50/);assert.match(scheduling,/border-amber-300/);assert.match(scheduling,/border-emerald-300/);

@@ -11,7 +11,7 @@ test("published mentor details exposes a guided meeting action without private f
   assert.match(directory, /MeetingRequestFlow/);
   assert.match(flow, /בקשת פגישה/);
   assert.match(flow, /config\.mentor\.subjects/);
-  assert.match(flow, /config\.mentor\.meetingModes/);
+  assert.match(flow, /availableModes/);
   assert.match(flow, /available-slots/);
   assert.match(flow, /childFirstName/);
   assert.match(flow, /childGradeOrAge/);
@@ -37,7 +37,7 @@ test("mentor availability editor is selection-based and supports all required co
   assert.match(editor, /עריכה/);
   assert.match(editor, /השבתה/);
   assert.match(editor, /מחיקה/);
-  assert.match(editor, /חסימת תאריך/);
+  assert.match(editor, /effectiveStartDate/);
 });
 
 test("parent and mentor dashboards render request history and valid actions", () => {

@@ -33,10 +33,10 @@ test("meetings and general inquiries remain separate",()=>{
  assert.doesNotMatch(meetings,/טופלה|פניות פעילות/);assert.match(inquiries,/פניות פעילות/);assert.match(inquiries,/פניות שטופלו/);assert.match(inquiries,/סימון הפנייה כטופלה/);
  assert.doesNotMatch(inquiries,/MeetingRequestsPanel|propose_alternative|accept_alternative/);
 });
-test("activity routes are honest placeholders",()=>{
- for(const path of["app/dashboard/mentor/activities/page.tsx","app/dashboard/mentor/activities/new/page.tsx"]){const source=read(path);assert.match(source,/בשלב הבא|בבנייה/);assert.match(source,/עצמאית מהזמינות/)}
-});
-test("mentor discovery reuses public projection and disables parent-only actions",()=>{
+test("activity routes render the active mentor activity system",()=>{
+ assert.match(read("app/dashboard/mentor/activities/page.tsx"),/MentorActivitiesManager/);
+ assert.match(read("app/dashboard/mentor/activities/new/page.tsx"),/MentorActivityForm/);
+});test("mentor discovery reuses public projection and disables parent-only actions",()=>{
  const page=read("app/dashboard/mentor/discover/page.tsx"),directory=read("app/_components/PublicMentorDirectory.tsx");
  assert.match(page,/getPublishedMentors/);assert.match(page,/PublicMentorDirectory/);assert.match(page,/interactionMode="read-only"/);
  assert.match(directory,/interactionMode\?:"parent"\|"read-only"/);assert.match(directory,/!readOnly && <button/);assert.match(directory,/interactionMode==="parent"&&activeInteraction/);

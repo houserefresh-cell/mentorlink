@@ -15,13 +15,18 @@ export async function GET(request: Request) {
     const activities = await client.from("mentor_activities").select("*").eq("mentor_user_id", authentication.user.id).order("created_at", { ascending: false });
     if (activities.error) throw new Error("activity list failed");
     const ids = (activities.data ?? []).map((activity) => activity.id);
-    const [sessions, registrations] = ids.length ? await Promise.all([
+    const subjectIds = [...new Set((activities.data ?? []).map((activity) => activity.subject_id).filter(Boolean))];
+    const [sessions, registrations, subjects] = ids.length ? await Promise.all([
       client.from("mentor_activity_sessions").select("*").in("activity_id", ids).order("starts_at"),
       client.from("mentor_activity_registrations").select("activity_id, status").in("activity_id", ids),
-    ]) : [{ data: [], error: null }, { data: [], error: null }];
-    if (sessions.error || registrations.error) throw new Error("activity children failed");
+      subjectIds.length
+        ? client.from("subjects").select("id, name").in("id", subjectIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]) : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
+    if (sessions.error || registrations.error || subjects.error) throw new Error("activity children failed");
     return Response.json({ activities: (activities.data ?? []).map((activity) => ({
       ...activity,
+      subject_name: (subjects.data ?? []).find((subject) => subject.id === activity.subject_id)?.name ?? null,
       sessions: (sessions.data ?? []).filter((session) => session.activity_id === activity.id),
       registration_counts: registrationCounts((registrations.data ?? []).filter((registration) => registration.activity_id === activity.id)),
     })) }, { headers: { "Cache-Control": "no-store" } });

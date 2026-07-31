@@ -37,8 +37,9 @@ export function registrationCounts(rows: Array<{ status: string }>) {
   return rows.reduce((counts, row) => {
     if (row.status === "registered") counts.registered += 1;
     if (row.status === "waitlisted") counts.waitlisted += 1;
+    counts.total += 1;
     return counts;
-  }, { registered: 0, waitlisted: 0 });
+  }, { registered: 0, waitlisted: 0, total: 0 });
 }
 
 export function activityPayloadFromRow(row: Record<string, unknown>) {
@@ -60,7 +61,8 @@ export function activityPayloadFromRow(row: Record<string, unknown>) {
     price: row.price,
     registrationDeadline: row.registration_deadline,
     equipment: row.equipment,
-    accessibility: row.accessibility,
+    accessibilityOptions: row.accessibility_options,
+    accessibilityOther: row.accessibility_other,
     cancellationPolicy: row.cancellation_policy,
     pickupOptions: row.pickup_options,
     pickupDetails: row.pickup_details,

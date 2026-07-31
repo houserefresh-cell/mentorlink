@@ -32,6 +32,37 @@ test("published activity requires complete fields and a future valid session", (
   assert.deepEqual(past.ok ? null : past.code, "NO_FUTURE_SESSION");
 });
 
+test("published activities may target all ages without age or grade fields", () => {
+  const result = validateActivityInput({
+    ...complete,
+    minimumAge: null,
+    maximumAge: null,
+    suitableGrades: [],
+  }, "published", now);
+  assert.equal(result.ok, true);
+});
+
+test("structured accessibility is validated and serialized for atomic storage", () => {
+  const valid = validateActivityInput({
+    ...complete,
+    accessibilityOptions: ["wheelchair", "other"],
+    accessibilityOther: "כניסה דרך המעלית הצפונית",
+  }, "published", now);
+  assert.equal(valid.ok, true);
+  if (valid.ok) assert.match(valid.activity.accessibility ?? "", /wheelchair/);
+
+  const unknownCombined = validateActivityInput({
+    ...complete,
+    accessibilityOptions: ["unknown", "wheelchair"],
+  }, "published", now);
+  assert.deepEqual(unknownCombined.ok ? null : unknownCombined.code, "INVALID_ACCESSIBILITY");
+
+  const missingOther = validateActivityInput({
+    ...complete,
+    accessibilityOptions: ["other"],
+  }, "published", now);
+  assert.deepEqual(missingOther.ok ? null : missingOther.code, "INVALID_ACCESSIBILITY");
+});
 test("sessions, deadline, price and pickup details are validated", () => {
   const reversed = validateActivityInput({ ...complete, sessions: [{ startsAt: "2026-08-10T13:00:00Z", endsAt: "2026-08-10T12:00:00Z" }] }, "published", now);
   assert.deepEqual(reversed.ok ? null : reversed.code, "INVALID_SESSION");
