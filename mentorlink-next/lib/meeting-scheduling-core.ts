@@ -7,7 +7,7 @@ import {
 
 export const MEETING_DURATIONS = [30, 45, 60, 75, 90] as const;
 export function isMeetingDuration(value: number) {
-  return Number.isInteger(value) && value >= 15 && value <= 180 && value % 5 === 0;
+  return Number.isInteger(value) && value >= 10 && value <= 180;
 }
 export const MEETING_MODES = ["פרונטלי", "אונליין"] as const;
 export const MEETING_STATUSES = [

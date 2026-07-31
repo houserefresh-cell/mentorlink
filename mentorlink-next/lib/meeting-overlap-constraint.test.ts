@@ -7,6 +7,7 @@ const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.ur
 const originalMigration = read("supabase/migrations/202607270010_create_parent_mentor_meeting_requests.sql");
 const durationMigration = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
 const confirmedMigration = read("supabase/migrations/202607300017_add_confirmed_meeting_interval.sql");
+const customDurationMigration = read("supabase/migrations/202607310021_allow_ten_minute_custom_durations.sql");
 const createRoute = read("app/api/meeting-requests/route.ts");
 const actionRoute = read("app/api/meeting-requests/[requestId]/route.ts");
 const dataLoader = read("lib/meeting-data.ts");
@@ -25,14 +26,17 @@ test("original request interval remains immutable and confirmed interval is cano
 });
 
 test("supported custom durations produce a canonical confirmed end", () => {
-  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 12), null);
+  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 9), null);
+  assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 12)?.toISOString(), "2026-08-10T12:12:00.000Z");
   assert.equal(meetingEndAt("2026-08-10T12:00:00.000Z", 75)?.toISOString(), "2026-08-10T13:15:00.000Z");
   assert.match(durationMigration, /requested_duration_minutes between 15 and 180/);
   assert.match(confirmedMigration, /confirmed_duration_minutes between 15 and 180/);
+  assert.match(customDurationMigration, /requested_duration_minutes between 10 and 180/);
+  assert.match(customDurationMigration, /confirmed_duration_minutes between 10 and 180/);
 });
 
 test("accepted overlap protection uses the actual confirmed interval", () => {
-  assert.match(confirmedMigration, /drop constraint meeting_requests_no_accepted_overlap/);
+  assert.match(confirmedMigration, /drop constraint if exists meeting_requests_no_accepted_overlap/);
   assert.match(confirmedMigration, /coalesce\(confirmed_start_at, requested_start_at\)/);
   assert.match(confirmedMigration, /coalesce\(confirmed_end_at, requested_end_at\)/);
   assert.match(confirmedMigration, /'\[\)'/);

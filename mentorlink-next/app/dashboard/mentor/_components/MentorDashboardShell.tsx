@@ -12,7 +12,6 @@ export const mentorNavigation = [
  {href:"/dashboard/mentor/inquiries",label:"פניות מהורים",badge:"inquiries"},
  {href:"/dashboard/mentor/scheduling",label:"הזמינות שלי"},
  {href:"/dashboard/mentor/subjects",label:"המקצועות והתחומים שלי"},
- {href:"/dashboard/mentor/profile",label:"הפרופיל שלי"},
  {href:"/dashboard/mentor/activities/new",label:"פתיחת פעילות חדשה"},
  {href:"/dashboard/mentor/activities",label:"הפעילויות שלי"},
  {href:"/dashboard/mentor/discover",label:"חיפוש חונכים ופעילויות"},

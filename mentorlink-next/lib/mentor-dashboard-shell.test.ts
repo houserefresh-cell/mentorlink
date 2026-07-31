@@ -5,7 +5,7 @@ const read=(path:string)=>readFileSync(new URL(`../${path}`,import.meta.url),"ut
 const shell=read("app/dashboard/mentor/_components/MentorDashboardShell.tsx");
 
 test("mentor sidebar has the exact requested order",()=>{
- const labels=["עמוד הבית","בקשות ופגישות","פניות מהורים","הזמינות שלי","הפרופיל שלי","פתיחת פעילות חדשה","הפעילויות שלי","חיפוש חונכים ופעילויות","החשבון שלי"];
+ const labels=["עמוד הבית","בקשות ופגישות","פניות מהורים","הזמינות שלי","המקצועות והתחומים שלי","פתיחת פעילות חדשה","הפעילויות שלי","חיפוש חונכים ופעילויות","החשבון שלי"];
  let position=-1;for(const label of labels){const next=shell.indexOf(`label:"${label}"`);assert.ok(next>position,`${label} must appear in order`);position=next}
 });
 test("shell is role guarded and accessible on desktop and mobile",()=>{

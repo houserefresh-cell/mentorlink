@@ -7,7 +7,7 @@ const api = read("app/api/mentor-availability/route.ts");
 const slots = read("app/api/meeting-requests/available-slots/route.ts");
 const flow = read("app/_components/MeetingRequestFlow.tsx");
 const core = read("lib/meeting-scheduling-core.ts");
-const migration = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
+const migration = read("supabase/migrations/202607310021_allow_ten_minute_custom_durations.sql");
 
 test("availability saves independently with visible confirmation and safe diagnostics", () => {
   assert.match(editor, /הזמינות נשמרה בהצלחה\./);
@@ -32,9 +32,9 @@ test("availability supports create edit delete validation and duplicate preventi
 test("fixed and custom durations are validated end to end", () => {
   assert.match(editor, /\[30, 45, 60, 75, 90\]/);
   assert.match(editor, /משך מותאם אישית/);
-  assert.match(core, /value >= 15 && value <= 180 && value % 5 === 0/);
-  assert.match(migration, /supported_durations <@ array\[/);
-  assert.match(migration, /requested_duration_minutes between 15 and 180/);
+  assert.match(core, /value >= 10 && value <= 180/);
+  assert.match(migration, /10 <= all\(supported_durations\)/i);
+  assert.match(migration, /requested_duration_minutes between 10 and 180/);
 });
 
 test("parent sees distinct availability states, controls and later horizon", () => {
