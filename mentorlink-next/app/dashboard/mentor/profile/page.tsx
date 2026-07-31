@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
+import MentorSubjectsCard from "./MentorSubjectsCard";
 
 type Message = {
   type: "success" | "error";
@@ -303,6 +304,8 @@ export default function MentorProfilePage() {
             הפרטים יעזרו למשפחות להכיר אותך ולבחור את החונך המתאים.
           </p>
         </div>
+
+        <MentorSubjectsCard />
 
         <form
           onSubmit={handleSubmit}
