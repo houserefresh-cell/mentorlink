@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -7,7 +7,13 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "MentorLink | צומחים יחד",
+  manifest: "/manifest.webmanifest",
+  icons: { apple: "/favicon.ico" },
   description: "MentorLink מחברת בין ילדים ומשפחות לבין חונכים צעירים בקהילה.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1d4ed8",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

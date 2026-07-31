@@ -18,6 +18,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export default function PhotoPage() {
   const router = useRouter();
   const [userId, setUserId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
   const [storedPath, setStoredPath] = useState("");
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -26,13 +27,13 @@ export default function PhotoPage() {
 
   useEffect(() => {
     async function load() {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return router.replace("/login");
-      setUserId(auth.user.id);
+      const { data: auth } = await supabase.auth.getSession();
+      if (!auth.session) return router.replace("/login");
+      setUserId(auth.session.user.id); setAccessToken(auth.session.access_token);
       const { data, error } = await supabase
         .from("mentor_profiles")
         .select("profile_photo_path")
-        .eq("user_id", auth.user.id)
+        .eq("user_id", auth.session.user.id)
         .maybeSingle();
       if (error) {
         console.error(error);
@@ -63,11 +64,7 @@ export default function PhotoPage() {
     setWorking(true);
     setMessage(null);
     const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const path = `${userId}/profile.${extension}`;
-    if (storedPath && storedPath !== path) {
-      const { error } = await supabase.storage.from(BUCKET).remove([storedPath]);
-      if (error) console.error(error);
-    }
+    const path = `${userId}/pending-${crypto.randomUUID()}.${extension}`;
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
       .upload(path, file, { upsert: true, contentType: file.type });
@@ -77,45 +74,34 @@ export default function PhotoPage() {
       setWorking(false);
       return;
     }
-    const { error: profileError } = await supabase
-      .from("mentor_profiles")
-      .update({ profile_photo_path: path, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
-    if (profileError) {
-      console.error(profileError);
-      setMessage({ type: "error", text: `התמונה הועלתה אך לא קושרה לפרופיל: ${profileError.message}` });
+    const response = await fetch("/api/mentor-profile/photo", {
+      method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage({ type: "error", text: `${result.error ?? "לא ניתן לשמור את התמונה."} (${result.code ?? "PHOTO_SAVE_FAILED"})` });
     } else {
       const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
-      setStoredPath(path);
       setPreviewUrl(data?.signedUrl ?? "");
-      setMessage({ type: "success", text: "תמונת הפרופיל נשמרה בהצלחה." });
+      setMessage({ type: "success", text: result.pending ? "השינוי ממתין לאישור." : "תמונת הפרופיל נשמרה בהצלחה." });
+      if (!result.pending) setStoredPath(path);
     }
     setWorking(false);
   }
 
   async function removePhoto() {
-    if (!storedPath) return;
-    setWorking(true);
-    setMessage(null);
-    const { error: storageError } = await supabase.storage.from(BUCKET).remove([storedPath]);
-    if (storageError) {
-      console.error(storageError);
-      setMessage({ type: "error", text: `שגיאה במחיקת התמונה: ${storageError.message}` });
-      setWorking(false);
-      return;
-    }
-    const { error } = await supabase
-      .from("mentor_profiles")
-      .update({ profile_photo_path: null, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
-    if (error) console.error(error);
-    setMessage(error
-      ? { type: "error", text: `שגיאה בעדכון הפרופיל: ${error.message}` }
-      : { type: "success", text: "התמונה הוסרה." });
-    if (!error) { setStoredPath(""); setPreviewUrl(""); }
-    setWorking(false);
+    if (!storedPath || working) return;
+    setWorking(true); setMessage(null);
+    try {
+      const response = await fetch("/api/mentor-profile/photo", { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ path: null }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.code ?? "PHOTO_SAVE_FAILED");
+      setMessage({ type: "success", text: result.pending ? "השינוי ממתין לאישור." : "התמונה הוסרה." });
+      if (!result.pending) { setStoredPath(""); setPreviewUrl(""); }
+    } catch (error) { setMessage({ type: "error", text: `לא ניתן לעדכן את התמונה. (${error instanceof Error ? error.message : "PHOTO_SAVE_FAILED"})` }); }
+    finally { setWorking(false); }
   }
-
   if (loading) return <LoadingPage text="טוען תמונת פרופיל..." />;
   return (
     <MentorPageShell title="תמונת פרופיל" description="העלו תמונה ברורה ואמינה שתוצג למשפחות.">

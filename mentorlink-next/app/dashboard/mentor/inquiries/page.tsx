@@ -1,0 +1,2 @@
+import MentorGeneralInquiriesPanel from "../_components/MentorGeneralInquiriesPanel";
+export default function MentorInquiriesPage(){return <div className="mx-auto max-w-5xl"><h1 className="text-3xl font-black">פניות מהורים</h1><p className="mt-2 text-slate-600">פניות כלליות ושיחות שאינן בקשות לפגישה.</p><MentorGeneralInquiriesPanel/><p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600">החזרת פנייה שטופלה לפעילה עדיין אינה נתמכת במודל הקיים, ולכן פעולה זו אינה מוצגת.</p></div>}

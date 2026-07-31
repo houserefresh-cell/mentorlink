@@ -1,0 +1,2 @@
+﻿import ParentChildrenManager from "./ParentChildrenManager";
+export default function ParentPreferencesPage() { return <section className="mx-auto max-w-4xl"><p className="font-black text-violet-700">המשפחה שלי</p><h1 className="mt-2 text-3xl font-black">הילדים והעדפות</h1><p className="mt-3 text-slate-600">שמירת הפרטים מקצרת הרשמה ומאפשרת התאמה טובה יותר של פעילויות וחונכים.</p><ParentChildrenManager /></section>; }

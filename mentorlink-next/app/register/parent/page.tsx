@@ -25,7 +25,7 @@ export default function ParentRegisterPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?flow=parent_register`,
+        emailRedirectTo: `${window.location.origin}/auth/callback?flow=parent_register&returnTo=${encodeURIComponent(new URLSearchParams(window.location.search).get("returnTo") ?? "")}`,
         data: {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
@@ -61,6 +61,7 @@ export default function ParentRegisterPage() {
       flow: "parent_register",
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      returnTo: new URLSearchParams(window.location.search).get("returnTo") ?? "",
     });
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",

@@ -8,6 +8,7 @@ const profile = {
   last_name: "כהן",
   city: "רעננה",
   bio: "אוהבת לעזור לילדים להצליח.",
+  birth_date: null,
 };
 const base = {
   profiles: [profile],
@@ -38,7 +39,7 @@ const base = {
 for (const status of ["approved", "paused", "pending_review", "rejected", "draft"]) {
   test(`${status} mentor is not publicly returned`, () => {
     assert.deepEqual(mapPublishedMentors({
-      publications: [{ user_id: profile.user_id, status }],
+      publications: [{ user_id: profile.user_id, status, public_booking_id: "booking-public-id" }],
       ...base,
     }), []);
   });
@@ -46,12 +47,14 @@ for (const status of ["approved", "paused", "pending_review", "rejected", "draft
 
 test("published mentor is mapped to a strict safe public object", () => {
   const [mentor] = mapPublishedMentors({
-    publications: [{ user_id: profile.user_id, status: "published" }],
+    publications: [{ user_id: profile.user_id, status: "published", public_booking_id: "booking-public-id" }],
     ...base,
   });
   assert.deepEqual(mentor, {
+    bookingId: "booking-public-id",
     displayName: "נועה כ׳",
     city: "רעננה",
+    age: null,
     subjects: ["מתמטיקה"],
     introduction: "אוהבת לעזור לילדים להצליח.",
     experience: ["הדרכה", "לימודי"],
@@ -68,3 +71,5 @@ test("published mentor is mapped to a strict safe public object", () => {
   }
   assert.equal(mentor.displayName, "נועה כ׳");
 });
+
+test("unpublished mentor subjects never enter the eligible public collection",()=>{const result=mapPublishedMentors({publications:[{user_id:profile.user_id,status:"pending_review",public_booking_id:"hidden"}],...base});assert.equal(result.length,0);});

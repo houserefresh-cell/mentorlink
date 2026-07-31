@@ -1,6 +1,8 @@
 export type PublicMentor = {
+  bookingId: string;
   displayName: string;
   city: string | null;
+  age?: number | null;
   subjects: string[];
   introduction: string | null;
   experience: string[];
@@ -9,13 +11,14 @@ export type PublicMentor = {
   availability: string[];
 };
 
-export type PublishedRow = { user_id: string; status: string };
+export type PublishedRow = { user_id: string; status: string; public_booking_id: string };
 export type ProfileRow = {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
   city: string | null;
   bio: string | null;
+  birth_date: string | null;
 };
 export type SubjectRow = {
   user_id: string;
@@ -40,6 +43,15 @@ export type AvailabilityRow = {
   time_preferences: string[] | null;
 };
 
+function publicAgeFromBirthDate(birthDate: string, now = new Date()) {
+  const [birthYear, birthMonth, birthDay] = birthDate.split("-").map(Number);
+  if (!birthYear || !birthMonth || !birthDay) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(now);
+  const current = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const year = current("year"), month = current("month"), day = current("day");
+  if (!year || !month || !day) return null;
+  return year - birthYear - (month < birthMonth || (month === birthMonth && day < birthDay) ? 1 : 0);
+}
 function unique(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
 }
@@ -68,9 +80,12 @@ export function mapPublishedMentors(input: {
       const experience = input.experiences.find((row) => row.user_id === profile.user_id);
       const preferences = input.preferences.find((row) => row.user_id === profile.user_id);
       const availability = input.availability.find((row) => row.user_id === profile.user_id);
+      const publication = input.publications.find((row) => row.user_id === profile.user_id);
       return {
+        bookingId: publication?.public_booking_id ?? "",
         displayName: publicDisplayName(profile.first_name, profile.last_name),
         city: profile.city?.trim() || null,
+        age: profile.birth_date ? publicAgeFromBirthDate(profile.birth_date) : null,
         subjects: unique(subjects.map((row) => {
           const joined = Array.isArray(row.subjects) ? row.subjects[0] : row.subjects;
           return row.custom_subject || joined?.name;

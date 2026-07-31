@@ -16,6 +16,7 @@ import {
   inputClassName,
   toggleValue,
 } from "../_components/MentorPageShell";
+import WebPushControls from "../../_components/WebPushControls";
 
 const AGE_GROUPS = [
   "א׳–ב׳",
@@ -892,6 +893,7 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 6 && (
           <form onSubmit={submitForReview} className="space-y-6">
+            <WebPushControls compact />
             <div className="rounded-3xl border border-blue-100 bg-slate-50 p-6">
               <h3 className="text-xl font-extrabold">סיכום פרטי ההרשמה</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-2">

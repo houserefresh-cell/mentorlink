@@ -1,0 +1,3 @@
+import PublicMentorDirectory from "@/app/_components/PublicMentorDirectory";
+import { getPublishedMentors } from "@/lib/public-mentor-data";
+export default async function MentorDiscoverPage(){const mentors=await getPublishedMentors();return <div className="mx-auto max-w-7xl"><h1 className="text-3xl font-black">חיפוש חונכים ופעילויות בסביבה</h1><p className="mt-2 text-slate-600">אפשר לעיין בפרופילים הציבוריים של חונכים אחרים. פעילויות שפורסמו יופיעו כאן לאחר בניית מערכת הפעילויות.</p><div className="mt-7"><PublicMentorDirectory mentors={mentors} expandableFilters interactionMode="read-only"/></div></div>}

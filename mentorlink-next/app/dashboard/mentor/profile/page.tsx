@@ -22,10 +22,31 @@ type MentorProfile = {
   bio: string | null;
 };
 
+type PendingChange = {
+  id: string;
+  field_name: string;
+  current_value: unknown;
+  requested_value: unknown;
+  requested_at: string;
+};
+
+const PENDING_FIELD_LABELS: Record<string, string> = {
+  first_name: "שם פרטי",
+  last_name: "שם משפחה",
+  birth_date: "תאריך לידה",
+  bio: "תיאור קצר על עצמי",
+  city: "עיר מגורים",
+  phone: "טלפון",
+};
+
 export default function MentorProfilePage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [pendingFields, setPendingFields] = useState<string[]>([]);
+  const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
+  const [initialValues, setInitialValues] = useState<MentorProfile | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -37,60 +58,44 @@ export default function MentorProfilePage() {
   const [bio, setBio] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cancellingField, setCancellingField] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>(null);
 
   useEffect(() => {
     let active = true;
 
     async function loadProfile() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (!active) {
-        return;
-      }
-
-      if (userError || !user) {
-        router.replace("/login");
-        return;
-      }
-
-      setUserId(user.id);
-
-      const { data, error: profileError } = await supabase
-        .from("mentor_profiles")
-        .select(
-          "first_name, last_name, birth_date, grade, school, city, phone, languages, bio",
-        )
-        .eq("user_id", user.id)
-        .maybeSingle<MentorProfile>();
-
-      if (!active) {
-        return;
-      }
-
-      if (profileError) {
-        setFirstName(user.user_metadata?.first_name ?? "");
-        setLastName(user.user_metadata?.last_name ?? "");
-        setMessage({
-          type: "error",
-          text: `לא ניתן לטעון את הפרופיל: ${profileError.message}`,
-        });
-        setLoading(false);
-        return;
-      }
-
+      const { data: session, error: sessionError } = await supabase.auth.getSession();
+      const user = session.session?.user;
+      const token = session.session?.access_token;
+      if (!active) return;
+      if (sessionError || !user || !token) { router.replace("/login"); return; }
+      setUserId(user.id); setAccessToken(token);
+      const response = await fetch("/api/mentor-profile", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!active) return;
+      if (!response.ok) { setMessage({ type: "error", text: "לא ניתן לטעון את הפרופיל." }); setLoading(false); return; }
+      const data = body.profile as MentorProfile | null;
       setFirstName(data?.first_name ?? user.user_metadata?.first_name ?? "");
       setLastName(data?.last_name ?? user.user_metadata?.last_name ?? "");
-      setBirthDate(data?.birth_date ?? "");
-      setGrade(data?.grade ?? "");
-      setSchool(data?.school ?? "");
-      setCity(data?.city ?? "");
-      setPhone(data?.phone ?? "");
-      setLanguages(data?.languages?.join(", ") ?? "");
-      setBio(data?.bio ?? "");
+      setBirthDate(data?.birth_date ?? ""); setGrade(data?.grade ?? ""); setSchool(data?.school ?? "");
+      setCity(data?.city ?? ""); setPhone(data?.phone ?? ""); setLanguages(data?.languages?.join(", ") ?? ""); setBio(data?.bio ?? "");
+      setInitialValues({
+        first_name: data?.first_name ?? user.user_metadata?.first_name ?? "",
+        last_name: data?.last_name ?? user.user_metadata?.last_name ?? "",
+        birth_date: data?.birth_date ?? "",
+        grade: data?.grade ?? "",
+        school: data?.school ?? "",
+        city: data?.city ?? "",
+        phone: data?.phone ?? "",
+        languages: data?.languages ?? [],
+        bio: data?.bio ?? "",
+      });
+      const loadedPendingChanges: PendingChange[] = Array.isArray(body.pendingChanges)
+        ? body.pendingChanges
+        : [];
+      setPendingChanges(loadedPendingChanges);
+      setPendingFields(loadedPendingChanges.map((change) => change.field_name));
       setLoading(false);
     }
 
@@ -100,6 +105,22 @@ export default function MentorProfilePage() {
       active = false;
     };
   }, [router]);
+
+  const currentValues: MentorProfile = {
+    first_name: firstName.trim(),
+    last_name: lastName.trim(),
+    birth_date: birthDate,
+    grade: grade.trim(),
+    school: school.trim(),
+    city: city.trim(),
+    phone: phone.trim(),
+    languages: languages.split(",").map((language) => language.trim()).filter(Boolean),
+    bio: bio.trim(),
+  };
+
+  const hasChanges =
+    initialValues !== null &&
+    JSON.stringify(currentValues) !== JSON.stringify(initialValues);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -130,40 +151,31 @@ export default function MentorProfilePage() {
 
     const normalizedFirstName = firstName.trim();
     const normalizedLastName = lastName.trim();
-    const { error: profileError } = await supabase
-      .from("mentor_profiles")
-      .upsert(
-        {
-          user_id: userId,
-          first_name: normalizedFirstName,
-          last_name: normalizedLastName,
-          birth_date: birthDate,
-          grade: grade.trim(),
-          school: school.trim(),
-          city: city.trim(),
-          phone: phone.trim(),
-          languages: normalizedLanguages,
-          bio: bio.trim(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
-
-    if (profileError) {
-      setMessage({
-        type: "error",
-        text: `לא ניתן לשמור את הפרופיל: ${profileError.message}`,
-      });
-      setSaving(false);
-      return;
-    }
-
-    const { error: metadataError } = await supabase.auth.updateUser({
-      data: {
-        first_name: normalizedFirstName,
-        last_name: normalizedLastName,
-      },
+    const response = await fetch("/api/mentor-profile", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        first_name: normalizedFirstName, last_name: normalizedLastName, birth_date: birthDate,
+        grade: grade.trim(), school: school.trim(), city: city.trim(), phone: phone.trim(),
+        languages: normalizedLanguages, bio: bio.trim(),
+      }),
     });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage({ type: "error", text: `${result.error ?? "לא ניתן לשמור את הפרופיל."} (${result.code ?? "PROFILE_SAVE_FAILED"})` });
+      setSaving(false); return;
+    }
+    const nextPendingChanges: PendingChange[] = Array.isArray(result.pendingChanges)
+      ? result.pendingChanges
+      : [];
+    const nextPending: string[] = Array.isArray(result.pendingFields)
+      ? result.pendingFields
+      : nextPendingChanges.map((change) => change.field_name);
+
+    setPendingChanges(nextPendingChanges);
+    setPendingFields(nextPending);
+    const namePending = nextPending.includes("first_name") || nextPending.includes("last_name");
+    const { error: metadataError } = namePending ? { error: null } : await supabase.auth.updateUser({ data: { first_name: normalizedFirstName, last_name: normalizedLastName } });
 
     setFirstName(normalizedFirstName);
     setLastName(normalizedLastName);
@@ -173,6 +185,17 @@ export default function MentorProfilePage() {
     setPhone(phone.trim());
     setLanguages(normalizedLanguages.join(", "));
     setBio(bio.trim());
+    setInitialValues({
+      first_name: normalizedFirstName,
+      last_name: normalizedLastName,
+      birth_date: birthDate,
+      grade: grade.trim(),
+      school: school.trim(),
+      city: city.trim(),
+      phone: phone.trim(),
+      languages: normalizedLanguages,
+      bio: bio.trim(),
+    });
 
     if (metadataError) {
       setMessage({
@@ -182,13 +205,60 @@ export default function MentorProfilePage() {
     } else {
       setMessage({
         type: "success",
-        text: "הפרטים נשמרו בהצלחה.",
+        text: nextPending.length ? "השינוי ממתין לאישור." : "השינויים נשמרו.",
       });
     }
 
     setSaving(false);
   }
 
+  function restoreApprovedValue(field: string, value: unknown) {
+    const approvedValue = value === null || value === undefined ? "" : String(value);
+
+    switch (field) {
+      case "first_name": setFirstName(approvedValue); break;
+      case "last_name": setLastName(approvedValue); break;
+      case "birth_date": setBirthDate(approvedValue); break;
+      case "bio": setBio(approvedValue); break;
+      case "city": setCity(approvedValue); break;
+      case "phone": setPhone(approvedValue); break;
+    }
+  }
+
+  async function cancelPendingChange(change: PendingChange) {
+    if (!accessToken || cancellingField) return;
+
+    setCancellingField(change.field_name);
+    setMessage(null);
+
+    const response = await fetch(
+      `/api/mentor-profile?field=${encodeURIComponent(change.field_name)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setMessage({
+        type: "error",
+        text: `לא ניתן לבטל את השינוי הממתין. (${result.code ?? "PENDING_CHANGE_CANCEL_FAILED"})`,
+      });
+      setCancellingField(null);
+      return;
+    }
+
+    const approvedValue = Object.prototype.hasOwnProperty.call(result, "approvedValue")
+      ? result.approvedValue
+      : change.current_value;
+    restoreApprovedValue(change.field_name, approvedValue);
+    setInitialValues((values) => values ? { ...values, [change.field_name]: approvedValue } : values);
+    setPendingChanges((changes) => changes.filter((item) => item.id !== change.id));
+    setPendingFields((fields) => fields.filter((field) => field !== change.field_name));
+    setMessage({ type: "success", text: "השינוי הממתין בוטל." });
+    setCancellingField(null);
+  }
   if (loading) {
     return (
       <main
@@ -239,7 +309,7 @@ export default function MentorProfilePage() {
           className="rounded-3xl border border-blue-100 bg-white p-8 shadow-xl md:p-10"
         >
           <div className="grid gap-5 md:grid-cols-2">
-            <FormField label="שם פרטי" htmlFor="firstName">
+            <FormField label="שם פרטי" htmlFor="firstName">{pendingFields.includes("first_name") && <PendingLabel />}
               <input
                 id="firstName"
                 type="text"
@@ -251,7 +321,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="שם משפחה" htmlFor="lastName">
+            <FormField label="שם משפחה" htmlFor="lastName">{pendingFields.includes("last_name") && <PendingLabel />}
               <input
                 id="lastName"
                 type="text"
@@ -263,7 +333,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="תאריך לידה" htmlFor="birthDate">
+            <FormField label="תאריך לידה" htmlFor="birthDate">{pendingFields.includes("birth_date") && <PendingLabel />}
               <input
                 id="birthDate"
                 type="date"
@@ -297,7 +367,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="עיר מגורים" htmlFor="city">
+            <FormField label="עיר מגורים" htmlFor="city">{pendingFields.includes("city") && <PendingLabel />}
               <input
                 id="city"
                 type="text"
@@ -309,7 +379,7 @@ export default function MentorProfilePage() {
               />
             </FormField>
 
-            <FormField label="טלפון" htmlFor="phone">
+            <FormField label="טלפון" htmlFor="phone">{pendingFields.includes("phone") && <PendingLabel />}
               <input
                 id="phone"
                 type="tel"
@@ -339,7 +409,7 @@ export default function MentorProfilePage() {
           </div>
 
           <div className="mt-5">
-            <FormField label="תיאור קצר על עצמי" htmlFor="bio">
+            <FormField label="תיאור קצר על עצמי" htmlFor="bio">{pendingFields.includes("bio") && <PendingLabel />}
               <textarea
                 id="bio"
                 value={bio}
@@ -351,9 +421,78 @@ export default function MentorProfilePage() {
             </FormField>
           </div>
 
+          {pendingChanges.length > 0 && (
+            <section
+              aria-labelledby="pending-changes-title"
+              className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5"
+            >
+              <h2
+                id="pending-changes-title"
+                className="text-lg font-extrabold text-amber-950"
+              >
+                שינויים שממתינים לאישור
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                הפרטים החדשים נשמרו ונשלחו לבדיקה. עד לאישור, הפרופיל הציבורי
+                ממשיך להציג את הערכים המאושרים.
+              </p>
+
+              <div className="mt-4 space-y-4">
+                {pendingChanges.map((change) => (
+                  <article
+                    key={change.id}
+                    className="rounded-xl border border-amber-200 bg-white p-4"
+                  >
+                    <h3 className="font-bold text-slate-900">
+                      {PENDING_FIELD_LABELS[change.field_name] ??
+                        change.field_name}
+                    </h3>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg bg-slate-50 p-3">
+                        <p className="text-xs font-bold text-slate-500">
+                          הערך המאושר כרגע
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-slate-800">
+                          {formatPendingValue(change.current_value)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg bg-blue-50 p-3">
+                        <p className="text-xs font-bold text-blue-700">
+                          הערך שביקשת
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap break-words text-blue-950">
+                          {formatPendingValue(change.requested_value)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {change.requested_at && (
+                      <p className="mt-3 text-xs text-slate-500">
+                        נשלח לבדיקה: {formatPendingDate(change.requested_at)}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      disabled={cancellingField !== null}
+                      onClick={() => cancelPendingChange(change)}
+                      className="mt-4 rounded-lg border border-amber-300 px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cancellingField === change.field_name
+                        ? "מבטל..."
+                        : "ביטול השינוי"}
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !hasChanges}
             className="mt-7 w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {saving ? "שומר..." : "שמירת פרטים"}
@@ -377,6 +516,34 @@ export default function MentorProfilePage() {
   );
 }
 
+function formatPendingValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "לא הוגדר";
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map(String).join(", ") : "לא הוגדר";
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "כן" : "לא";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function formatPendingDate(value: string) {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("he-IL");
+}
+
 function FormField({
   label,
   htmlFor,
@@ -398,3 +565,5 @@ function FormField({
     </div>
   );
 }
+
+function PendingLabel() { return <span className="mb-2 inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">ממתין לאישור</span>; }
