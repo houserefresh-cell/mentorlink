@@ -2,11 +2,16 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { authenticateMeetingUser } from "./meeting-auth";
+import { createSupabaseAdmin } from "./supabase-admin";
 
 export async function authenticateMentorActivityUser(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return { error: Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 }) };
   if (user.role !== "mentor") return { error: Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 }) };
+  const publication = await createSupabaseAdmin().from("mentor_publication").select("status").eq("user_id", user.id).maybeSingle();
+  if (publication.error || publication.data?.status !== "published") {
+    return { error: Response.json({ error: "ניתן לנהל פעילויות רק לאחר השלמת ההרשמה, אישור המנהל ופרסום החונך.", code: "MENTOR_NOT_PUBLISHED" }, { status: 403 }) };
+  }
   return { user };
 }
 

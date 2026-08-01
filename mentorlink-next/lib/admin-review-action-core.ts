@@ -1,3 +1,5 @@
+import { MIN_MENTOR_REGISTRATION_AGE } from "./mentor-registration.ts";
+
 export const MAX_REJECTION_REASON_LENGTH = 1000;
 export const MIN_REJECTION_REASON_LENGTH = 3;
 
@@ -97,6 +99,9 @@ export async function reviewMentorApplication(
         outcome: "approval_blocked",
         message: "A valid mentor birth date is required before approval",
       };
+    }
+    if (application.age < MIN_MENTOR_REGISTRATION_AGE) {
+      return { outcome: "approval_blocked", message: `Mentor must be at least ${MIN_MENTOR_REGISTRATION_AGE} years old` };
     }
     if (application.age < 18 && application.parentConsentStatus !== "approved") {
       return {

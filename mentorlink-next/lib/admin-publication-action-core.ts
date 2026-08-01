@@ -1,3 +1,5 @@
+import { MIN_MENTOR_REGISTRATION_AGE } from "./mentor-registration.ts";
+
 export type PublicationAction = "publish" | "pause" | "republish";
 export type PublicationCommand = { action: PublicationAction };
 export type PublicationApplication = {
@@ -73,6 +75,9 @@ export async function updateMentorPublication(
         outcome: "publication_blocked",
         message: "A valid mentor birth date is required before publication",
       };
+    }
+    if (application.age < MIN_MENTOR_REGISTRATION_AGE) {
+      return { outcome: "publication_blocked", message: `Mentor must be at least ${MIN_MENTOR_REGISTRATION_AGE} years old` };
     }
     if (application.age < 18 && application.parentConsentStatus !== "approved") {
       return {

@@ -4,13 +4,16 @@ import { excludeAdministrator } from "./admin-authorization-core";
 import { isPendingQueueStatus } from "./admin-review-action-core";
 import { getAgeFromBirthDate } from "./mentor-age";
 import { createSupabaseAdmin } from "./supabase-admin";
+import { classifyMentorRegistration, MENTOR_REGISTRATION_STAGE_LABELS, type MentorRegistrationStage } from "./mentor-registration";
 
 export type AdminReviewDataClient = ReturnType<typeof createSupabaseAdmin>;
 export type AdminMentorStatus =
+  | "draft"
   | "pending_review"
   | "approved"
   | "published"
-  | "paused";
+  | "paused"
+  | "rejected";
 export type MentorSummary = {
   userId: string;
   firstName: string | null;
@@ -20,6 +23,18 @@ export type MentorSummary = {
   submittedAt: string | null;
   status: AdminMentorStatus;
   isMinor: boolean | null;
+};
+export type MentorRegistrationSummary = MentorSummary & {
+  email: string | null;
+  phone: string | null;
+  school: string | null;
+  createdAt: string;
+  emailConfirmed: boolean;
+  parentConsentStatus: string | null;
+  stage: MentorRegistrationStage;
+  stageLabel: string;
+  lastCompletedStep: string;
+  hasPendingSensitiveChanges: boolean;
 };
 export type AdminMentorDetail = {
   userId: string;
@@ -50,6 +65,67 @@ function minor(birthDate: unknown) {
   if (typeof birthDate !== "string") return null;
   const age = getAgeFromBirthDate(birthDate);
   return age === null ? null : age < 18;
+}
+
+export async function getAllMentorRegistrations(
+  administratorUserId: string,
+  admin: AdminReviewDataClient,
+): Promise<MentorRegistrationSummary[]> {
+  const authUsers: Array<{ id: string; email?: string; phone?: string; created_at: string; email_confirmed_at?: string; user_metadata?: Record<string, unknown> }> = [];
+  for (let page = 1; ; page += 1) {
+    const result = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    check("Unable to load registered users", result.error);
+    authUsers.push(...result.data.users);
+    if (result.data.users.length < 200) break;
+  }
+  const mentors = authUsers.filter((user) => user.id !== administratorUserId && user.user_metadata?.role === "mentor");
+  if (!mentors.length) return [];
+  const ids = mentors.map((user) => user.id);
+  const [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult] = await Promise.all([
+    admin.from("mentor_profiles").select("user_id, first_name, last_name, birth_date, city, school, phone, bio").in("user_id", ids),
+    admin.from("mentor_publication").select("user_id, submitted_at, status").in("user_id", ids),
+    admin.from("mentor_parent_consents").select("user_id, status").in("user_id", ids),
+    admin.from("mentor_subjects").select("user_id").in("user_id", ids),
+    admin.from("mentor_locations").select("user_id").in("user_id", ids),
+    admin.from("mentor_availability").select("user_id").in("user_id", ids),
+    admin.from("mentor_experience").select("user_id").in("user_id", ids),
+    admin.from("mentor_public_pending_changes").select("mentor_user_id").eq("status", "pending").in("mentor_user_id", ids),
+  ]);
+  for (const result of [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult]) check("Unable to load registration status", result.error);
+  const byId = <T extends Record<string, unknown>>(rows: T[], key: keyof T) => new Map(rows.map((row) => [String(row[key]), row]));
+  const profiles = byId((profilesResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
+  const publications = byId((publicationsResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
+  const consents = byId((consentsResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
+  const subjectIds = new Set((subjectsResult.data ?? []).map((row) => row.user_id));
+  const locationIds = new Set((locationsResult.data ?? []).map((row) => row.user_id));
+  const availabilityIds = new Set((availabilityResult.data ?? []).map((row) => row.user_id));
+  const experienceIds = new Set((experienceResult.data ?? []).map((row) => row.user_id));
+  const sensitiveIds = new Set((changesResult.data ?? []).map((row) => row.mentor_user_id));
+  return mentors.map((user) => {
+    const profile = profiles.get(user.id);
+    const publication = publications.get(user.id);
+    const consent = consents.get(user.id);
+    const profileComplete = Boolean(profile?.first_name && profile?.last_name && profile?.birth_date && profile?.city && profile?.bio && subjectIds.has(user.id) && locationIds.has(user.id) && availabilityIds.has(user.id) && experienceIds.has(user.id));
+    const stage = classifyMentorRegistration({ birthDate: typeof profile?.birth_date === "string" ? profile.birth_date : null, emailConfirmed: Boolean(user.email_confirmed_at), profileComplete, parentConsentStatus: typeof consent?.status === "string" ? consent.status : null, publicationStatus: typeof publication?.status === "string" ? publication.status : null });
+    const completed = [profile ? "פרטים אישיים" : null, subjectIds.has(user.id) ? "מקצועות" : null, locationIds.has(user.id) ? "אזורי פעילות" : null, availabilityIds.has(user.id) ? "זמינות" : null, experienceIds.has(user.id) ? "ניסיון" : null].filter(Boolean);
+    return {
+      userId: user.id,
+      firstName: typeof profile?.first_name === "string" ? profile.first_name : typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name : null,
+      lastName: typeof profile?.last_name === "string" ? profile.last_name : typeof user.user_metadata?.last_name === "string" ? user.user_metadata.last_name : null,
+      birthDate: typeof profile?.birth_date === "string" ? profile.birth_date : null,
+      city: typeof profile?.city === "string" ? profile.city : null,
+      submittedAt: typeof publication?.submitted_at === "string" ? publication.submitted_at : null,
+      status: (typeof publication?.status === "string" ? publication.status : "draft") as AdminMentorStatus,
+      isMinor: minor(profile?.birth_date), email: user.email ?? null,
+      phone: typeof profile?.phone === "string" ? profile.phone : user.phone ?? null,
+      school: typeof profile?.school === "string" ? profile.school : null,
+      createdAt: user.created_at, emailConfirmed: Boolean(user.email_confirmed_at),
+      parentConsentStatus: typeof consent?.status === "string" ? consent.status : null,
+      stage, stageLabel: MENTOR_REGISTRATION_STAGE_LABELS[stage],
+      lastCompletedStep: completed.at(-1) ?? "יצירת חשבון",
+      hasPendingSensitiveChanges: sensitiveIds.has(user.id),
+    };
+  }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 async function summaries(

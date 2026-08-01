@@ -7,6 +7,14 @@ function availabilityDiagnostic(stage: string, ok: boolean, code: string) {
   console.info("Mentor availability", { stage, ok, code });
 }
 
+async function requirePublishedMentor(userId: string) {
+  const publication = await createSupabaseAdmin().from("mentor_publication").select("status").eq("user_id", userId).maybeSingle();
+  if (publication.error || publication.data?.status !== "published") {
+    return Response.json({ error: "ניתן לפרסם זמינות רק לאחר השלמת ההרשמה, אישור המנהל ופרסום החונך.", code: "MENTOR_NOT_PUBLISHED" }, { status: 403 });
+  }
+  return null;
+}
+
 export async function GET(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
@@ -42,6 +50,8 @@ export async function POST(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
+  const publicationError = await requirePublishedMentor(user.id);
+  if (publicationError) return publicationError;
   let payload: Record<string, unknown>;
   try { payload = await request.json(); }
   catch { return Response.json({ error: "בקשה לא תקינה.", code: "INVALID_REQUEST" }, { status: 400 }); }
@@ -93,6 +103,8 @@ export async function PATCH(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
+  const publicationError = await requirePublishedMentor(user.id);
+  if (publicationError) return publicationError;
   let payload: Record<string, unknown>;
   try { payload = await request.json(); } catch { return Response.json({ error: "בקשה לא תקינה.", code: "INVALID_REQUEST" }, { status: 400 }); }
   const id = clean(payload.id, 36);
@@ -140,6 +152,8 @@ export async function DELETE(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
+  const publicationError = await requirePublishedMentor(user.id);
+  if (publicationError) return publicationError;
   const url = new URL(request.url); const id = url.searchParams.get("id") ?? ""; const type = url.searchParams.get("type");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "Invalid id", code: "INVALID_ID" }, { status: 400 });
   try {
