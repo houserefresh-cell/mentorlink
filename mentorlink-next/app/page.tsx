@@ -6,9 +6,9 @@ import { getPublishedMentors } from "@/lib/public-mentor-data";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 
 const benefits = [
-  "חונכות אישית בגובה העיניים",
+  "חונכות אישית בתוך הקהילה",
   "בחירה לפי תחום, אזור ואופן המפגש",
-  "שמירה על פרטיות ובטיחות לאורך הדרך",
+  "שמירה על פרטיות עד להיכרות אישית",
 ];
 
 export default async function HomePage() {
