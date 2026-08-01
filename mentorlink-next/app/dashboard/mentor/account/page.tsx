@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getAgeFromBirthDate } from "@/lib/mentor-age";
 
 type Completion = Record<string, boolean | null>;
 
@@ -14,6 +15,7 @@ const cards = [
   { key: "experience", title: "ניסיון ויכולות", description: "רקע, חוזקות וסגנון חונכות.", href: "/dashboard/mentor/experience" },
   { key: "preferences", title: "העדפות התאמה", description: "העדפות שיעזרו ליצור התאמה טובה.", href: "/dashboard/mentor/preferences" },
   { key: "photo", title: "תמונת פרופיל", description: "התמונה שמוצגת למשפחות.", href: "/dashboard/mentor/photo" },
+  { key: "parentConsent", title: "אישור הורה", description: "לחונכים שטרם מלאו להם 18: שליחת בקשה ומעקב אחר אישור ההורה.", href: "/dashboard/mentor/parent-consent" },
 ] as const;
 
 export default function MentorAccountPage() {
@@ -23,28 +25,32 @@ export default function MentorAccountPage() {
     let active = true;
     async function load() {
       const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
+      const session = data.session;
+      const token = session?.access_token;
+      if (!token || !session) return;
       const headers = { Authorization: `Bearer ${token}` };
-      const [profile, subjects, availability] = await Promise.all([
+      const [profile, subjects, availability, consent] = await Promise.all([
         fetch("/api/mentor-profile", { headers, cache: "no-store" }),
         fetch("/api/mentor-subjects", { headers, cache: "no-store" }),
         fetch("/api/mentor-availability", { headers, cache: "no-store" }),
+        supabase.from("mentor_parent_consents").select("status").eq("user_id", session.user.id).maybeSingle(),
       ]);
       const [profileBody, subjectBody, availabilityBody] = await Promise.all([
         profile.ok ? profile.json() : {},
         subjects.ok ? subjects.json() : {},
         availability.ok ? availability.json() : {},
       ]) as [
-        { profile?: { first_name?: string | null; bio?: string | null } },
+        { profile?: { first_name?: string | null; bio?: string | null; birth_date?: string | null } },
         { selected?: unknown[] },
         { windows?: unknown[] },
       ];
+      const age = profileBody.profile?.birth_date ? getAgeFromBirthDate(profileBody.profile.birth_date) : null;
       if (!active) return;
       setCompletion({
         profile: profile.ok ? Boolean(profileBody.profile?.first_name && profileBody.profile?.bio) : null,
         subjects: subjects.ok ? (subjectBody.selected ?? []).length > 0 : null,
         availability: availability.ok ? (availabilityBody.windows ?? []).length > 0 : null,
+        parentConsent: age === null ? null : age >= 18 ? true : consent.data?.status === "approved",
       });
     }
     load();
