@@ -20,9 +20,11 @@ type Registration = Summary & {
   emailConfirmed: boolean; parentConsentStatus: string | null;
   stage: "blocked_age" | "awaiting_email" | "incomplete" | "awaiting_parent_request" | "awaiting_parent_consent" | "ready_for_review" | "pending_review" | "active" | "inactive";
   stageLabel: string; lastCompletedStep: string; hasPendingSensitiveChanges: boolean;
+  accountControlStatus: "active" | "suspended" | "blocked";
 };
 type Detail = {
   userId: string;
+  email: string | null;
   status: Status;
   submittedAt: string | null;
   publishedAt: string | null;
@@ -41,6 +43,8 @@ type Detail = {
   isMinor: boolean | null;
   photoUrl: string | null;
   pendingChanges: Array<{ id: string; fieldName: string; currentValue: unknown; requestedValue: unknown; requestedAt: string }>;
+  accountControl: { status: "active" | "suspended" | "blocked"; reason: string | null; suspendedUntil: string | null; actedAt: string } | null;
+  accountHistory: Array<{ id: string; action: string; reason: string; createdAt: string; metadata: Record<string, unknown> }>;
 };
 
 const LABELS: Record<string, string> = {
@@ -138,8 +142,8 @@ function QueueView({ registrations }: { registrations: Registration[] }) {
     new: registrations.filter((mentor) => ["blocked_age", "awaiting_email", "incomplete", "awaiting_parent_request", "awaiting_parent_consent", "ready_for_review"].includes(mentor.stage)),
     review: registrations.filter((mentor) => mentor.stage === "pending_review"),
     changes: registrations.filter((mentor) => mentor.hasPendingSensitiveChanges),
-    active: registrations.filter((mentor) => mentor.stage === "active" && !mentor.hasPendingSensitiveChanges),
-    inactive: registrations.filter((mentor) => mentor.stage === "inactive"),
+    active: registrations.filter((mentor) => mentor.stage === "active" && !mentor.hasPendingSensitiveChanges && mentor.accountControlStatus === "active"),
+    inactive: registrations.filter((mentor) => mentor.stage === "inactive" || mentor.accountControlStatus !== "active"),
   };
   const tabs = [
     ["new", "נרשמים חדשים"], ["review", "חונכים חדשים לאישור"], ["changes", "שינויים רגישים לאישור"], ["active", "חונכים פעילים"], ["inactive", "חשבונות לא פעילים"],
@@ -155,9 +159,9 @@ function QueueView({ registrations }: { registrations: Registration[] }) {
   );
 }
 function RegistrationCard({ mentor }: { mentor: Registration }) {
-  const canOpen = ["pending_review", "approved", "published", "paused"].includes(mentor.status);
+  const canOpen = true;
   const content = <>
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{[mentor.firstName, mentor.lastName].filter(Boolean).join(" ") || "שם טרם הוזן"}</h3><p className="mt-1 text-slate-600">{mentor.email ?? "אין דוא״ל"} · {mentor.phone ?? "אין טלפון"}</p></div><span className={`rounded-full px-3 py-1 text-sm font-bold ${mentor.stage === "active" ? "bg-emerald-100 text-emerald-800" : mentor.stage === "blocked_age" || mentor.stage === "inactive" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{mentor.stageLabel}</span></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{[mentor.firstName, mentor.lastName].filter(Boolean).join(" ") || "שם טרם הוזן"}</h3><p className="mt-1 text-slate-600">{mentor.email ?? "אין דוא״ל"} · {mentor.phone ?? "אין טלפון"}</p></div><div className="flex flex-wrap gap-2"><span className={`rounded-full px-3 py-1 text-sm font-bold ${mentor.stage === "active" ? "bg-emerald-100 text-emerald-800" : mentor.stage === "blocked_age" || mentor.stage === "inactive" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{mentor.stageLabel}</span>{mentor.accountControlStatus !== "active" ? <span className="rounded-full bg-red-600 px-3 py-1 text-sm font-bold text-white">{mentor.accountControlStatus === "blocked" ? "חסום" : "מושבת זמנית"}</span> : null}</div></div>
     <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3"><p><b>נוצר:</b> {formatDate(mentor.createdAt)}</p><p><b>מייל:</b> {mentor.emailConfirmed ? "אומת" : "טרם אומת"}</p><p><b>אישור הורה:</b> {mentor.parentConsentStatus ?? "טרם נפתח"}</p><p><b>שלב אחרון:</b> {mentor.lastCompletedStep}</p><p><b>בית ספר:</b> {mentor.school ?? "טרם הוזן"}</p><p><b>עיר:</b> {mentor.city ?? "טרם הוזנה"}</p></div>
   </>;
   return canOpen ? <Link href={`/dashboard/admin/mentors/${mentor.userId}`} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-blue-400">{content}</Link> : <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{content}<p className="mt-4 text-xs text-slate-500">החשבון גלוי למנהל כבר עכשיו; בדיקת החונך תיפתח לאחר השלמת ההרשמה ושליחה לבדיקה.</p></article>;
@@ -190,6 +194,30 @@ function DetailView({ mentor }: { mentor: Detail }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pendingChanges, setPendingChanges] = useState(mentor.pendingChanges ?? []);
+  const [accountControl, setAccountControl] = useState(mentor.accountControl);
+  const [accountAction, setAccountAction] = useState<"suspend" | "block" | "restore" | "permanently_delete" | null>(null);
+  const [accountReason, setAccountReason] = useState("");
+  const [suspendedUntil, setSuspendedUntil] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+
+  async function controlAccount() {
+    if (!accountAction) return;
+    setBusy(true); setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/mentors/${mentor.userId}/account`, {
+        method: "PATCH", headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: accountAction, reason: accountReason, suspendedUntil, confirmation: deleteConfirmation }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "לא ניתן לעדכן את החשבון.");
+      if (accountAction === "permanently_delete") return window.location.replace("/dashboard/admin/mentors");
+      const next = body.account?.status as "active" | "suspended" | "blocked" | undefined;
+      setAccountControl(next === "active" ? null : { status: next ?? "active", reason: accountReason, suspendedUntil: next === "suspended" ? suspendedUntil : null, actedAt: new Date().toISOString() });
+      setAccountAction(null); setAccountReason(""); setSuspendedUntil("");
+      setMessage({ type: "success", text: next === "blocked" ? "החונך נחסם והוסר מהפרסום." : next === "suspended" ? "החשבון הושבת זמנית." : "החשבון שוחזר והחסימה הוסרה." });
+    } catch (reason) { setMessage({ type: "error", text: reason instanceof Error ? reason.message : "לא ניתן לעדכן את החשבון." }); }
+    finally { setBusy(false); }
+  }
 
 async function reviewField(changeId: string, action: "approve" | "reject") {
     const reason = action === "reject" ? window.prompt("Rejection reason")?.trim() ?? "" : "";
@@ -252,6 +280,24 @@ async function reviewField(changeId: string, action: "approve" | "reject") {
         <p className="mt-2 text-sm">Submitted {formatDate(mentor.submittedAt)}</p>
       </section>
       {message ? <div role="status" className={`rounded-xl p-4 ${message.type === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{message.text}</div> : null}
+      <ReviewSection title="ניהול החשבון">
+        <div dir="rtl" className="space-y-4">
+          <div className="rounded-xl bg-slate-50 p-4"><p><b>דוא״ל:</b> {mentor.email ?? "לא זמין"}</p><p className="mt-1"><b>מצב החשבון:</b> {accountControl?.status === "blocked" ? "חסום" : accountControl?.status === "suspended" ? "מושבת זמנית" : "פעיל"}</p>{accountControl?.reason ? <p className="mt-1"><b>סיבה:</b> {accountControl.reason}</p> : null}{accountControl?.suspendedUntil ? <p className="mt-1"><b>עד:</b> {formatDate(accountControl.suspendedUntil)}</p> : null}</div>
+          {!accountAction ? <div className="flex flex-wrap gap-3">
+            {accountControl?.status !== "suspended" ? <button onClick={() => setAccountAction("suspend")} className="rounded-xl bg-amber-500 px-5 py-3 font-bold text-white">השבתה זמנית</button> : null}
+            {accountControl?.status !== "blocked" ? <button onClick={() => setAccountAction("block")} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white">חסימת חונך</button> : null}
+            {accountControl && accountControl.status !== "active" ? <button onClick={() => setAccountAction("restore")} className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white">שחזור והסרת חסימה</button> : null}
+            <button onClick={() => setAccountAction("permanently_delete")} className="rounded-xl border-2 border-red-600 bg-white px-5 py-3 font-bold text-red-700">מחיקה לצמיתות</button>
+          </div> : <form onSubmit={(event) => { event.preventDefault(); void controlAccount(); }} className={`rounded-xl border p-4 ${accountAction === "permanently_delete" ? "border-red-300 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
+            <h3 className="font-black">{accountAction === "suspend" ? "השבתה זמנית" : accountAction === "block" ? "חסימת חונך" : accountAction === "restore" ? "שחזור החשבון" : "מחיקה סופית ובלתי הפיכה"}</h3>
+            <label className="mt-4 block font-bold">סיבה *</label><textarea required minLength={3} maxLength={1000} value={accountReason} onChange={(event) => setAccountReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-xl border bg-white p-3" />
+            {accountAction === "suspend" ? <><label className="mt-4 block font-bold">מושבת עד *</label><input required type="datetime-local" value={suspendedUntil} onChange={(event) => setSuspendedUntil(event.target.value)} className="mt-2 rounded-xl border bg-white p-3" /></> : null}
+            {accountAction === "permanently_delete" ? <div className="mt-4"><p className="font-bold text-red-800">הפעולה מוחקת את ההתחברות ואת נתוני החשבון, ומשחררת את כתובת המייל לרישום מחדש. היא תיחסם אם קיימים נרשמים פעילים.</p><label className="mt-3 block font-bold">הקלד: מחיקה לצמיתות</label><input required value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} className="mt-2 w-full rounded-xl border border-red-300 bg-white p-3" /></div> : null}
+            <div className="mt-4 flex gap-3"><button disabled={busy || accountReason.trim().length < 3 || (accountAction === "permanently_delete" && deleteConfirmation !== "מחיקה לצמיתות")} className={`rounded-xl px-5 py-3 font-bold text-white disabled:opacity-50 ${accountAction === "permanently_delete" || accountAction === "block" ? "bg-red-600" : "bg-blue-600"}`}>{busy ? "שומר…" : "אישור הפעולה"}</button><button type="button" disabled={busy} onClick={() => setAccountAction(null)} className="rounded-xl border bg-white px-5 py-3 font-bold">ביטול</button></div>
+          </form>}
+          {mentor.accountHistory.length ? <div><h3 className="font-black">היסטוריית ניהול</h3><div className="mt-3 grid gap-2">{mentor.accountHistory.map((event) => <div key={event.id} className="rounded-xl border bg-white p-3"><b>{accountActionLabel(event.action)}</b> · {formatDate(event.createdAt)}<p className="mt-1 text-sm text-slate-600">{event.reason}</p></div>)}</div></div> : null}
+        </div>
+      </ReviewSection>
       {status === "pending_review" ? (
         <ReviewSection title="Review decision">
           {confirmation === "approve" ? <Confirm title="Approve this application?" text="Approval does not make the mentor public." busy={busy} confirmLabel="Confirm approval" onConfirm={() => void review("approve")} onCancel={() => setConfirmation(null)} /> :
@@ -325,6 +371,13 @@ function statusMessage(status: Status) {
   if (status === "published") return "The mentor is now visible on the homepage.";
   if (status === "paused") return "The mentor is now hidden from the homepage.";
   return "The mentor status was updated.";
+}
+function accountActionLabel(action: string) {
+  if (action === "blocked") return "החשבון נחסם";
+  if (action === "suspended") return "החשבון הושבת זמנית";
+  if (action === "restored") return "החשבון שוחזר";
+  if (action === "permanently_deleted") return "החשבון נמחק לצמיתות";
+  return action;
 }
 function ReviewSection({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="mb-5 text-xl font-extrabold">{title}</h2>{children}</section>;
