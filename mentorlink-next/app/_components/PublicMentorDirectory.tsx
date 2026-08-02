@@ -41,7 +41,7 @@ function MentorCard({ mentor, activities, onOpen, readOnly }: { mentor: PublicMe
   const shortIntroduction = mentor.introduction && mentor.introduction.length > 90 ? `${mentor.introduction.slice(0, 87).trimEnd()}…` : mentor.introduction;
   return (
     <article className="flex h-full min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_28px_-22px_rgba(15,23,42,0.55)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200">
-      <div className="flex min-w-0 items-center gap-3"><Avatar initial={initial} large={false} /><div className="min-w-0"><h3 className="break-words text-xl font-black leading-tight text-slate-950">{mentor.displayName}</h3>{mentor.city && <City city={mentor.city} />}</div></div>
+      <div className="flex min-w-0 items-center gap-3"><Avatar initial={initial} large={false} photoUrl={mentor.profilePhotoUrl} /><div className="min-w-0"><h3 className="break-words text-xl font-black leading-tight text-slate-950">{mentor.displayName}</h3>{mentor.city && <City city={mentor.city} />}</div></div>
       {mentor.subjects.length > 0 && <ul aria-label="תחומי חונכות" className="mt-3 flex min-w-0 flex-wrap gap-1.5">{mentor.subjects.map((subject) => <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-bold leading-5 text-blue-800 [overflow-wrap:anywhere]">{subject}</li>)}</ul>}
       <div className="mt-3 grid gap-2"><CompactLine label="מתאים לגילאים" values={mentor.ageGroups} /><CompactLine label="אופן המפגש" values={mentor.meetingModes} /></div>
       {shortIntroduction && <p className="mt-3 line-clamp-2 break-words text-sm leading-6 text-slate-600">{shortIntroduction}</p>}
@@ -63,7 +63,7 @@ function MentorDetailsDialog({ mentor, activities, onClose }: { mentor: PublicMe
     <dialog ref={dialogRef} dir="rtl" aria-labelledby={titleId} onClose={onClose} onClick={(event) => { if (event.target === event.currentTarget) event.currentTarget.close(); }} className="m-auto max-h-[90dvh] w-[min(calc(100%_-_2rem),34rem)] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-0 text-right text-slate-950 shadow-2xl backdrop:bg-slate-950/55">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur"><h2 id={titleId} className="text-lg font-black">פרטי החונך</h2><button type="button" onClick={() => dialogRef.current?.close()} aria-label="סגירת פרטי החונך" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-2xl text-slate-600 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">×</button></div>
       <div className="p-5 sm:p-6">
-        <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-gradient-to-l from-blue-50 to-violet-50 p-4"><Avatar initial={initial} large /><div className="min-w-0"><p className="break-words text-2xl font-black">{mentor.displayName}</p>{mentor.city && <City city={mentor.city} />}</div></div>
+        <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-gradient-to-l from-blue-50 to-violet-50 p-4"><Avatar initial={initial} large photoUrl={mentor.profilePhotoUrl} /><div className="min-w-0"><p className="break-words text-2xl font-black">{mentor.displayName}</p>{mentor.city && <City city={mentor.city} />}</div></div>
         {mentor.subjects.length > 0 && <DetailsSection title="תחומי חונכות"><ul className="flex min-w-0 flex-wrap gap-1.5">{mentor.subjects.map((subject) => <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-bold text-blue-800 [overflow-wrap:anywhere]">{subject}</li>)}</ul></DetailsSection>}
         {mentor.introduction && <DetailsSection title="קצת עליי"><p className="whitespace-pre-wrap break-words leading-7 text-slate-700">{mentor.introduction}</p></DetailsSection>}
         <DetailsValues title="מתאים לגילאים" values={mentor.ageGroups} /><DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} /><DetailsValues title="אופן המפגש" values={mentor.meetingModes} /><DetailsValues title="זמינות כללית" values={mentor.availability} />
@@ -72,7 +72,10 @@ function MentorDetailsDialog({ mentor, activities, onClose }: { mentor: PublicMe
     </dialog>
   );
 }
-function Avatar({ initial, large }: { initial: string; large: boolean }) {
+function Avatar({ initial, large, photoUrl }: { initial: string; large: boolean; photoUrl?: string | null }) {
+  if (photoUrl) {
+    return <img src={photoUrl} alt="" className={`${large ? "h-16 w-16" : "h-12 w-12"} shrink-0 rounded-2xl object-cover shadow-sm`} />;
+  }
   return <div aria-hidden="true" className={`flex shrink-0 items-center justify-center bg-gradient-to-br from-blue-600 to-violet-600 font-black text-white shadow-md shadow-blue-200/70 ${large ? "h-16 w-16 rounded-2xl text-2xl" : "h-12 w-12 rounded-xl text-lg"}`}>{initial}</div>;
 }
 

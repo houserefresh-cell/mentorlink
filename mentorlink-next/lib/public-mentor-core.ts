@@ -9,6 +9,7 @@ export type PublicMentor = {
   ageGroups: string[];
   meetingModes: string[];
   availability: string[];
+  profilePhotoUrl?: string | null;
 };
 
 export type PublishedRow = { user_id: string; status: string; public_booking_id: string };
@@ -19,6 +20,7 @@ export type ProfileRow = {
   city: string | null;
   bio: string | null;
   birth_date: string | null;
+  profile_photo_path?: string | null;
 };
 export type SubjectRow = {
   user_id: string;

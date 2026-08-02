@@ -121,6 +121,12 @@ export default function MentorOnboardingPage() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("step") === "summary") {
+      setActiveStep(6);
+    }
+  }, []);
+
   const requiredProfileChecks = useMemo(() => [
       Boolean(firstName.trim() && lastName.trim() && birthDate),
       Object.keys(selectedSubjects).length > 0,
@@ -357,6 +363,9 @@ export default function MentorOnboardingPage() {
     }
 
     await supabase.auth.updateUser({ data: { first_name: trimmedFirstName, last_name: trimmedLastName } });
+    const minor = age < 18;
+    setIsMinor(minor);
+    setConsentStatusLabel(getConsentStatusLabel(consentStatus, minor));
     setMessage({ type: "success", text: "הפרטים האישיים נשמרו בהצלחה." });
     setSaving(false);
     setActiveStep(1);
@@ -668,7 +677,7 @@ export default function MentorOnboardingPage() {
     }, { onConflict: "user_id" });
 
     if (error) {
-      setMessage({ type: "error", text: `שגיאה בשליחה: ${error.message}` });
+      setMessage({ type: "error", text: "לא ניתן לשלוח את הפרופיל. לחונך שטרם מלאו לו 18 נדרש אישור הורה מאומת." });
       setSubmitting(false);
       return;
     }

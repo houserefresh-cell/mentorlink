@@ -18,7 +18,7 @@ import {
   inputClassName,
 } from "../_components/MentorPageShell";
 
-const CONSENT_VERSION = "mentor-parent-consent-v1";
+const CONSENT_VERSION = "mentor-parent-consent-v2";
 
 const STATUS_LABELS: Record<string, string> = {
   not_required: "לא נדרש",
@@ -407,6 +407,12 @@ export default function ParentConsentPage() {
               הפלטפורמה. פרטי ההורה יישמרו לצורכי אימות וקשר בלבד ולא יוצגו
               בפרופיל הציבורי.
             </p>
+            <p className="mt-3 leading-7 text-slate-700">
+              MentorLink משמשת כפלטפורמה להיכרות ולתיאום. ההורה יתבקש לאשר
+              שהוא יבחן את ההתאמה ויהיה מעורב בתיאום מפגשים שבהם משתתף החונך
+              הקטין. בנוסף תוצג לו בחירה נפרדת ולא-חובה אם להתיר הצגה ציבורית
+              של תמונת הפרופיל; ללא אישור מפורש התמונה לא תוצג לציבור.
+            </p>
           </section>
 
           <div className="space-y-3">
@@ -473,6 +479,13 @@ export default function ParentConsentPage() {
         <div className="mt-4">
           <MessageBox message={message} />
         </div>
+        <button
+          type="button"
+          onClick={() => router.push("/register/mentor?step=summary")}
+          className="mt-5 rounded-xl border border-blue-300 bg-white px-6 py-3 font-extrabold text-blue-800 transition hover:border-blue-500 hover:bg-blue-50"
+        >
+          חזרה לסיכום ההרשמה
+        </button>
       </div>
     </MentorPageShell>
   );
