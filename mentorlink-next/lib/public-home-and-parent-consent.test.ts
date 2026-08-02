@@ -10,14 +10,24 @@ const publicData = read("lib/public-mentor-data.ts");
 const migration = read("supabase/migrations/202608020030_add_parent_consent_role_and_photo_choice.sql");
 
 test("public home leads with community and separate parent and mentor actions", () => {
-  assert.match(home, /Frank_Ruhl_Libre, Heebo/);
+  assert.match(home, /import \{ Rubik \} from "next\/font\/google"/);
   assert.match(home, /homeBodyFont\.className/);
-  assert.match(home, /homeHeadingFont\.className/);
+  assert.doesNotMatch(home, /homeHeadingFont|Secular_One/);
+  assert.doesNotMatch(home, /group rounded-3xl p-5 transition hover:-translate-y-1/);
   assert.match(home, /אנשים קרובים/);
   assert.match(home, /חיבורים שמקדמים/);
   assert.match(home, /אני הורה — מתחילים כאן/);
   assert.match(home, /יש לי מה לתת — הרשמה כחונך/);
   assert.doesNotMatch(home, /בתהליך ברור ובטוח/);
+});
+
+test("new minor registration requires parent consent immediately after saving the birth date", () => {
+  const onboarding = read("app/dashboard/mentor/onboarding/page.tsx");
+  assert.match(onboarding, /const minor = age < 18;[\s\S]*setIsMinor\(minor\);/);
+  assert.match(onboarding, /setConsentStatusLabel\(getConsentStatusLabel\(consentStatus, minor\)\)/);
+  assert.match(onboarding, /isMinor && consentStatus !== "approved"/);
+  assert.match(onboarding, /לחונך שטרם מלאו לו 18 נדרש אישור הורה מאומת/);
+  assert.doesNotMatch(onboarding, /שגיאה בשליחה: \$\{error\.message\}/);
 });
 
 test("platform role is explained naturally rather than presented as a blanket waiver", () => {

@@ -479,6 +479,13 @@ export default function ParentConsentPage() {
         <div className="mt-4">
           <MessageBox message={message} />
         </div>
+        <button
+          type="button"
+          onClick={() => router.push("/register/mentor?step=summary")}
+          className="mt-5 rounded-xl border border-blue-300 bg-white px-6 py-3 font-extrabold text-blue-800 transition hover:border-blue-500 hover:bg-blue-50"
+        >
+          חזרה לסיכום ההרשמה
+        </button>
       </div>
     </MentorPageShell>
   );
