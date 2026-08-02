@@ -30,17 +30,32 @@ export default function MentorRegisterPage() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("mentor_profiles")
-        .select("first_name, birth_date, bio")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
+      const [profileResult, publicationResult] = await Promise.all([
+        supabase
+          .from("mentor_profiles")
+          .select("first_name, birth_date, bio")
+          .eq("user_id", data.user.id)
+          .maybeSingle(),
+        supabase
+          .from("mentor_publication")
+          .select("status")
+          .eq("user_id", data.user.id)
+          .maybeSingle(),
+      ]);
+      const profile = profileResult.data;
+      const publicationStatus = publicationResult.data?.status ?? null;
       const resolution = resolveMentorRegistrationView({
         isAuthenticated: true,
         role: data.user.user_metadata?.role,
         hasCompletedMentorProfile: Boolean(
           profile?.first_name && profile?.birth_date && profile?.bio,
         ),
+        hasSubmittedForReview: [
+          "pending_review",
+          "approved",
+          "published",
+          "paused",
+        ].includes(publicationStatus ?? ""),
       });
 
       if (resolution.view === "redirect") {

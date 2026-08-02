@@ -8,6 +8,7 @@ test("guest on mentor registration sees account signup", () => {
       isAuthenticated: false,
       role: null,
       hasCompletedMentorProfile: false,
+      hasSubmittedForReview: false,
     }),
     { view: "signup" },
   );
@@ -19,6 +20,7 @@ test("authenticated mentor without a profile sees full onboarding", () => {
       isAuthenticated: true,
       role: "mentor",
       hasCompletedMentorProfile: false,
+      hasSubmittedForReview: false,
     }),
     { view: "onboarding" },
   );
@@ -30,6 +32,7 @@ test("authenticated mentor never sees signup fields again", () => {
       isAuthenticated: true,
       role: "mentor",
       hasCompletedMentorProfile: false,
+      hasSubmittedForReview: false,
     }).view,
     "signup",
   );
@@ -41,6 +44,7 @@ test("completed mentor is redirected to the mentor dashboard", () => {
       isAuthenticated: true,
       role: "mentor",
       hasCompletedMentorProfile: true,
+      hasSubmittedForReview: true,
     }),
     { view: "redirect", destination: "/dashboard/mentor" },
   );
@@ -52,7 +56,20 @@ test("parent-only user cannot access mentor onboarding", () => {
       isAuthenticated: true,
       role: "parent",
       hasCompletedMentorProfile: false,
+      hasSubmittedForReview: false,
     }),
     { view: "redirect", destination: "/dashboard/parent" },
+  );
+});
+
+test("completed mentor keeps the review-submit button until the profile is actually submitted", () => {
+  assert.deepEqual(
+    resolveMentorRegistrationView({
+      isAuthenticated: true,
+      role: "mentor",
+      hasCompletedMentorProfile: true,
+      hasSubmittedForReview: false,
+    }),
+    { view: "onboarding" },
   );
 });

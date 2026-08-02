@@ -10,17 +10,19 @@ export function resolveMentorRegistrationView({
   isAuthenticated,
   role,
   hasCompletedMentorProfile,
+  hasSubmittedForReview,
 }: {
   isAuthenticated: boolean;
   role: unknown;
   hasCompletedMentorProfile: boolean;
+  hasSubmittedForReview: boolean;
 }): MentorRegistrationView {
   if (!isAuthenticated) {
     return { view: "signup" };
   }
 
   if (role === "mentor") {
-    return hasCompletedMentorProfile
+    return hasCompletedMentorProfile && hasSubmittedForReview
       ? { view: "redirect", destination: "/dashboard/mentor" }
       : { view: "onboarding" };
   }
