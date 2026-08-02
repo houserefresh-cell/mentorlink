@@ -18,7 +18,7 @@ import {
   inputClassName,
 } from "../_components/MentorPageShell";
 
-const CONSENT_VERSION = "mentor-parent-consent-v1";
+const CONSENT_VERSION = "mentor-parent-consent-v2";
 
 const STATUS_LABELS: Record<string, string> = {
   not_required: "לא נדרש",
@@ -406,6 +406,12 @@ export default function ParentConsentPage() {
               עמו קשר בנושאים הקשורים לפעילות החונכות, לבטיחות ולתפעול
               הפלטפורמה. פרטי ההורה יישמרו לצורכי אימות וקשר בלבד ולא יוצגו
               בפרופיל הציבורי.
+            </p>
+            <p className="mt-3 leading-7 text-slate-700">
+              MentorLink משמשת כפלטפורמה להיכרות ולתיאום. ההורה יתבקש לאשר
+              שהוא יבחן את ההתאמה ויהיה מעורב בתיאום מפגשים שבהם משתתף החונך
+              הקטין. בנוסף תוצג לו בחירה נפרדת ולא-חובה אם להתיר הצגה ציבורית
+              של תמונת הפרופיל; ללא אישור מפורש התמונה לא תוצג לציבור.
             </p>
           </section>
 

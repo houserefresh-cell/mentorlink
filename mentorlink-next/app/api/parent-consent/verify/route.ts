@@ -27,6 +27,8 @@ type VerifyRequestBody = {
   detailsConfirmed?: boolean;
   participationConfirmed?: boolean;
   contactConfirmed?: boolean;
+  platformRoleConfirmed?: boolean;
+  publicPhotoConfirmed?: boolean;
 };
 
 export async function POST(request: NextRequest) {
@@ -84,6 +86,8 @@ export async function POST(request: NextRequest) {
       confirmed_details: body.detailsConfirmed === true,
       confirmed_participation: body.participationConfirmed === true,
       confirmed_contact: body.contactConfirmed === true,
+      confirmed_platform_role: body.platformRoleConfirmed === true,
+      confirmed_public_photo: body.publicPhotoConfirmed === true,
     },
   );
 

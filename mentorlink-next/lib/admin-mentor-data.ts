@@ -230,7 +230,7 @@ export async function getAdminMentorDetail(
     admin.from("mentor_locations").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_experience").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_preferences").select("*").eq("user_id", userId).maybeSingle(),
-    admin.from("mentor_parent_consents").select("status, parent_name, parent_relationship, details_confirmed, participation_confirmed, contact_confirmed, consent_requested_at, consented_at, declined_at, consent_version").eq("user_id", userId).maybeSingle(),
+    admin.from("mentor_parent_consents").select("status, parent_name, parent_relationship, parent_phone, parent_email, details_confirmed, participation_confirmed, contact_confirmed, platform_role_confirmed, profile_photo_visibility, profile_photo_consented_at, consent_requested_at, consented_at, declined_at, consent_version").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", userId).eq("status", "pending").order("requested_at"),
     admin.from("mentor_account_controls").select("status, reason, suspended_until, acted_at").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_account_admin_events").select("id, action, reason, created_at, metadata").eq("target_user_id", userId).order("created_at", { ascending: false }).limit(50),

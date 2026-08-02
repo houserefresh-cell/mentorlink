@@ -17,6 +17,8 @@ export default function ParentConsentVerifyPage() {
   const [detailsConfirmed, setDetailsConfirmed] = useState(false);
   const [participationConfirmed, setParticipationConfirmed] = useState(false);
   const [contactConfirmed, setContactConfirmed] = useState(false);
+  const [platformRoleConfirmed, setPlatformRoleConfirmed] = useState(false);
+  const [publicPhotoConfirmed, setPublicPhotoConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
@@ -66,9 +68,9 @@ export default function ParentConsentVerifyPage() {
   async function respond(decision: "approved" | "declined") {
     if (
       decision === "approved" &&
-      (!detailsConfirmed || !participationConfirmed || !contactConfirmed)
+      (!detailsConfirmed || !participationConfirmed || !contactConfirmed || !platformRoleConfirmed)
     ) {
-      setError("כדי לאשר יש לסמן את כל שלוש ההצהרות.");
+      setError("כדי לאשר יש לסמן את כל הצהרות החובה.");
       return;
     }
 
@@ -85,6 +87,8 @@ export default function ParentConsentVerifyPage() {
           detailsConfirmed,
           participationConfirmed,
           contactConfirmed,
+          platformRoleConfirmed,
+          publicPhotoConfirmed,
         }),
       });
       const data = (await response.json()) as { state?: string; error?: string };
@@ -156,6 +160,11 @@ export default function ParentConsentVerifyPage() {
             הפלטפורמה. פרטי ההורה ישמשו לצורכי אימות וקשר בלבד ולא יוצגו
             בפרופיל הציבורי.
           </p>
+          <p className="mt-3 leading-8 text-slate-700">
+            MentorLink היא פלטפורמה להיכרות ולתיאום ואינה מחליפה בדיקה אישית,
+            שיחה ותיאום ציפיות. ההחלטה על קיום מפגש, מיקומו ותנאיו מתקבלת בין
+            הצדדים, ובמקרה של קטינים — בליווי ובאחריות ההורה או האפוטרופוס.
+          </p>
           <p className="mt-3 text-sm text-slate-500">
             גרסת הסכמה: {details.consentVersion}
           </p>
@@ -174,6 +183,28 @@ export default function ParentConsentVerifyPage() {
           <ConsentCheck checked={contactConfirmed} onChange={setContactConfirmed}>
             אני מאשר/ת יצירת קשר בנוגע לפעילות החונכות.
           </ConsentCheck>
+          <ConsentCheck checked={platformRoleConfirmed} onChange={setPlatformRoleConfirmed}>
+            ידוע לי כי MentorLink מספקת פלטפורמה לחיבור ולתיאום, וכי עליי לבחון
+            את ההתאמה ולהיות מעורב/ת בתיאום מפגשים שבהם משתתף החונך הקטין.
+          </ConsentCheck>
+          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <label className="flex items-start gap-3 font-bold text-violet-950">
+              <input
+                type="checkbox"
+                checked={publicPhotoConfirmed}
+                onChange={(event) => setPublicPhotoConfirmed(event.target.checked)}
+                className="mt-1 h-5 w-5 accent-violet-600"
+              />
+              <span>
+                אישור רשות נפרד: אני מאשר/ת להציג את תמונת הפרופיל של החונך
+                בפרופיל הציבורי ב-MentorLink.
+                <small className="mt-2 block font-normal leading-6 text-violet-800">
+                  הסימון אינו חובה להשתתפות. ללא סימון התמונה לא תוצג לציבור.
+                  ניתן לבקש להסיר אותה גם לאחר האישור.
+                </small>
+              </span>
+            </label>
+          </div>
         </div>
 
         {error && (
