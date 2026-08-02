@@ -67,16 +67,18 @@ export function SavePanel({
   saving,
   message,
   label = "שמירה",
+  disabled = false,
 }: {
   saving: boolean;
   message: FormMessage;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="mt-8 rounded-3xl border border-blue-100 bg-white p-6 shadow-lg">
       <button
         type="submit"
-        disabled={saving}
+        disabled={saving || disabled}
         className="w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400"
       >
         {saving ? "שומר..." : label}
