@@ -65,7 +65,7 @@ export default function MentorRegisterPage() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
       options: {
@@ -77,7 +77,9 @@ export default function MentorRegisterPage() {
       console.error("Email registration failed", error);
       setMessage(`שגיאה: ${error.message}`);
     } else {
-      setMessage("ההרשמה הצליחה. שלחנו אליך אימייל לאימות החשבון.");
+      setMessage(data.user?.email_confirmed_at
+        ? "החשבון נוצר וכתובת האימייל אומתה בהצלחה."
+        : "החשבון נוצר במצב הרשמה בתהליך. נשלח אליך מייל אימות; יש לפתוח אותו לפני שליחת הפרופיל לבדיקה.");
     }
     setLoading(false);
   }

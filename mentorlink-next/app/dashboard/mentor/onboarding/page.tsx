@@ -6,6 +6,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { getAgeFromBirthDate } from "../../../../lib/mentor-age";
+import { MIN_MENTOR_REGISTRATION_AGE } from "../../../../lib/mentor-registration";
 import {
   ChoicePills,
   Field,
@@ -69,6 +70,7 @@ export default function MentorOnboardingPage() {
   const [isMinor, setIsMinor] = useState<boolean | null>(null);
   const [consentStatus, setConsentStatus] = useState("missing");
   const [consentStatusLabel, setConsentStatusLabel] = useState("לא נשלחה בקשה");
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -156,6 +158,7 @@ export default function MentorOnboardingPage() {
       }
 
       setUserId(auth.user.id);
+      setEmailConfirmed(Boolean(auth.user.email_confirmed_at));
 
       const [profileResult, subjectsResult, choicesResult, availabilityResult, locationsResult, experienceResult, preferencesResult, consentResult] = await Promise.all([
         supabase
@@ -307,8 +310,12 @@ export default function MentorOnboardingPage() {
     }
 
     const age = getAgeFromBirthDate(birthDate);
-    if (age === null || age < 13 || age > 100) {
+    if (age === null || age > 100) {
       setMessage({ type: "error", text: "יש להזין תאריך לידה תקין לחונך/ת." });
+      return;
+    }
+    if (age < MIN_MENTOR_REGISTRATION_AGE) {
+      setMessage({ type: "error", text: `ההרשמה כחונך אפשרית מגיל ${MIN_MENTOR_REGISTRATION_AGE} בלבד.` });
       return;
     }
 
@@ -630,6 +637,11 @@ export default function MentorOnboardingPage() {
     event.preventDefault();
     setMessage(null);
 
+    if (!emailConfirmed) {
+      setMessage({ type: "error", text: "כתובת האימייל טרם אומתה. יש לפתוח את הודעת האימות שנשלחה אליכם לפני שליחת הפרופיל לבדיקה." });
+      return;
+    }
+
     const requiredChecks = [
       Boolean(firstName.trim() && lastName.trim() && birthDate),
       Object.keys(selectedSubjects).length > 0,
@@ -674,6 +686,9 @@ export default function MentorOnboardingPage() {
 
   return (
     <MentorPageShell eyebrow="מסע הרשמה" title="השלמת פרופיל לחונך" description="הזינו את הפרטים בשבעה שלבים קצרים, מכל מכשיר, והמידע ישמר אוטומטית.">
+      <div className={`mb-5 rounded-2xl border p-4 font-bold ${emailConfirmed ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+        {emailConfirmed ? "כתובת האימייל אומתה בהצלחה." : "כתובת האימייל טרם אומתה. ניתן להשלים פרטים, אך לא לשלוח את הפרופיל לבדיקת מנהל."}
+      </div>
       <div className="mb-8 rounded-3xl border border-blue-100 bg-white p-6 shadow-lg">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>

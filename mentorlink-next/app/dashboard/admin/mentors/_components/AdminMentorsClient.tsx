@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Status = "pending_review" | "approved" | "published" | "paused";
+type Status = "draft" | "pending_review" | "approved" | "published" | "paused" | "rejected";
 type Summary = {
   userId: string;
   firstName: string | null;
@@ -14,6 +14,12 @@ type Summary = {
   submittedAt: string | null;
   isMinor: boolean | null;
   status: Status;
+};
+type Registration = Summary & {
+  email: string | null; phone: string | null; school: string | null; createdAt: string;
+  emailConfirmed: boolean; parentConsentStatus: string | null;
+  stage: "blocked_age" | "awaiting_email" | "incomplete" | "awaiting_parent_request" | "awaiting_parent_consent" | "ready_for_review" | "pending_review" | "active" | "inactive";
+  stageLabel: string; lastCompletedStep: string; hasPendingSensitiveChanges: boolean;
 };
 type Detail = {
   userId: string;
@@ -76,13 +82,14 @@ async function authorizedGet(path: string) {
   });
   const body = await response.json();
   if (!response.ok) throw new Error(response.status === 401 ? "AUTHENTICATION_REQUIRED" : body.error ?? "Request failed");
-  return body as { mentors?: Summary[]; fieldChangeMentors?: Summary[]; publicationMentors?: Summary[]; mentor?: Detail };
+  return body as { mentors?: Summary[]; fieldChangeMentors?: Summary[]; publicationMentors?: Summary[]; registrations?: Registration[]; mentor?: Detail };
 }
 
 export default function AdminMentorsClient({ userId }: { userId?: string }) {
   const [mentors, setMentors] = useState<Summary[] | null>(null);
   const [fieldChangeMentors, setFieldChangeMentors] = useState<Summary[] | null>(null);
   const [publicationMentors, setPublicationMentors] = useState<Summary[] | null>(null);
+  const [registrations, setRegistrations] = useState<Registration[] | null>(null);
   const [mentor, setMentor] = useState<Detail | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -95,6 +102,7 @@ export default function AdminMentorsClient({ userId }: { userId?: string }) {
           setMentors(body.mentors ?? []);
           setFieldChangeMentors(body.fieldChangeMentors ?? []);
           setPublicationMentors(body.publicationMentors ?? []);
+          setRegistrations(body.registrations ?? []);
         }
       })
       .catch((reason: unknown) => {
@@ -115,22 +123,44 @@ export default function AdminMentorsClient({ userId }: { userId?: string }) {
         </header>
         {error ? <ErrorPanel message={error} /> : null}
         {!error && userId && !mentor ? <Loading /> : null}
-        {!error && !userId && (mentors === null || fieldChangeMentors === null || publicationMentors === null) ? <Loading /> : null}
+        {!error && !userId && (mentors === null || fieldChangeMentors === null || publicationMentors === null || registrations === null) ? <Loading /> : null}
         {!error && mentor ? <DetailView mentor={mentor} /> : null}
-        {!error && mentors && fieldChangeMentors && publicationMentors ? <QueueView pending={mentors} fieldChanges={fieldChangeMentors} publication={publicationMentors} /> : null}
+        {!error && mentors && fieldChangeMentors && publicationMentors && registrations ? <QueueView registrations={registrations} /> : null}
       </div>
     </main>
   );
 }
 
-function QueueView({ pending, fieldChanges, publication }: { pending: Summary[]; fieldChanges: Summary[]; publication: Summary[] }) {
+function QueueView({ registrations }: { registrations: Registration[] }) {
+  const [tab, setTab] = useState<"new" | "review" | "changes" | "active" | "inactive">("new");
+  const [query, setQuery] = useState("");
+  const groups = {
+    new: registrations.filter((mentor) => ["blocked_age", "awaiting_email", "incomplete", "awaiting_parent_request", "awaiting_parent_consent", "ready_for_review"].includes(mentor.stage)),
+    review: registrations.filter((mentor) => mentor.stage === "pending_review"),
+    changes: registrations.filter((mentor) => mentor.hasPendingSensitiveChanges),
+    active: registrations.filter((mentor) => mentor.stage === "active" && !mentor.hasPendingSensitiveChanges),
+    inactive: registrations.filter((mentor) => mentor.stage === "inactive"),
+  };
+  const tabs = [
+    ["new", "נרשמים חדשים"], ["review", "חונכים חדשים לאישור"], ["changes", "שינויים רגישים לאישור"], ["active", "חונכים פעילים"], ["inactive", "חשבונות לא פעילים"],
+  ] as const;
+  const normalized = query.trim().toLocaleLowerCase("he");
+  const visible = groups[tab].filter((mentor) => !normalized || [mentor.firstName, mentor.lastName, mentor.email, mentor.phone, mentor.school, mentor.city, mentor.stageLabel].some((value) => value?.toLocaleLowerCase("he").includes(normalized)));
   return (
-    <div className="space-y-10">
-      <QueueSection title="Pending mentor reviews" empty="There are no mentor profiles awaiting review." mentors={pending} />
-      <QueueSection title="Pending critical field changes" empty="There are no critical field changes awaiting review." mentors={fieldChanges} />
-      <QueueSection title="Publication management" empty="There are no approved or published mentors to manage." mentors={publication} />
+    <div dir="rtl" className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{tabs.map(([key, label]) => <button key={key} onClick={() => setTab(key)} className={`rounded-2xl border p-4 text-right font-extrabold ${tab === key ? "border-blue-700 bg-blue-700 text-white" : "bg-white text-slate-800"}`}><span className="block text-2xl">{groups[key].length}</span>{label}</button>)}</div>
+      <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי שם, טלפון, דוא״ל, בית ספר או סטטוס" className="w-full rounded-2xl border bg-white px-5 py-4" />
+      {!visible.length ? <div className="rounded-2xl border bg-white p-6 text-slate-600">אין חשבונות בקטגוריה זו.</div> : <div className="grid gap-4">{visible.map((mentor) => <RegistrationCard key={mentor.userId} mentor={mentor} />)}</div>}
     </div>
   );
+}
+function RegistrationCard({ mentor }: { mentor: Registration }) {
+  const canOpen = ["pending_review", "approved", "published", "paused"].includes(mentor.status);
+  const content = <>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{[mentor.firstName, mentor.lastName].filter(Boolean).join(" ") || "שם טרם הוזן"}</h3><p className="mt-1 text-slate-600">{mentor.email ?? "אין דוא״ל"} · {mentor.phone ?? "אין טלפון"}</p></div><span className={`rounded-full px-3 py-1 text-sm font-bold ${mentor.stage === "active" ? "bg-emerald-100 text-emerald-800" : mentor.stage === "blocked_age" || mentor.stage === "inactive" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"}`}>{mentor.stageLabel}</span></div>
+    <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3"><p><b>נוצר:</b> {formatDate(mentor.createdAt)}</p><p><b>מייל:</b> {mentor.emailConfirmed ? "אומת" : "טרם אומת"}</p><p><b>אישור הורה:</b> {mentor.parentConsentStatus ?? "טרם נפתח"}</p><p><b>שלב אחרון:</b> {mentor.lastCompletedStep}</p><p><b>בית ספר:</b> {mentor.school ?? "טרם הוזן"}</p><p><b>עיר:</b> {mentor.city ?? "טרם הוזנה"}</p></div>
+  </>;
+  return canOpen ? <Link href={`/dashboard/admin/mentors/${mentor.userId}`} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-blue-400">{content}</Link> : <article className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{content}<p className="mt-4 text-xs text-slate-500">החשבון גלוי למנהל כבר עכשיו; בדיקת החונך תיפתח לאחר השלמת ההרשמה ושליחה לבדיקה.</p></article>;
 }
 function QueueSection({ title, empty, mentors }: { title: string; empty: string; mentors: Summary[] }) {
   return (
