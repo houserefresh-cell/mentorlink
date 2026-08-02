@@ -52,7 +52,7 @@ const STEP_META: Array<{ key: StepKey; title: string; description: string }> = [
   { key: "availability", title: "זמינות", description: "קבעו את הימים, השעות והסוגים של הפגישות." },
   { key: "experience", title: "ניסיון והצגה עצמית", description: "ספרו על הרקע, החוזקות והסגנון שלכם." },
   { key: "photo", title: "תמונת פרופיל", description: "העלו תמונה ברורה ואמינה למשפחות." },
-  { key: "summary", title: "סיכום ואישור", description: "בדקו את הפרטים ומשכו את התהליך לפרסום." },
+  { key: "summary", title: "סיכום ואישור", description: "בדקו את הפרטים והשלימו את דרישות האישור לפני שליחה לבדיקת מנהל." },
 ];
 
 const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
@@ -121,16 +121,23 @@ export default function MentorOnboardingPage() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
 
-  const progressPercent = useMemo(() => {
-    const completed = [
+  const requiredProfileChecks = useMemo(() => [
       Boolean(firstName.trim() && lastName.trim() && birthDate),
       Object.keys(selectedSubjects).length > 0,
       Boolean(city.trim() && locationsSchools.length > 0 && meetingPlaces.length > 0),
       Boolean(Object.keys(schedule).length || flexible),
       Boolean(bio.trim() && motivation.trim() && mentoringTypes.length > 0),
-    ].filter(Boolean).length;
-    return Math.round((completed / 5) * 100);
-  }, [birthDate, bio, city, firstName, flexible, lastName, locationsSchools.length, meetingPlaces.length, motivation, mentoringTypes.length, schedule, selectedSubjects]);
+    ], [birthDate, bio, city, firstName, flexible, lastName, locationsSchools.length, meetingPlaces.length, motivation, mentoringTypes.length, schedule, selectedSubjects]);
+
+  const profileDetailsComplete = requiredProfileChecks.every(Boolean);
+  const parentConsentComplete = isMinor !== true || consentStatus === "approved";
+  const readyForReview = profileDetailsComplete && emailConfirmed && parentConsentComplete;
+
+  const progressPercent = useMemo(() => {
+    const requirements = [...requiredProfileChecks, emailConfirmed];
+    if (isMinor === true) requirements.push(consentStatus === "approved");
+    return Math.round((requirements.filter(Boolean).length / requirements.length) * 100);
+  }, [consentStatus, emailConfirmed, isMinor, requiredProfileChecks]);
 
   function getConsentStatusLabel(status: string, minor: boolean | null) {
     if (minor === false) return "לא נדרש";
@@ -642,15 +649,7 @@ export default function MentorOnboardingPage() {
       return;
     }
 
-    const requiredChecks = [
-      Boolean(firstName.trim() && lastName.trim() && birthDate),
-      Object.keys(selectedSubjects).length > 0,
-      Boolean(city.trim() && locationsSchools.length > 0 && meetingPlaces.length > 0),
-      Boolean(Object.keys(schedule).length || flexible),
-      Boolean(bio.trim() && motivation.trim() && mentoringTypes.length > 0),
-    ];
-
-    if (requiredChecks.some((value) => value === false)) {
+    if (!profileDetailsComplete) {
       setMessage({ type: "error", text: "יש להשלים את כל שלבי החובה לפני שליחה לאישור." });
       return;
     }
@@ -695,7 +694,9 @@ export default function MentorOnboardingPage() {
             <p className="font-bold text-blue-700">התקדמות</p>
             <h2 className="text-2xl font-extrabold">{step.title}</h2>
           </div>
-          <div className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">{progressPercent}% הושלם</div>
+          <div className={`rounded-full px-4 py-2 text-sm font-bold ${readyForReview ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+            {readyForReview ? "כל הדרישות הושלמו" : `${progressPercent}% הושלם`}
+          </div>
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-slate-200">
           <div className="h-full rounded-full bg-blue-600 transition-all" style={{ width: `${progressPercent}%` }} />
@@ -908,7 +909,6 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 6 && (
           <form onSubmit={submitForReview} className="space-y-6">
-            <WebPushControls compact />
             <div className="rounded-3xl border border-blue-100 bg-slate-50 p-6">
               <h3 className="text-xl font-extrabold">סיכום פרטי ההרשמה</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -919,7 +919,42 @@ export default function MentorOnboardingPage() {
               </div>
               <p className="mt-4 text-sm text-slate-600">המידע נשמר באופן מקומי ברשומה שלך ב-Supabase, והוא זמין לעריכה גם מהדשבורד בהמשך.</p>
             </div>
-            <SavePanel saving={submitting} message={message} label="שליחה לאישור" />
+
+            {isMinor === true && (
+              <div className={`rounded-3xl border p-6 ${consentStatus === "approved" ? "border-emerald-300 bg-emerald-50" : consentStatus === "declined" ? "border-red-300 bg-red-50" : "border-amber-300 bg-amber-50"}`}>
+                <p className="text-sm font-bold text-slate-600">שלב חובה לחונך קטין</p>
+                <h3 className="mt-1 text-xl font-extrabold">
+                  {consentStatus === "approved" ? "אישור ההורה התקבל" : consentStatus === "sent" ? "ממתינים לאישור ההורה" : consentStatus === "declined" ? "בקשת אישור ההורה נדחתה" : "נדרש אישור הורה"}
+                </h3>
+                <p className="mt-2 text-slate-700">
+                  {consentStatus === "approved"
+                    ? "אפשר לשלוח את הפרופיל לבדיקת מנהל."
+                    : consentStatus === "sent"
+                      ? "הבקשה נשלחה. אפשר לבדוק את הסטטוס או לשלוח בקשה חדשה מעמוד אישור ההורה."
+                      : "כדי להשלים את ההרשמה יש להזין את פרטי ההורה ולשלוח אליו בקשת אישור."}
+                </p>
+                {consentStatus !== "approved" && (
+                  <Link href="/dashboard/mentor/parent-consent" className="mt-4 inline-flex rounded-xl bg-amber-600 px-5 py-3 font-bold text-white transition hover:bg-amber-700">
+                    {consentStatus === "sent" ? "בדיקת סטטוס אישור ההורה" : "מילוי פרטי ההורה ושליחת בקשה"}
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {!emailConfirmed && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 font-bold text-amber-900">
+                לפני השליחה יש לאמת את כתובת האימייל דרך ההודעה שנשלחה אליכם.
+              </div>
+            )}
+
+            <SavePanel saving={submitting} message={message} label="שליחת הפרופיל לבדיקת מנהל" disabled={!readyForReview} />
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6">
+              <p className="text-sm font-bold text-slate-500">אופציונלי — לא נדרש להשלמת ההרשמה</p>
+              <h3 className="mt-1 text-lg font-extrabold">התראות למכשיר</h3>
+              <p className="mt-1 text-sm text-slate-600">אפשר להפעיל התראות עכשיו או בכל שלב מאוחר יותר.</p>
+              <div className="mt-4"><WebPushControls compact /></div>
+            </div>
             <div className="flex justify-between gap-3">
               <button type="button" onClick={() => setActiveStep(5)} className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">חזרה לשלב הקודם</button>
               <Link href="/dashboard/mentor" className="rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-700">מעבר לדשבורד</Link>

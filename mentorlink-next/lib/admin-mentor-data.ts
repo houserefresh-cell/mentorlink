@@ -35,9 +35,11 @@ export type MentorRegistrationSummary = MentorSummary & {
   stageLabel: string;
   lastCompletedStep: string;
   hasPendingSensitiveChanges: boolean;
+  accountControlStatus: "active" | "suspended" | "blocked";
 };
 export type AdminMentorDetail = {
   userId: string;
+  email: string | null;
   status: AdminMentorStatus;
   submittedAt: string | null;
   publishedAt: string | null;
@@ -56,6 +58,8 @@ export type AdminMentorDetail = {
   isMinor: boolean | null;
   photoUrl: string | null;
   pendingChanges: Array<{ id: string; fieldName: string; currentValue: unknown; requestedValue: unknown; requestedAt: string }>;
+  accountControl: { status: "active" | "suspended" | "blocked"; reason: string | null; suspendedUntil: string | null; actedAt: string } | null;
+  accountHistory: Array<{ id: string; action: string; reason: string; createdAt: string; metadata: Record<string, unknown> }>;
 };
 
 function check(context: string, error: { message: string } | null) {
@@ -81,7 +85,7 @@ export async function getAllMentorRegistrations(
   const mentors = authUsers.filter((user) => user.id !== administratorUserId && user.user_metadata?.role === "mentor");
   if (!mentors.length) return [];
   const ids = mentors.map((user) => user.id);
-  const [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult] = await Promise.all([
+  const [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult, controlsResult] = await Promise.all([
     admin.from("mentor_profiles").select("user_id, first_name, last_name, birth_date, city, school, phone, bio").in("user_id", ids),
     admin.from("mentor_publication").select("user_id, submitted_at, status").in("user_id", ids),
     admin.from("mentor_parent_consents").select("user_id, status").in("user_id", ids),
@@ -90,8 +94,9 @@ export async function getAllMentorRegistrations(
     admin.from("mentor_availability").select("user_id").in("user_id", ids),
     admin.from("mentor_experience").select("user_id").in("user_id", ids),
     admin.from("mentor_public_pending_changes").select("mentor_user_id").eq("status", "pending").in("mentor_user_id", ids),
+    admin.from("mentor_account_controls").select("user_id, status").in("user_id", ids),
   ]);
-  for (const result of [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult]) check("Unable to load registration status", result.error);
+  for (const result of [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult, controlsResult]) check("Unable to load registration status", result.error);
   const byId = <T extends Record<string, unknown>>(rows: T[], key: keyof T) => new Map(rows.map((row) => [String(row[key]), row]));
   const profiles = byId((profilesResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
   const publications = byId((publicationsResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
@@ -101,6 +106,7 @@ export async function getAllMentorRegistrations(
   const availabilityIds = new Set((availabilityResult.data ?? []).map((row) => row.user_id));
   const experienceIds = new Set((experienceResult.data ?? []).map((row) => row.user_id));
   const sensitiveIds = new Set((changesResult.data ?? []).map((row) => row.mentor_user_id));
+  const controls = byId((controlsResult.data ?? []) as Array<Record<string, unknown>>, "user_id");
   return mentors.map((user) => {
     const profile = profiles.get(user.id);
     const publication = publications.get(user.id);
@@ -124,6 +130,7 @@ export async function getAllMentorRegistrations(
       stage, stageLabel: MENTOR_REGISTRATION_STAGE_LABELS[stage],
       lastCompletedStep: completed.at(-1) ?? "יצירת חשבון",
       hasPendingSensitiveChanges: sensitiveIds.has(user.id),
+      accountControlStatus: (controls.get(user.id)?.status as "active" | "suspended" | "blocked" | undefined) ?? "active",
     };
   }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
@@ -207,14 +214,15 @@ export async function getAdminMentorDetail(
   admin: AdminReviewDataClient,
 ): Promise<AdminMentorDetail | null> {
   if (userId === administratorUserId) return null;
+  const authUser = await admin.auth.admin.getUserById(userId);
+  check("Unable to load mentor account", authUser.error);
+  if (!authUser.data.user || authUser.data.user.user_metadata?.role !== "mentor") return null;
   const publication = await admin
     .from("mentor_publication")
     .select("submitted_at, status, published_at")
     .eq("user_id", userId)
-    .in("status", ["pending_review", "approved", "published", "paused"])
     .maybeSingle();
   check("Unable to verify administrator review", publication.error);
-  if (!publication.data) return null;
   const results = await Promise.all([
     admin.from("mentor_profiles").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_subjects").select("subject_id, custom_subject, age_groups, subjects(name)").eq("user_id", userId).order("subject_id"),
@@ -224,10 +232,12 @@ export async function getAdminMentorDetail(
     admin.from("mentor_preferences").select("*").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_parent_consents").select("status, parent_name, parent_relationship, details_confirmed, participation_confirmed, contact_confirmed, consent_requested_at, consented_at, declined_at, consent_version").eq("user_id", userId).maybeSingle(),
     admin.from("mentor_public_pending_changes").select("id, field_name, current_value, requested_value, requested_at").eq("mentor_user_id", userId).eq("status", "pending").order("requested_at"),
+    admin.from("mentor_account_controls").select("status, reason, suspended_until, acted_at").eq("user_id", userId).maybeSingle(),
+    admin.from("mentor_account_admin_events").select("id, action, reason, created_at, metadata").eq("target_user_id", userId).order("created_at", { ascending: false }).limit(50),
   ]);
   const failure = results.find((result) => result.error);
   check("Unable to load mentor review", failure?.error ?? null);
-  const [profileResult, subjectsResult, availability, locations, experience, preferences, parentConsent, pendingChanges] = results;
+  const [profileResult, subjectsResult, availability, locations, experience, preferences, parentConsent, pendingChanges, accountControl, accountHistory] = results;
   const profile = (profileResult.data as Record<string, unknown> | null) ?? null;
   const subjects = ((subjectsResult.data ?? []) as Array<{
     subject_id: number;
@@ -250,9 +260,10 @@ export async function getAdminMentorDetail(
   }
   return {
     userId,
-    status: publication.data.status as AdminMentorStatus,
-    submittedAt: publication.data.submitted_at,
-    publishedAt: publication.data.published_at,
+    email: authUser.data.user.email ?? null,
+    status: (publication.data?.status ?? "draft") as AdminMentorStatus,
+    submittedAt: publication.data?.submitted_at ?? null,
+    publishedAt: publication.data?.published_at ?? null,
     profile,
     subjects,
     availability: (availability.data as Record<string, unknown> | null) ?? null,
@@ -263,5 +274,7 @@ export async function getAdminMentorDetail(
     isMinor: minor(profile?.birth_date),
     photoUrl,
     pendingChanges: ((pendingChanges.data ?? []) as Array<{ id: string; field_name: string; current_value: unknown; requested_value: unknown; requested_at: string }>).map((change) => ({ id: change.id, fieldName: change.field_name, currentValue: change.current_value, requestedValue: change.requested_value, requestedAt: change.requested_at })),
+    accountControl: accountControl.data ? { status: accountControl.data.status, reason: accountControl.data.reason, suspendedUntil: accountControl.data.suspended_until, actedAt: accountControl.data.acted_at } : null,
+    accountHistory: ((accountHistory.data ?? []) as Array<{ id: string; action: string; reason: string; created_at: string; metadata: Record<string, unknown> }>).map((event) => ({ id: event.id, action: event.action, reason: event.reason, createdAt: event.created_at, metadata: event.metadata ?? {} })),
   };
 }
