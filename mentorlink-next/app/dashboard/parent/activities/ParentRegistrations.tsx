@@ -1,14 +1,219 @@
-"use client";
-import { useEffect, useState } from "react";
+﻿"use client";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Registration = { id: string; child_first_name: string; status: string; activity: { title: string; status: string; venue_name: string | null; location_type: string } | null; sessions: { starts_at: string; ends_at: string }[] };
-const status: Record<string, { label: string; style: string }> = { registered: { label: "רשום/ה", style: "bg-green-100 text-green-800" }, waitlisted: { label: "רשימת המתנה", style: "bg-amber-100 text-amber-900" }, cancelled: { label: "בוטלה", style: "bg-red-100 text-red-800" } };
+type Registration = {
+  id: string;
+  child_first_name: string;
+  status: string;
+  activity: {
+    title: string;
+    status: string;
+    description: string | null;
+    venue_name: string | null;
+    location_type: string;
+    location_details: string | null;
+    address: string | null;
+    equipment: string | null;
+    price: number | null;
+    is_free: boolean | null;
+    min_participants: number | null;
+    max_participants: number | null;
+    minimum_age: number | null;
+    maximum_age: number | null;
+    suitable_grades: string[] | null;
+    cancellation_policy: string | null;
+    registeredCount: number;
+    waitlistedCount: number;
+    availablePlaces: number;
+    mentor_first_name: string | null;
+    mentor_last_name: string | null;
+    mentor_phone: string | null;
+    mentor_city: string | null;
+  } | null;
+  sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
+};
+
+type Tabs = "all" | "closest" | "future" | "awaiting" | "cancelled" | "completed";
+
+const status: Record<string, { label: string; style: string }> = {
+  registered: { label: "רשום/ה", style: "bg-green-100 text-green-800" },
+  waitlisted: { label: "רשימת המתנה", style: "bg-amber-100 text-amber-900" },
+  cancelled: { label: "בוטלה", style: "bg-red-100 text-red-800" },
+};
+
+const tabs: Array<{ key: Tabs; label: string }> = [
+  { key: "all", label: "הכול" },
+  { key: "closest", label: "הקרובות" },
+  { key: "future", label: "עתידיות" },
+  { key: "awaiting", label: "ממתינות" },
+  { key: "cancelled", label: "בוטלו" },
+  { key: "completed", label: "הושלמו" },
+];
+
+const locationLabels: Record<string, string> = {
+  mentor_home: "בית החונך",
+  mentee_home: "בית החניך",
+  school: "בית ספר",
+  public_place: "מקום ציבורי",
+  sports_park: "ספורטק",
+  community_center: "מרכז קהילתי",
+  sports_complex: "מתחם ספורט",
+  online: "מקוון",
+  other: "מקום אחר",
+};
+
 export default function ParentRegistrations() {
- const [rows,setRows]=useState<Registration[]>([]),[loading,setLoading]=useState(true),[message,setMessage]=useState("");
- async function load(){setLoading(true);const token=(await supabase.auth.getSession()).data.session?.access_token;const response=await fetch("/api/parent/activity-registrations",{headers:{Authorization:`Bearer ${token}`},cache:"no-store"});if(response.ok)setRows((await response.json()).registrations??[]);else setMessage("לא ניתן לטעון את ההרשמות כרגע.");setLoading(false);}
- useEffect(()=>{void load();},[]);
- async function cancel(id:string){if(!confirm("לבטל את ההרשמה של הילד/ה לפעילות?"))return;const token=(await supabase.auth.getSession()).data.session?.access_token;const response=await fetch(`/api/parent/activity-registrations?registrationId=${id}`,{method:"DELETE",headers:{Authorization:`Bearer ${token}`}});setMessage(response.ok?"ההרשמה בוטלה.":"לא ניתן לבטל את ההרשמה.");if(response.ok)await load();}
- if(loading)return <p className="mt-8 rounded-2xl bg-white p-6 font-bold">טוען הרשמות...</p>;
- return <div className="mt-8">{message&&<p role="status" className="mb-4 rounded-xl bg-blue-50 p-4 font-bold text-blue-900">{message}</p>}{rows.length?<div className="grid gap-5 md:grid-cols-2">{rows.map((row)=>{const next=row.sessions.find((session)=>new Date(session.starts_at)>new Date());const badge=status[row.status]??status.cancelled;return <article key={row.id} className="rounded-3xl border bg-white p-6 shadow-sm"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-violet-700">עבור {row.child_first_name}</p><h2 className="mt-1 text-2xl font-black">{row.activity?.title??"פעילות"}</h2></div><span className={`rounded-full px-3 py-1 text-sm font-black ${badge.style}`}>{badge.label}</span></div>{next&&<div className="mt-5 rounded-2xl bg-blue-700 p-4 text-white"><p className="font-black">המפגש הקרוב</p><p>{new Intl.DateTimeFormat("he-IL",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit"}).format(new Date(next.starts_at))}</p></div>}{row.status!=="cancelled"&&<button onClick={()=>cancel(row.id)} className="mt-5 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700">ביטול הרשמה לילד/ה</button>}</article>})}</div>:<div className="rounded-3xl border border-dashed bg-white p-10 text-center"><h2 className="text-xl font-black">עדיין אין הרשמות לפעילויות</h2><p className="mt-2 text-slate-600">הפעילויות שתבחרו יופיעו כאן לפי הילדים.</p></div>}</div>;
+  const [rows, setRows] = useState<Registration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+  const [details, setDetails] = useState<Registration | null>(null);
+  const [view, setView] = useState<Tabs>("all");
+
+  async function load() {
+    setLoading(true);
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const response = await fetch("/api/parent/activity-registrations", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    if (response.ok) setRows((await response.json()).registrations ?? []);
+    else setMessage("לא ניתן לטעון את ההרשמות כרגע.");
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const nextByRow = useMemo(() => {
+    return Object.fromEntries(rows.map((row) => [row.id, row.sessions.find((session) => new Date(session.starts_at) > new Date()) ?? null]));
+  }, [rows]);
+
+  const visibleRows = useMemo(() => {
+    const sorted = [...rows].sort((left, right) => {
+      const leftNext = nextByRow[left.id];
+      const rightNext = nextByRow[right.id];
+      if (leftNext && rightNext) return new Date(leftNext.starts_at).getTime() - new Date(rightNext.starts_at).getTime();
+      if (leftNext && !rightNext) return -1;
+      if (!leftNext && rightNext) return 1;
+      return (left.activity?.title ?? "").localeCompare(right.activity?.title ?? "");
+    });
+
+    const tabbed = sorted.filter((row) => {
+      const next = nextByRow[row.id];
+      const completed = row.status === "cancelled" || row.activity?.status === "completed" || !next;
+      if (view === "closest") return Boolean(next) && sorted[0]?.id === row.id;
+      if (view === "future") return Boolean(next) && !completed && row.status !== "waitlisted";
+      if (view === "awaiting") return row.status === "waitlisted";
+      if (view === "cancelled") return row.status === "cancelled";
+      if (view === "completed") return completed;
+      return true;
+    });
+
+    return tabbed;
+  }, [nextByRow, rows, view]);
+
+  async function cancel(id: string) {
+    if (!confirm("לבטל את ההרשמה של הילד/ה לפעילות?")) return;
+    const token = (await supabase.auth.getSession()).data.session?.access_token;
+    const response = await fetch(`/api/parent/activity-registrations?registrationId=${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    setMessage(response.ok ? "ההרשמה בוטלה." : "לא ניתן לבטל את ההרשמה.");
+    if (response.ok) await load();
+  }
+
+  if (loading) return <p className="mt-8 rounded-2xl bg-white p-6 font-bold">טוען הרשמות...</p>;
+
+  return (
+    <div className="mt-8">
+      {message && <p role="status" className="mb-4 rounded-xl bg-blue-50 p-4 font-bold text-blue-900">{message}</p>}
+      {rows.length ? (
+        <div className="space-y-5">
+          <div className="flex flex-wrap gap-2 rounded-2xl border bg-white p-3 shadow-sm">
+            {tabs.map((tab) => (
+              <button key={tab.key} type="button" onClick={() => setView(tab.key)} className={`rounded-full px-4 py-2 text-sm font-black transition ${view === tab.key ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-700"}`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {visibleRows.map((row) => {
+              const next = nextByRow[row.id];
+              const badge = status[row.status] ?? status.cancelled;
+              return (
+                <article key={row.id} className="rounded-3xl border bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-violet-700">עבור {row.child_first_name}</p>
+                      <h2 className="mt-1 text-2xl font-black">{row.activity?.title ?? "פעילות"}</h2>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-sm font-black ${badge.style}`}>{badge.label}</span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+                    <Info label="מקומות פנויים" value={String(row.activity?.availablePlaces ?? 0)} />
+                    <Info label="מעמד" value={row.activity?.registeredCount ? `רשומים ${row.activity.registeredCount}` : "טרם נפתחו הרשמות"} />
+                  </div>
+
+                  {next && (
+                    <div className="mt-5 rounded-2xl bg-blue-700 p-4 text-white">
+                      <p className="font-black">המפגש הקרוב</p>
+                      <p className="mt-1 text-lg font-black">{dateLabel(next.starts_at)}</p>
+                      <p className="text-xl font-black">{timeLabel(next.starts_at)}–{timeLabel(next.ends_at)}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <button type="button" onClick={() => setDetails(row)} className="rounded-xl border border-blue-300 px-4 py-2 font-black text-blue-800">פרטי הפעילות</button>
+                    {row.status !== "cancelled" && (
+                      <button type="button" onClick={() => cancel(row.id)} className="rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700">ביטול הרשמה לילד/ה</button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-3xl border border-dashed bg-white p-10 text-center">
+          <h2 className="text-xl font-black">עדיין אין הרשמות לפעילויות</h2>
+          <p className="mt-2 text-slate-600">הפעילויות שתבחרו יופיעו כאן לפי הילדים.</p>
+        </div>
+      )}
+
+      {details && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => event.target === event.currentTarget && setDetails(null)}>
+          <section role="dialog" aria-modal="true" aria-label="פרטי הפעילות" className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white shadow-2xl">
+            <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-5">
+              <h2 className="text-2xl font-black">{details.activity?.title ?? "פרטי פעילות"}</h2>
+              <button onClick={() => setDetails(null)} aria-label="סגירת החלון" className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-2xl font-black">×</button>
+            </header>
+            <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7">
+              <Detail title="תיאור" value={details.activity?.description ?? "לא צוינו פרטי פעילות."} wide />
+              <Detail title="מועד" value={details.sessions.map((session) => `${dateLabel(session.starts_at)}, ${timeLabel(session.starts_at)}–${timeLabel(session.ends_at)}`).join("\n")} wide />
+              <Detail title="מיקום" value={[locationLabels[details.activity?.location_type ?? "other"] ?? "מקום אחר", details.activity?.venue_name, details.activity?.location_details].filter(Boolean).join(" · ")} />
+              <Detail title="חונך" value={[details.activity?.mentor_first_name, details.activity?.mentor_last_name].filter(Boolean).join(" ") || "לא נקבע"} />
+              <Detail title="מחיר" value={details.activity?.is_free ? "ללא עלות" : `${details.activity?.price ?? 0} ₪`} />
+              <Detail title="ציוד" value={details.activity?.equipment || "לא נדרש להביא ציוד"} />
+              <Detail title="כמות" value={`${details.activity?.min_participants ?? 0}–${details.activity?.max_participants ?? 0}`} />
+              <Detail title="סטטוס" value={details.activity?.status === "published" ? "פורסם" : details.activity?.status ?? "לא ידוע"} />
+              <Detail title="רשומים" value={`${details.activity?.registeredCount ?? 0}`} />
+              <Detail title="מקומות פנויים" value={`${details.activity?.availablePlaces ?? 0}`} />
+              <Detail title="טלפון לחונך" value={details.activity?.mentor_phone || "מספר הטלפון מוסתר על פי מדיניות הפעילות"} wide />
+              <Detail title="מדיניות ביטול" value={details.activity?.cancellation_policy || "לא צוינה מדיניות ביטול"} wide />
+            </div>
+          </section>
+        </div>
+      )}
+    </div>
+  );
 }
+
+function Detail({ title, value, wide }: { title: string; value: string; wide?: boolean }) {
+  return <div className={`rounded-2xl border border-blue-100 bg-blue-50/60 p-4 ${wide ? "sm:col-span-2" : ""}`}><h3 className="font-black text-blue-900">{title}</h3><p className="mt-1 whitespace-pre-line leading-7 text-slate-700">{value}</p></div>;
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">{label}</span><strong className="block">{value}</strong></div>;
+}
+
+function dateLabel(value: string) { return new Intl.DateTimeFormat("he-IL", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(value)); }
+function timeLabel(value: string) { return new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }

@@ -7,6 +7,7 @@ import PublicMentorDirectory from "@/app/_components/PublicMentorDirectory";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 
 type Child = { id: string; first_name: string; grade: string | null; birth_date: string | null; school_name: string | null; accommodation_notes: string | null; interests: { subjectId: number; name?: string; category?: string }[] };
+type RegistrationStatus = { id: string; activity_id: string; child_id: string; child_first_name: string; status: string };
 type Session = { starts_at: string; ends_at: string; estimated_overrun: string };
 type Activity = {
   id: string; title: string; description: string; subjectId: number | null; subjectName: string; mentorName: string; mentorBookingId: string | null; city: string | null;
@@ -24,7 +25,7 @@ const locationLabels: Record<string, string> = { mentor_home: "בית החונך
 const accessibilityLabels: Record<string, string> = { wheelchair: "נגישות לכיסא גלגלים", accessible_restroom: "שירותים נגישים", accessible_parking: "חניה נגישה", visual_impairment: "התאמה ללקות ראייה", hearing_impairment: "התאמה ללקות שמיעה", written_visual_instructions: "הוראות כתובות או חזותיות", sensory_friendly: "סביבה מותאמת לרגישות חושית", companion_allowed: "אפשרות למלווה", unknown: "מומלץ ליצור קשר לפני ההרשמה" };
 
 export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMentor[] }) {
-  const [activities, setActivities] = useState<Activity[]>([]), [children, setChildren] = useState<Child[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]), [children, setChildren] = useState<Child[]>([]), [registrations, setRegistrations] = useState<RegistrationStatus[]>([]);
   const [selectedChild, setSelectedChild] = useState("all"), [details, setDetails] = useState<Activity | null>(null), [registering, setRegistering] = useState<Activity | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const [showAddChild, setShowAddChild] = useState(false), [newChild, setNewChild] = useState({ firstName: "", grade: "" });
@@ -32,15 +33,29 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
   async function token() { return (await supabase.auth.getSession()).data.session?.access_token ?? ""; }
   async function load() {
     setLoading(true); const accessToken = await token();
-    const [activityResponse, childResponse] = await Promise.all([fetch("/api/parent/activities", { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }), fetch("/api/parent/children", { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" })]);
+    const [activityResponse, childResponse, registrationResponse] = await Promise.all([
+      fetch("/api/parent/activities", { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }),
+      fetch("/api/parent/children", { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }),
+      fetch("/api/parent/activity-registrations", { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }),
+    ]);
     if (activityResponse.ok) setActivities((await activityResponse.json()).activities ?? []); else { const body = await activityResponse.json().catch(() => ({})); setMessage(body.error ?? "לא ניתן לטעון את הפעילויות כרגע."); }
     if (childResponse.ok) setChildren((await childResponse.json()).children ?? []);
+    if (registrationResponse.ok) setRegistrations((await registrationResponse.json()).registrations ?? []); else setRegistrations([]);
     setLoading(false);
   }
   useEffect(() => { void load(); }, []);
+  const registrationState = useMemo(() => {
+    return registrations.reduce<Map<string, Map<string, string>>>((map, row) => {
+      const activityMap = map.get(row.activity_id) ?? new Map<string, string>();
+      activityMap.set(row.child_id, row.status);
+      map.set(row.activity_id, activityMap);
+      return map;
+    }, new Map());
+  }, [registrations]);
   const visible = useMemo(() => { const child = children.find((item) => item.id === selectedChild); if (!child) return activities; const interestIds = new Set(child.interests?.map((interest) => interest.subjectId) ?? []); const score = (activity: Activity) => Number(interestIds.has(activity.subjectId ?? -1)) * 4 + Number(Boolean(child.grade && activity.suitableGrades?.includes(child.grade))) * 2 + Number(!activity.suitableGrades?.length); return [...activities].sort((left, right) => score(right) - score(left)); }, [activities, children, selectedChild]);
   const recommendedMentors = useMemo(() => { const child = children.find((item) => item.id === selectedChild); if (!child?.grade) return mentors; const label = gradeLabels[child.grade]; return [...mentors].sort((left, right) => Number(right.ageGroups.some((value) => value.includes(label))) - Number(left.ageGroups.some((value) => value.includes(label)))); }, [children, mentors, selectedChild]);
   const mentorActivities = useMemo(() => activities.reduce<Record<string, {id:string;title:string;subjectName:string;nextStartAt:string|null;registrationOpen:boolean}[]>>((groups, activity) => { if (!activity.mentorBookingId) return groups; (groups[activity.mentorBookingId] ??= []).push({ id: activity.id, title: activity.title, subjectName: activity.subjectName, nextStartAt: activity.sessions[0]?.starts_at ?? null, registrationOpen: activity.registrationOpen }); return groups; }, {}), [activities]);
+  const activityChildStatus = (activityId: string, childId: string) => registrationState.get(activityId)?.get(childId) ?? null;
 
   async function addChild() {
     setBusy(true); setMessage(""); const accessToken = await token();
@@ -69,7 +84,27 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     {loading ? <p className="py-12 text-center font-bold text-slate-500">טוען פעילויות...</p> : visible.length ? <div className="mt-7 grid auto-rows-fr gap-6 md:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} onDetails={() => setDetails(activity)} onRegister={() => { setRegistering(activity); setSelectedIds(selectedChild === "all" ? [] : [selectedChild]); setMessage(""); }} />)}</div> : <div className="mt-7 rounded-3xl border border-dashed border-blue-300 bg-white p-10 text-center"><p className="text-xl font-black">עדיין אין פעילות מתאימה להצגה</p><p className="mt-2 text-slate-600">אפשר לבחור ילד אחר או לחזור בקרוב לפעילויות חדשות.</p></div>}
     <div className="mt-6 flex justify-end"><Link href="/dashboard/parent/activities" className="font-black text-blue-700 underline">הפעילויות וההרשמות שלי</Link></div>
     {details && <Modal title={details.title} onClose={() => setDetails(null)}><ActivityDetails activity={details} /><button disabled={!details.registrationOpen} onClick={() => { setDetails(null); setRegistering(details); }} className="mt-6 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:bg-slate-300">{details.registrationOpen ? "הרשמה לפעילות" : "ההרשמה לפעילות נסגרה"}</button></Modal>}
-    {registering && <Modal title="את מי תרצו לרשום?" onClose={() => setRegistering(null)}><p className="mb-4 text-slate-600">כל ילד תופס מקום נפרד. ניתן לבחור ילד אחד או כמה ילדים.</p>{children.length ? <div className="grid gap-3">{children.map((child) => <label key={child.id} className="flex cursor-pointer items-center gap-3 rounded-xl border p-4"><input type="checkbox" checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} /><span className="font-black">{child.first_name}</span><span className="text-sm text-slate-500">{child.grade ? `כיתה ${gradeLabels[child.grade]}` : "ללא כיתה"}</span></label>)}</div> : <p className="rounded-xl bg-amber-50 p-4">לפני ההרשמה יש להוסיף ילד/ה לחשבון.</p>}<button onClick={() => setShowAddChild(true)} className="mt-4 font-bold text-blue-700 underline">+ הוספת ילד/ה</button><button disabled={busy || !selectedIds.length} onClick={register} className="mt-5 w-full rounded-xl bg-green-600 px-5 py-3 font-black text-white disabled:bg-slate-300">{busy ? "מבצע הרשמה..." : "אישור הרשמה"}</button></Modal>}
+    {registering && <Modal title="את מי תרצו לרשום?" onClose={() => setRegistering(null)}><p className="mb-4 text-slate-600">כל ילד תופס מקום נפרד. ניתן לבחור ילד אחד או כמה ילדים.</p>{children.length ? <div className="grid gap-3">{children.map((child) => {
+      const status = activityChildStatus(registering.id, child.id);
+      const locked = status === "registered" || status === "waitlisted";
+      const disableReason = status === "registered" ? "כבר רשום/ה" : status === "waitlisted" ? "כבר ברשימת ההמתנה" : null;
+      return <label key={child.id} className={`flex items-center gap-3 rounded-xl border p-4 ${locked ? "bg-slate-100 opacity-70" : "cursor-pointer"}`}>
+        <input type="checkbox" disabled={locked} checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} />
+        <span className="font-black">{child.first_name}</span>
+        <span className="text-sm text-slate-500">{child.grade ? `כיתה ${gradeLabels[child.grade]}` : "ללא כיתה"}</span>
+        {disableReason && <span className="text-sm font-black text-slate-700">{disableReason}</span>}
+      </label>;
+    })}</div> : <p className="rounded-xl bg-amber-50 p-4">לפני ההרשמה יש להוסיף ילד/ה לחשבון.</p>}<button onClick={() => setShowAddChild(true)} className="mt-4 font-bold text-blue-700 underline">+ הוספת ילד/ה</button>{(() => {
+      const selectableIds = selectedIds.filter((id) => {
+        const status = activityChildStatus(registering.id, id);
+        return status !== "registered" && status !== "waitlisted";
+      });
+      const canSubmit = selectableIds.length > 0;
+      return <>
+        <button disabled={busy || !canSubmit} onClick={register} className="mt-5 w-full rounded-xl bg-green-600 px-5 py-3 font-black text-white disabled:bg-slate-300">{busy ? "מבצע הרשמה..." : "אישור הרשמה"}</button>
+        {registering && !canSubmit && <p className="mt-3 text-sm font-bold text-slate-700">הילדים כבר רשומים לפעילות זו.</p>}
+      </>;
+    })()}</Modal>}
     {showAddChild && <Modal title="הוספת ילד/ה" onClose={() => setShowAddChild(false)}><div className="grid gap-4"><label className="grid gap-2 font-bold">שם פרטי<input value={newChild.firstName} onChange={(event) => setNewChild({ ...newChild, firstName: event.target.value })} maxLength={60} className="rounded-xl border p-3" /></label><label className="grid gap-2 font-bold">כיתה (לא חובה)<select value={newChild.grade} onChange={(event) => setNewChild({ ...newChild, grade: event.target.value })} className="rounded-xl border bg-white p-3"><option value="">לא צוינה</option>{Object.entries(gradeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><button disabled={busy || !newChild.firstName.trim()} onClick={addChild} className="rounded-xl bg-blue-700 p-3 font-black text-white disabled:bg-slate-300">שמירת הילד/ה</button></div></Modal>}
     <section className="mt-14 rounded-[2rem] border border-cyan-200 bg-gradient-to-br from-white to-cyan-50 p-6 shadow-sm sm:p-9"><p className="font-black text-cyan-700">ליווי אישי</p><h2 className="mt-2 text-3xl font-black sm:text-4xl">חונכים מומלצים{selectedChild !== "all" ? ` עבור ${children.find((child) => child.id === selectedChild)?.first_name ?? "הילד/ה"}` : ""}</h2><p className="mt-3 max-w-3xl leading-7 text-slate-600">מחפשים עזרה קבועה או מפגש אישי? אפשר לבחור חונך לפי תחום, עיר, גיל החונך ואופן המפגש.</p><div className="mt-7"><PublicMentorDirectory mentors={recommendedMentors} mentorActivities={mentorActivities} expandableFilters/></div></section>
   </section>;

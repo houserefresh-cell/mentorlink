@@ -69,6 +69,7 @@ export function activityPayloadFromRow(row: Record<string, unknown>) {
     accessibilityOptions: row.accessibility_options,
     accessibilityOther: row.accessibility_other,
     cancellationPolicy: row.cancellation_policy,
+    contactPhoneVisibility: row.contact_phone_visibility ?? "registered_parents",
     pickupOptions: row.pickup_options,
     pickupDetails: row.pickup_details,
   };

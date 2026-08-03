@@ -6,6 +6,7 @@ export const ACTIVITY_LOCATIONS = [
 ] as const;
 export const ACTIVITY_OVERRUNS = ["none", "5_10_minutes", "15_20_minutes"] as const;
 export const ACTIVITY_PICKUPS = ["school", "after_school", "home", "other"] as const;
+export const ACTIVITY_CONTACT_VISIBILITIES = ["public", "registered_parents", "mentor_approved"] as const;
 export const ACTIVITY_ACCESSIBILITY = [
   "wheelchair", "accessible_restrooms", "accessible_parking", "visual_impairment",
   "hearing_impairment", "written_visual_instructions", "sensory_friendly",
@@ -45,6 +46,7 @@ export type CleanActivity = {
   equipment: string | null;
   accessibility: string | null;
   cancellation_policy: string | null;
+  contact_phone_visibility: (typeof ACTIVITY_CONTACT_VISIBILITIES)[number];
   pickup_options: string[];
   pickup_details: string | null;
 };
@@ -113,6 +115,7 @@ export function validateActivityInput(
     ? JSON.stringify({ options: accessibilityOptions ?? [], other: accessibilityOther })
     : null;
   const cancellationPolicy = text(payload.cancellationPolicy, 2000);
+  const contactPhoneVisibility = choice(payload.contactPhoneVisibility, ACTIVITY_CONTACT_VISIBILITIES) ?? "registered_parents";
   const pickups = choices(payload.pickupOptions, ACTIVITY_PICKUPS);
   const pickupDetails = text(payload.pickupDetails, 500);
 
@@ -125,6 +128,10 @@ export function validateActivityInput(
     equipment === undefined || accessibilityOptions === null || accessibilityOther === undefined ||
     cancellationPolicy === undefined || pickups === null || pickupDetails === undefined
   ) return invalid("INVALID_ACTIVITY", "Activity fields are invalid");
+
+  if (!ACTIVITY_CONTACT_VISIBILITIES.includes(contactPhoneVisibility)) {
+    return invalid("INVALID_CONTACT_VISIBILITY", "Contact phone visibility is invalid");
+  }
 
   if (title !== null && title.length < 3) return invalid("INVALID_TITLE", "Title is too short");
   if (description !== null && description.length < 10) return invalid("INVALID_DESCRIPTION", "Description is too short");
@@ -173,7 +180,8 @@ export function validateActivityInput(
     min_participants: minimumParticipants, max_participants: maximumParticipants,
     minimum_age: minimumAge, maximum_age: maximumAge, suitable_grades: grades,
     is_free: isFree, price, registration_deadline: deadline, equipment,
-    accessibility, cancellation_policy: cancellationPolicy, pickup_options: pickups,
+    accessibility, cancellation_policy: cancellationPolicy,
+    contact_phone_visibility: contactPhoneVisibility, pickup_options: pickups,
     pickup_details: pickupDetails,
   }, sessions };
 }
