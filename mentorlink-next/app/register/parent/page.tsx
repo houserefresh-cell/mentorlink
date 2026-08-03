@@ -8,6 +8,7 @@ export default function ParentRegisterPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,7 @@ export default function ParentRegisterPage() {
         data: {
           first_name: firstName.trim(),
           last_name: lastName.trim(),
+          phone: phone.trim(),
           role: "parent",
         },
       },
@@ -48,6 +50,7 @@ export default function ParentRegisterPage() {
       setFirstName("");
       setLastName("");
       setEmail("");
+      setPhone("");
       setPassword("");
     }
 
@@ -61,6 +64,7 @@ export default function ParentRegisterPage() {
       flow: "parent_register",
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      phone: phone.trim(),
       returnTo: new URLSearchParams(window.location.search).get("returnTo") ?? "",
     });
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -101,6 +105,12 @@ export default function ParentRegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
+              <label htmlFor="phone" className="mb-2 block text-base font-extrabold text-slate-900">מספר טלפון</label>
+              <input id="phone" type="tel" dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} required autoComplete="tel" placeholder="050-0000000" className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 text-left text-base font-semibold text-slate-950 placeholder:text-slate-500 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100" />
+              <p className="mt-2 text-sm font-medium text-slate-700">המספר יוצג רק לחונך שאליו פניתם או לפעילות שאליה נרשמתם.</p>
+            </div>
+
+            <div>
               <label
                 htmlFor="firstName"
                 className="mb-2 block text-sm font-medium text-slate-700"
@@ -115,7 +125,7 @@ export default function ParentRegisterPage() {
                 onChange={(event) => setFirstName(event.target.value)}
                 required
                 autoComplete="given-name"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
@@ -134,7 +144,7 @@ export default function ParentRegisterPage() {
                 onChange={(event) => setLastName(event.target.value)}
                 required
                 autoComplete="family-name"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
@@ -153,7 +163,7 @@ export default function ParentRegisterPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 required
                 autoComplete="email"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
               />
             </div>
 
@@ -173,7 +183,7 @@ export default function ParentRegisterPage() {
                 required
                 minLength={6}
                 autoComplete="new-password"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
               />
 
               <p className="mt-2 text-xs text-slate-500">

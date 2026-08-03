@@ -137,17 +137,17 @@ export default function MentorRegisterPage() {
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 px-6 py-12">
+    <main dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto w-full max-w-xl">
         <div className="mb-8 text-center">
           <p className="mb-3 font-bold text-blue-600">שלב 1</p>
           <h1 className="mb-3 text-4xl font-extrabold text-slate-900">הצטרפות כחונכים</h1>
           <p className="text-lg text-slate-600">חשבון אחד מנהל פרופיל חונך אחד.</p>
         </div>
-        <div className="rounded-3xl border border-blue-100 bg-white p-8 shadow-xl md:p-10">
+        <div className="rounded-3xl border-2 border-blue-200 bg-white p-5 shadow-xl sm:p-8 md:p-10">
           <div className="grid gap-5 md:grid-cols-2">
-            <label className="font-bold">שם פרטי<input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal" /></label>
-            <label className="font-bold">שם משפחה<input required value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal" /></label>
+            <label className="text-base font-extrabold text-slate-950">שם פרטי<input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
+            <label className="text-base font-extrabold text-slate-950">שם משפחה<input required value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
           </div>
 
           <fieldset className="mt-6">
@@ -166,8 +166,8 @@ export default function MentorRegisterPage() {
           )}
 
           <form onSubmit={registerWithEmail} className="mt-6">
-            <label className="font-bold">אימייל<input type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-left font-normal" /></label>
-            <label className="mt-5 block font-bold">סיסמה<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 font-normal" /></label>
+            <label className="text-base font-extrabold text-slate-950">אימייל<input type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 text-left font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
+            <label className="mt-5 block text-base font-extrabold text-slate-950">סיסמה<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
             <button disabled={loading} className="mt-7 w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white disabled:bg-slate-400">{loading ? "ממשיך..." : "הרשמה עם מייל"}</button>
           </form>
 

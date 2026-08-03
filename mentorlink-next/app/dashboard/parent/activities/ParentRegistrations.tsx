@@ -1,5 +1,6 @@
 ﻿"use client";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 type Registration = {
@@ -84,8 +85,9 @@ export default function ParentRegistrations() {
   }
 
   useEffect(() => {
-    void load();
-  }, []);
+    const timer = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nextByRow = useMemo(() => {
     return Object.fromEntries(rows.map((row) => [row.id, row.sessions.find((session) => new Date(session.starts_at) > new Date()) ?? null]));
@@ -103,7 +105,10 @@ export default function ParentRegistrations() {
 
     const tabbed = sorted.filter((row) => {
       const next = nextByRow[row.id];
-      const completed = row.status !== "cancelled" && (row.activity?.status === "completed" || !next);
+      const completed = row.status !== "cancelled" && (
+        row.activity?.status === "completed" ||
+        (row.sessions.length > 0 && row.sessions.every((session) => new Date(session.ends_at).getTime() < Date.now()))
+      );
       const closestId = sorted.find((item) => item.status === "registered" && nextByRow[item.id])?.id;
       if (view === "closest") return row.id === closestId;
       if (view === "future") return Boolean(next) && !completed && row.status === "registered";
@@ -142,7 +147,8 @@ export default function ParentRegistrations() {
           <div className="grid gap-5 md:grid-cols-2">
             {visibleRows.map((row) => {
               const next = nextByRow[row.id];
-              const badge = status[row.status] ?? status.cancelled;
+              const completed = row.status !== "cancelled" && row.sessions.length > 0 && row.sessions.every(session => new Date(session.ends_at).getTime() < Date.now());
+              const badge = completed ? { label: "הפעילות הסתיימה", style: "bg-slate-200 text-slate-900" } : status[row.status] ?? status.cancelled;
               return (
                 <article key={row.id} className="rounded-3xl border bg-white p-6 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -162,13 +168,15 @@ export default function ParentRegistrations() {
                     <div className="mt-5 rounded-2xl bg-blue-700 p-4 text-white">
                       <p className="font-black">המפגש הקרוב</p>
                       <p className="mt-1 text-lg font-black">{dateLabel(next.starts_at)}</p>
-                      <p className="text-xl font-black">{timeLabel(next.starts_at)}–{timeLabel(next.ends_at)}</p>
+                      <p className="text-xl font-black" dir="ltr">{timeLabel(next.starts_at)}–{timeLabel(next.ends_at)}</p>
                     </div>
                   )}
 
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button type="button" onClick={() => setDetails(row)} className="rounded-xl border border-blue-300 px-4 py-2 font-black text-blue-800">פרטי הפעילות</button>
-                    {row.status !== "cancelled" && (
+                    {row.activity?.mentor_phone && !completed && <ContactButtons phone={row.activity.mentor_phone} />}
+                    {completed && <Link href="/dashboard/parent/feedback" className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white">מילוי משוב</Link>}
+                    {row.status !== "cancelled" && !completed && (
                       <button type="button" onClick={() => cancel(row.id)} className="rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700">ביטול הרשמה לילד/ה</button>
                     )}
                   </div>
@@ -193,7 +201,7 @@ export default function ParentRegistrations() {
             </header>
             <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7">
               <Detail title="תיאור" value={details.activity?.description ?? "לא צוינו פרטי פעילות."} wide />
-              <Detail title="מועד" value={details.sessions.map((session) => `${dateLabel(session.starts_at)}, ${timeLabel(session.starts_at)}–${timeLabel(session.ends_at)}`).join("\n")} wide />
+              <Detail title="מועד" value={details.sessions.map((session) => `${dateLabel(session.starts_at)}, ${timeLabel(session.starts_at)}–${timeLabel(session.ends_at)}`).join("\n")} wide ltr />
               <Detail title="מיקום" value={[locationLabels[details.activity?.location_type ?? "other"] ?? "מקום אחר", details.activity?.venue_name, details.activity?.location_details].filter(Boolean).join(" · ")} />
               <Detail title="חונך" value={[details.activity?.mentor_first_name, details.activity?.mentor_last_name].filter(Boolean).join(" ") || "לא נקבע"} />
               <Detail title="מחיר" value={details.activity?.is_free ? "ללא עלות" : `${details.activity?.price ?? 0} ₪`} />
@@ -205,6 +213,7 @@ export default function ParentRegistrations() {
               <Detail title="רשומים" value={`${details.activity?.registeredCount ?? 0}`} />
               <Detail title="מקומות פנויים" value={`${details.activity?.availablePlaces ?? 0}`} />
               <Detail title="טלפון לחונך" value={details.activity?.mentor_phone || "מספר הטלפון מוסתר על פי מדיניות הפעילות"} wide />
+              {details.activity?.mentor_phone && <div className="sm:col-span-2"><ContactButtons phone={details.activity.mentor_phone} /></div>}
               <Detail title="מדיניות ביטול" value={details.activity?.cancellation_policy || "לא צוינה מדיניות ביטול"} wide />
               <button type="button" onClick={() => setDetails(null)} className="sm:col-span-2 mt-2 rounded-xl bg-blue-700 px-5 py-3 font-black text-white">סגירת הפרטים</button>
             </div>
@@ -215,9 +224,11 @@ export default function ParentRegistrations() {
   );
 }
 
-function Detail({ title, value, wide }: { title: string; value: string; wide?: boolean }) {
-  return <div className={`rounded-2xl border border-blue-100 bg-blue-50/60 p-4 ${wide ? "sm:col-span-2" : ""}`}><h3 className="font-black text-blue-900">{title}</h3><p className="mt-1 whitespace-pre-line leading-7 text-slate-700">{value}</p></div>;
+function Detail({ title, value, wide, ltr=false }: { title: string; value: string; wide?: boolean; ltr?:boolean }) {
+  return <div className={`rounded-2xl border border-blue-100 bg-blue-50/60 p-4 ${wide ? "sm:col-span-2" : ""}`}><h3 className="font-black text-blue-900">{title}</h3><p dir={ltr?"ltr":undefined} className={`mt-1 whitespace-pre-line leading-7 text-slate-700 ${ltr?"text-right":""}`}>{value}</p></div>;
 }
+
+function ContactButtons({phone}:{phone:string}){const normalized=phone.replace(/[^0-9+]/g,"");const whatsapp=normalized.replace(/^0/,"972").replace(/^\+/,"");return <div className="flex flex-wrap gap-2"><a href={`tel:${normalized}`} className="rounded-xl bg-blue-700 px-4 py-2 font-black text-white">התקשרות לחונך</a><a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noreferrer" className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white">WhatsApp לחונך</a></div>}
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl bg-slate-50 p-3"><span className="text-slate-500">{label}</span><strong className="block">{value}</strong></div>;

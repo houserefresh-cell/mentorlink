@@ -1,33 +1,31 @@
 # MentorLink project state
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
-## Existing systems
+## Current branch
 
-- Next.js 16 application with Supabase authentication and server-only service-role access.
-- Mentor activity lifecycle: draft, published, cancelled and completed, including sessions, capacity, accessibility, pickup, operational updates and images.
-- Parent children and subject preferences are private service-owned records.
-- Activity registration is per child and supports registered, waitlisted and cancelled states.
-- Minor mentor onboarding uses explicit parent consent. Public profile photos require separate consent.
+- Feature: `feature/activity-registration-final`
+- Foundation: remote `feature/activity-registration-management` at `679da5d`.
+- Migration 031 was already applied remotely before this package and remains unchanged.
 
-## Privacy decisions
+## Product rules now represented
 
-- A child registration is owned by the authenticated parent and validated again in the database.
-- Public responses must not include child needs, full surname, birth date, school or private identifiers.
-- A mentor may see registration details only for an activity they own. Parent phone is available for registered entries only; waitlisted entries do not expose it.
-- Mentor phone visibility is activity-specific: `public`, `registered_parents` or `mentor_approved`. Existing activities default to `registered_parents`.
-- Per-parent contact approval is stored separately and can only be changed by the activity owner for a parent with a registered child.
+- Creating an account does not publish a mentor; minor mentors still require parent consent and administrator review.
+- Parent and child details are not public. A mentor receives the relevant family details only after that parent contacts the mentor or registers a child in the mentor's activity.
+- A street may be stored for ordinary matching. House, entrance, apartment and arrival notes are requested only when the parent chooses home mentoring.
+- Activity registration is child-specific, capacity-safe and replay-safe. Completed registrations cannot be cancelled.
+- Mentor phone exposure is controlled per activity. Parent phone is required for contact and activity registration.
+- Feedback is attached to one completed registration. Professional feedback is visible to the mentor; safety details are administrator-only; public quotation requires parent consent and administrator approval.
 
-## Current package
+## Verification expectations
 
-- Added migration `202608030031_complete_activity_registration_privacy.sql`.
-- Added replay-safe registration idempotency while preserving transaction-level capacity locking and atomic multi-child requests.
-- Added the private mentor registration-details API and focused privacy tests.
-- Existing files could not be patched because the workspace sandbox failed while applying read ACLs. The existing UI and activity save pipeline therefore still need the new contact policy wired through.
+- Run the focused registration and feedback tests.
+- Run `git diff --check`.
+- Run a full Next.js build with the project's real environment variables. Dummy Supabase values prove compilation and TypeScript but cannot complete data-backed static prerendering.
+- Dry-run migration 032, then apply it once and verify local/remote migration alignment.
 
-## Later packages
+## Deferred package
 
-- Full mentor registration-management interface.
-- Waitlist notifications and automatic promotion.
-- Feedback system and feedback privacy.
-- Requests and referrals page reorganization and mentor-card opening fix.
+- “המשפחות בקהילה שלי”: a dedicated mentor directory of linked families, conversation history and follow-up messages.
+- Automatic waitlist promotion notifications.
+- Publishing administrator-approved feedback summaries on mentor profiles.

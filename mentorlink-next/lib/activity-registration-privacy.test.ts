@@ -20,11 +20,12 @@ test("registration is serialized, child-owned, atomic and replayable by idempote
   assert.match(migration, /continue;/);
 });
 
-test("mentor registration details require activity ownership and hide waitlisted phone", () => {
+test("mentor registration details require ownership and expose linked family contact details", () => {
   assert.match(mentorApi, /mentor_user_id !== user\.id/);
-  assert.match(mentorApi, /row\.status === "registered" \? parent\?\.phone/);
-  assert.match(mentorApi, /familyInitial/);
-  assert.doesNotMatch(mentorApi, /accommodation_notes|birth_date|school_name/);
+  assert.match(mentorApi, /parentPhone: parent\?\.phone/);
+  assert.match(mentorApi, /parentProfile:/);
+  assert.match(mentorApi, /school_name/);
+  assert.match(mentorApi, /interests:/);
 });
 
 test("mentor approvals require ownership and a registered parent", () => {

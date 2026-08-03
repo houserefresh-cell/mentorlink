@@ -13,7 +13,10 @@ export async function POST(request: Request) {
   const childIds = Array.isArray(payload.childIds) ? payload.childIds.filter((value): value is string => typeof value === "string" && uuid.test(value)) : [];
   const keys = Array.isArray(payload.idempotencyKeys) ? payload.idempotencyKeys.filter((value): value is string => typeof value === "string" && uuid.test(value)) : [];
   if (!uuid.test(activityId) || !childIds.length || childIds.length !== keys.length || childIds.length > 10) return Response.json({ error: "יש לבחור לפחות ילד אחד." }, { status: 400 });
-  const result = await createSupabaseAdmin().rpc("register_children_for_activity", { p_activity_id: activityId, p_parent_user_id: user.id, p_child_ids: childIds, p_idempotency_keys: keys });
+  const admin = createSupabaseAdmin();
+  const profile = await admin.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
+  if (!profile.data?.phone) return Response.json({ error: "לפני הרשמה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
+  const result = await admin.rpc("register_children_for_activity", { p_activity_id: activityId, p_parent_user_id: user.id, p_child_ids: childIds, p_idempotency_keys: keys });
   const message = result.error?.message ?? "";
   if (message.includes("CHILD_ALREADY_REGISTERED")) return Response.json({ error: "אחד הילדים כבר רשום לפעילות." }, { status: 409 });
   if (message.includes("REGISTRATION_CLOSED") || message.includes("ACTIVITY_NOT_AVAILABLE") || message.includes("ACTIVITY_ALREADY_STARTED")) return Response.json({ error: "ההרשמה לפעילות אינה זמינה עוד." }, { status: 422 });
@@ -103,7 +106,12 @@ export async function DELETE(request: Request) {
   if (user.role !== "parent") return Response.json({ error: "הגישה מיועדת להורים בלבד." }, { status: 403 });
   const registrationId = new URL(request.url).searchParams.get("registrationId") ?? "";
   if (!uuid.test(registrationId)) return Response.json({ error: "הרשמה לא תקינה." }, { status: 400 });
-  const result = await createSupabaseAdmin().rpc("cancel_parent_activity_registration", { p_registration_id: registrationId, p_parent_user_id: user.id });
+  const admin = createSupabaseAdmin();
+  const registration = await admin.from("mentor_activity_registrations").select("activity_id").eq("id", registrationId).eq("parent_user_id", user.id).maybeSingle();
+  if (!registration.data) return Response.json({ error: "ההרשמה אינה זמינה לביטול." }, { status: 404 });
+  const sessions = await admin.from("mentor_activity_sessions").select("ends_at").eq("activity_id", registration.data.activity_id);
+  if ((sessions.data ?? []).length && (sessions.data ?? []).every((session) => Date.parse(session.ends_at) < Date.now())) return Response.json({ error: "לא ניתן לבטל הרשמה לאחר שהפעילות הסתיימה." }, { status: 422 });
+  const result = await admin.rpc("cancel_parent_activity_registration", { p_registration_id: registrationId, p_parent_user_id: user.id });
   if (result.error) return Response.json({ error: "לא ניתן לבטל את ההרשמה." }, { status: 422 });
   return Response.json({ ok: true });
 }

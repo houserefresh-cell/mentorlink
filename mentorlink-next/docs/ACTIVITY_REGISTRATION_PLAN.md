@@ -1,29 +1,28 @@
-# Activity registration plan
+# Activity registration and feedback plan
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
-## Implemented foundation
+## Implemented
 
-- Registrations are per `child_id`; active duplicates are rejected in the API and database.
-- `registered` and `waitlisted` are active; `cancelled` permits a later registration with a new idempotency key.
-- A multi-child request runs in one database transaction. Capacity decisions are serialized per activity and count only `registered` rows.
-- Replaying the same child and idempotency key returns the existing result. Reusing a key for another child or activity is rejected.
-- Capacity presentation remains `registeredCount`, `availablePlaces`, and `maxParticipants`; waitlisted children do not consume capacity.
-- Activity contact policy and explicit mentor approvals are represented in the database with service-role-only grants and RLS enabled.
-- The mentor details endpoint verifies activity ownership before returning private registration data. Child display uses a regular period after the family initial.
+- Registration is per child, duplicate active registrations are rejected, and multi-child capacity decisions remain atomic.
+- Registered and waitlisted children are disabled in the child picker immediately after registration.
+- Parent activity cards show capacity, status, full activity details and mentor call/WhatsApp actions whenever the server grants access to the phone number.
+- Completed activities are separated from upcoming activities, cannot be cancelled, and link to the feedback task.
+- Mentors can open an owner-only registration view with the linked parent's profile, phone, email, address fields, child details and interests.
+- Activity owners choose one of three phone visibility policies: public, registered parents, or explicit mentor approval.
+- Parent profiles now include a required phone number and optional address. A full address is stored only when home mentoring is requested.
+- A parent must complete the phone profile before registering, sending an inquiry or requesting a meeting.
+- The feedback flow uses explicit Hebrew five-point labels, professional comments, separate private safety questions and optional publication consent.
+- Parents see pending feedback tasks with a calm violet counter. Mentors receive only the professional portion. Administrators receive the complete moderation and safety record.
 
-## Required wiring after sandbox access is restored
+## Database changes
 
-- Add `contactPhoneVisibility` to activity validation, persistence, create/edit forms and preview.
-- Return the authenticated parent's per-child active registration states from the parent activities API.
-- Disable registered and waitlisted children in activity cards and the child picker, while leaving unregistered siblings selectable.
-- Refresh cards, capacity, registration state and cancellation state immediately after mutations.
-- Expand the parent activity modal and "My activities" grouping with all sessions, operational details, child statuses, mentor photo rules and server-filtered phone access.
-- Add the owner-only registrations view to the mentor activity manager and connect explicit contact approvals.
+- Migration `202608030031_complete_activity_registration_privacy.sql` is the applied registration/privacy foundation and must not be edited.
+- Migration `202608040032_add_parent_profiles_and_activity_feedback.sql` adds parent profiles, child surnames and activity feedback.
 
-## Deferred product packages
+## Deliberately deferred
 
-- Full mentor registration management.
-- Waitlist notification and automatic promotion workflow.
-- Feedback and feedback privacy.
-- Requests/referrals page restructuring and mentor-card behavior.
+- A dedicated mentor “community families” contact directory and free-form follow-up messaging.
+- Automatic waitlist promotion messages across every notification channel.
+- Public profile aggregation of approved feedback; the current package stores moderation decisions but does not publish quotes yet.
+- Broader requests/referrals page restructuring.

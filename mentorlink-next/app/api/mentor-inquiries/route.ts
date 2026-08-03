@@ -32,6 +32,8 @@ export async function POST(request: Request) {
 
   try {
     const client = createSupabaseAdmin();
+    const parentProfile = await client.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
+    if (!parentProfile.data?.phone) return Response.json({ error: "לפני שליחת פנייה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
     const mentor = await loadPublishedSchedulingMentor(client, bookingId);
     if (!mentor) return Response.json({ error: "החונך אינו זמין לפניות." }, { status: 404 });
     if (subject && !mentor.subjects.includes(subject)) {
