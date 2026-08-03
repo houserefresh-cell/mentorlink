@@ -30,6 +30,10 @@ type Registration = {
     mentor_last_name: string | null;
     mentor_phone: string | null;
     mentor_city: string | null;
+    pickup_options: string[] | null;
+    pickup_details: string | null;
+    accessibility_options: string[] | null;
+    accessibility_other: string | null;
   } | null;
   sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
 };
@@ -99,9 +103,10 @@ export default function ParentRegistrations() {
 
     const tabbed = sorted.filter((row) => {
       const next = nextByRow[row.id];
-      const completed = row.status === "cancelled" || row.activity?.status === "completed" || !next;
-      if (view === "closest") return Boolean(next) && sorted[0]?.id === row.id;
-      if (view === "future") return Boolean(next) && !completed && row.status !== "waitlisted";
+      const completed = row.status !== "cancelled" && (row.activity?.status === "completed" || !next);
+      const closestId = sorted.find((item) => item.status === "registered" && nextByRow[item.id])?.id;
+      if (view === "closest") return row.id === closestId;
+      if (view === "future") return Boolean(next) && !completed && row.status === "registered";
       if (view === "awaiting") return row.status === "waitlisted";
       if (view === "cancelled") return row.status === "cancelled";
       if (view === "completed") return completed;
@@ -150,7 +155,7 @@ export default function ParentRegistrations() {
 
                   <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
                     <Info label="מקומות פנויים" value={String(row.activity?.availablePlaces ?? 0)} />
-                    <Info label="מעמד" value={row.activity?.registeredCount ? `רשומים ${row.activity.registeredCount}` : "טרם נפתחו הרשמות"} />
+                    <Info label="מעמד" value={`${row.activity?.registeredCount ?? 0} רשומים · ${row.activity?.availablePlaces ?? 0} פנויים מתוך ${row.activity?.max_participants ?? 0}`} />
                   </div>
 
                   {next && (
@@ -193,12 +198,15 @@ export default function ParentRegistrations() {
               <Detail title="חונך" value={[details.activity?.mentor_first_name, details.activity?.mentor_last_name].filter(Boolean).join(" ") || "לא נקבע"} />
               <Detail title="מחיר" value={details.activity?.is_free ? "ללא עלות" : `${details.activity?.price ?? 0} ₪`} />
               <Detail title="ציוד" value={details.activity?.equipment || "לא נדרש להביא ציוד"} />
+              <Detail title="איסוף" value={details.activity?.pickup_options?.length ? `${details.activity.pickup_options.join(", ")}${details.activity.pickup_details ? ` · ${details.activity.pickup_details}` : ""}` : "לא מוצע איסוף"} />
+              <Detail title="נגישות והתאמות" value={[...(details.activity?.accessibility_options ?? []), details.activity?.accessibility_other].filter(Boolean).join(", ") || "לא סומנו התאמות"} />
               <Detail title="כמות" value={`${details.activity?.min_participants ?? 0}–${details.activity?.max_participants ?? 0}`} />
               <Detail title="סטטוס" value={details.activity?.status === "published" ? "פורסם" : details.activity?.status ?? "לא ידוע"} />
               <Detail title="רשומים" value={`${details.activity?.registeredCount ?? 0}`} />
               <Detail title="מקומות פנויים" value={`${details.activity?.availablePlaces ?? 0}`} />
               <Detail title="טלפון לחונך" value={details.activity?.mentor_phone || "מספר הטלפון מוסתר על פי מדיניות הפעילות"} wide />
               <Detail title="מדיניות ביטול" value={details.activity?.cancellation_policy || "לא צוינה מדיניות ביטול"} wide />
+              <button type="button" onClick={() => setDetails(null)} className="sm:col-span-2 mt-2 rounded-xl bg-blue-700 px-5 py-3 font-black text-white">סגירת הפרטים</button>
             </div>
           </section>
         </div>

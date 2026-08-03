@@ -106,6 +106,9 @@ export async function PATCH(request: Request, context: Context) {
       if (saved.error?.message.includes("ACTIVITY_LOCKED_ACTIVE_REGISTRATIONS")) {
         return Response.json({ error: "לפעילות זו כבר קיימות הרשמות ולכן פרטיה המרכזיים נעולים. ניתן לשלוח עדכון לנרשמים או לבטל את הפעילות.", code: "ACTIVITY_LOCKED_ACTIVE_REGISTRATIONS" }, { status: 409 });
       }
+      if (saved.error?.message.includes("PUBLIC_PHONE_REQUIRES_PARENT_CONSENT")) {
+        return Response.json({ error: "כדי להציג מספר טלפון לכל ההורים נדרש אישור הורה מפורש. אפשר לבחור הצגה רק לאחר הרשמה.", code: "PUBLIC_PHONE_REQUIRES_PARENT_CONSENT" }, { status: 403 });
+      }
       if (saved.error?.message.includes("ACTIVITY_NOT_OWNED") || saved.error?.message.includes("ACTIVITY_NOT_EDITABLE")) {
         return Response.json({ error: "Activity changed", code: "ACTIVITY_CHANGED" }, { status: 409 });
       }

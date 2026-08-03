@@ -70,11 +70,12 @@ export async function GET(request: Request) {
       const activity = (activities.data ?? []).find((item) => item.id === registration.activity_id);
       const countsForActivity = countsByActivity.get(registration.activity_id) ?? { registered: 0, waitlisted: 0 };
       const mentor = activity ? profileMap.get(activity.mentor_user_id) : null;
-      const mentorPhone = activity?.contact_phone_visibility === "public" || activity?.contact_phone_visibility === "registered_parents"
-        ? mentor?.phone ?? null
-        : approvedActivityIds.has(registration.activity_id)
-          ? mentor?.phone ?? null
-          : null;
+      const isRegistered = registration.status === "registered";
+      const mentorPhone = isRegistered && (
+        activity?.contact_phone_visibility === "public" ||
+        activity?.contact_phone_visibility === "registered_parents" ||
+        (activity?.contact_phone_visibility === "mentor_approved" && approvedActivityIds.has(registration.activity_id))
+      ) ? mentor?.phone ?? null : null;
       return {
         ...registration,
         activity: activity

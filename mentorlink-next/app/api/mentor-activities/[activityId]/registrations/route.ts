@@ -11,7 +11,7 @@ export async function GET(request: Request, context: { params: Promise<{ activit
   if (!uuid.test(activityId)) return Response.json({ error: "פעילות לא תקינה." }, { status: 400 });
 
   const admin = createSupabaseAdmin();
-  const activity = await admin.from("mentor_activities").select("id, title, mentor_user_id").eq("id", activityId).maybeSingle();
+  const activity = await admin.from("mentor_activities").select("id, title, mentor_user_id, contact_phone_visibility").eq("id", activityId).maybeSingle();
   if (activity.error) return Response.json({ error: "לא ניתן לטעון את הפעילות." }, { status: 500 });
   if (!activity.data || activity.data.mentor_user_id !== user.id) {
     return Response.json({ error: "אין הרשאה לצפות בפרטי ההרשמה." }, { status: 403 });
@@ -23,26 +23,34 @@ export async function GET(request: Request, context: { params: Promise<{ activit
     .order("created_at");
   if (registrations.error) return Response.json({ error: "לא ניתן לטעון את ההרשמות." }, { status: 500 });
 
+  const approvals = await admin.from("mentor_activity_contact_approvals")
+    .select("parent_user_id").eq("activity_id", activityId);
+  if (approvals.error) return Response.json({ error: "לא ניתן לטעון את הרשאות הקשר." }, { status: 500 });
+  const approvedParentIds = new Set((approvals.data ?? []).map((row) => row.parent_user_id));
+
   const parentIds = [...new Set((registrations.data ?? []).map((row) => row.parent_user_id))];
   const parents = new Map<string, { name: string; phone: string | null; familyInitial: string }>();
   await Promise.all(parentIds.map(async (parentId) => {
     const result = await admin.auth.admin.getUserById(parentId);
     if (result.error || !result.data.user) return;
     const metadata = result.data.user.user_metadata ?? {};
-    const name = typeof metadata.full_name === "string" ? metadata.full_name.trim() : "הורה רשום";
+    const metadataName = [metadata.first_name, metadata.last_name].filter((value) => typeof value === "string" && value.trim()).join(" ").trim();
+    const name = typeof metadata.full_name === "string" && metadata.full_name.trim() ? metadata.full_name.trim() : metadataName || "הורה רשום";
     const parts = name.split(/\s+/).filter(Boolean);
     const phone = result.data.user.phone || (typeof metadata.phone === "string" ? metadata.phone : null);
     parents.set(parentId, { name, phone, familyInitial: parts.length > 1 ? Array.from(parts.at(-1) ?? "")[0] ?? "" : "" });
   }));
 
   return Response.json({
-    activity: { id: activity.data.id, title: activity.data.title },
+    activity: { id: activity.data.id, title: activity.data.title, contactPhoneVisibility: activity.data.contact_phone_visibility },
     registrations: (registrations.data ?? []).map((row) => {
       const parent = parents.get(row.parent_user_id);
       return {
         id: row.id,
+        parentUserId: row.status === "registered" ? row.parent_user_id : null,
         parentName: row.status === "registered" ? parent?.name ?? "הורה רשום" : null,
         parentPhone: row.status === "registered" ? parent?.phone ?? null : null,
+        contactApproved: row.status === "registered" && approvedParentIds.has(row.parent_user_id),
         childName: `${row.child_first_name}${parent?.familyInitial ? ` ${parent.familyInitial}.` : ""}`,
         status: row.status,
         registeredAt: row.created_at,

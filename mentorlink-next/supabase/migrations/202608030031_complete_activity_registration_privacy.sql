@@ -1,5 +1,8 @@
 alter table public.mentor_activities
-  add column contact_phone_visibility text not null default 'registered_parents';
+  add column if not exists contact_phone_visibility text not null default 'registered_parents';
+
+alter table public.mentor_activities
+  drop constraint if exists mentor_activities_contact_phone_visibility_allowed;
 
 alter table public.mentor_activities
   add constraint mentor_activities_contact_phone_visibility_allowed
@@ -12,6 +15,9 @@ create table public.mentor_activity_contact_approvals (
   approved_at timestamptz not null default now(),
   primary key (activity_id, parent_user_id)
 );
+
+comment on column public.mentor_activities.contact_phone_visibility is
+  'public: visible before registration; registered_parents: registered parents only; mentor_approved: registered parents after explicit mentor approval';
 
 alter table public.mentor_activity_contact_approvals enable row level security;
 revoke all on public.mentor_activity_contact_approvals from public, anon, authenticated;
@@ -136,6 +142,14 @@ begin
       p_activity_id, p_parent_user_id, v_child.id, v_key, btrim(v_child.first_name),
       coalesce(v_child.grade, 'not_provided'), nullif(btrim(v_child.accommodation_notes), ''), v_status
     ) returning * into v_existing;
+    insert into public.notifications(user_id, kind, title, body, href)
+    values (
+      v_activity.mentor_user_id,
+      'mentor_activity_update',
+      case when v_status = 'registered' then 'הרשמה חדשה לפעילות' else 'הצטרפות לרשימת ההמתנה' end,
+      format('%s נרשמ/ה לפעילות %s.', btrim(v_child.first_name), coalesce(v_activity.title, 'שלך')),
+      '/dashboard/mentor/activities'
+    );
     v_results := v_results || jsonb_build_array(jsonb_build_object(
       'id', v_existing.id, 'childId', v_child.id,
       'childFirstName', v_child.first_name, 'status', v_status));
@@ -147,6 +161,137 @@ $$;
 revoke all on function public.register_children_for_activity(uuid, uuid, uuid[], uuid[])
 from public, anon, authenticated;
 grant execute on function public.register_children_for_activity(uuid, uuid, uuid[], uuid[])
+to service_role;
+
+-- Keep the established activity save contract while persisting the new privacy
+-- choice in the same transaction. The previous implementation remains private
+-- and is called only by this wrapper.
+alter function public.save_mentor_activity(uuid, uuid, jsonb, jsonb, boolean)
+  rename to save_mentor_activity_before_contact_visibility;
+revoke all on function public.save_mentor_activity_before_contact_visibility(uuid, uuid, jsonb, jsonb, boolean)
+  from public, anon, authenticated, service_role;
+
+create function public.save_mentor_activity(
+  p_activity_id uuid,
+  p_mentor_user_id uuid,
+  p_activity jsonb,
+  p_sessions jsonb,
+  p_publish boolean default false
+) returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_activity_id uuid;
+  v_visibility text := coalesce(nullif(p_activity ->> 'contact_phone_visibility', ''), 'registered_parents');
+  v_birth_date date;
+begin
+  if v_visibility not in ('public', 'registered_parents', 'mentor_approved') then
+    raise exception 'INVALID_CONTACT_PHONE_VISIBILITY' using errcode = '22023';
+  end if;
+
+  if v_visibility = 'public' then
+    select birth_date into v_birth_date
+    from public.mentor_profiles
+    where user_id = p_mentor_user_id;
+
+    if v_birth_date is not null
+       and v_birth_date > current_date - interval '18 years'
+       and not exists (
+         select 1
+         from public.mentor_parent_consents
+         where user_id = p_mentor_user_id
+           and status = 'approved'
+           and contact_confirmed = true
+       ) then
+      raise exception 'PUBLIC_PHONE_REQUIRES_PARENT_CONSENT' using errcode = '42501';
+    end if;
+  end if;
+
+  v_activity_id := public.save_mentor_activity_before_contact_visibility(
+    p_activity_id, p_mentor_user_id, p_activity, p_sessions, p_publish
+  );
+
+  update public.mentor_activities
+  set contact_phone_visibility = v_visibility
+  where id = v_activity_id and mentor_user_id = p_mentor_user_id;
+
+  if not found then
+    raise exception 'ACTIVITY_CONTACT_VISIBILITY_NOT_SAVED' using errcode = 'P0002';
+  end if;
+  return v_activity_id;
+end;
+$$;
+
+revoke all on function public.save_mentor_activity(uuid, uuid, jsonb, jsonb, boolean)
+from public, anon, authenticated;
+grant execute on function public.save_mentor_activity(uuid, uuid, jsonb, jsonb, boolean)
+to service_role;
+
+-- Revoke per-parent contact approval as soon as that parent's last active
+-- registration is cancelled. Public phone visibility remains public by choice.
+create or replace function public.cancel_parent_activity_registration(
+  p_registration_id uuid,
+  p_parent_user_id uuid
+) returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_activity_id uuid;
+  v_cancelled_status text;
+  v_promoted_parent uuid;
+begin
+  select activity_id into v_activity_id
+  from public.mentor_activity_registrations
+  where id = p_registration_id and parent_user_id = p_parent_user_id;
+  if not found then raise exception 'REGISTRATION_NOT_CANCELLABLE' using errcode = '42501'; end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(v_activity_id::text, 0));
+  select status into v_cancelled_status
+  from public.mentor_activity_registrations
+  where id = p_registration_id and parent_user_id = p_parent_user_id
+    and status in ('registered', 'waitlisted') for update;
+  if not found then raise exception 'REGISTRATION_NOT_CANCELLABLE' using errcode = '42501'; end if;
+
+  update public.mentor_activity_registrations
+  set status = 'cancelled', cancelled_at = now(), updated_at = now()
+  where id = p_registration_id;
+
+  if not exists (
+    select 1 from public.mentor_activity_registrations
+    where activity_id = v_activity_id and parent_user_id = p_parent_user_id
+      and status = 'registered'
+  ) then
+    delete from public.mentor_activity_contact_approvals
+    where activity_id = v_activity_id and parent_user_id = p_parent_user_id;
+  end if;
+
+  if v_cancelled_status = 'registered' then
+    update public.mentor_activity_registrations
+    set status = 'registered', updated_at = now()
+    where id = (
+      select id from public.mentor_activity_registrations
+      where activity_id = v_activity_id and status = 'waitlisted'
+      order by created_at for update skip locked limit 1
+    )
+    returning parent_user_id into v_promoted_parent;
+
+    if v_promoted_parent is not null then
+      insert into public.notifications(user_id, kind, title, body, href)
+      values (v_promoted_parent, 'mentor_activity_update', 'התפנה מקום בפעילות',
+        'ההרשמה עברה מרשימת ההמתנה לרשימת המשתתפים.', '/dashboard/parent/activities');
+    end if;
+  end if;
+  return v_activity_id;
+end;
+$$;
+
+revoke all on function public.cancel_parent_activity_registration(uuid, uuid)
+from public, anon, authenticated;
+grant execute on function public.cancel_parent_activity_registration(uuid, uuid)
 to service_role;
 
 notify pgrst, 'reload schema';

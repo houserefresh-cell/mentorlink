@@ -36,11 +36,13 @@ type Activity = {
   image_alt: string | null;
   sessions: Session[];
   registration_counts: { registered: number; waitlisted: number; total: number };
+  contact_phone_visibility: "public" | "registered_parents" | "mentor_approved";
 };
 type ConfirmAction = { kind: "publish" | "cancel" | "delete"; activity: Activity } | null;
 type Notice = { type: "success" | "error"; text: string } | null;
 type Recipient = { parentUserId: string; childFirstNames: string[] };
 type ActivityUpdate = { id: string; recipient_scope: "all_active" | "parent"; recipient_parent_user_id: string | null; update_type: string; body: string; delay_minutes: number | null; proposed_start_at: string | null; proposed_end_at: string | null; created_at: string };
+type ActivityRegistration = { id: string; parentUserId: string | null; parentName: string | null; parentPhone: string | null; childName: string; status: "registered" | "waitlisted"; registeredAt: string; contactApproved: boolean };
 
 const STATUS: Record<Status, { label: string; badge: string; card: string }> = {
   draft: { label: "טיוטה", badge: "bg-amber-100 text-amber-900", card: "border-amber-200 bg-amber-50/70" },
@@ -65,6 +67,7 @@ export function MentorActivitiesManager() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [preview, setPreview] = useState<Activity | null>(null);
   const [updatesActivity, setUpdatesActivity] = useState<Activity | null>(null);
+  const [registrationsActivity, setRegistrationsActivity] = useState<Activity | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const previewTrigger = useRef<HTMLButtonElement | null>(null);
 
@@ -166,14 +169,15 @@ export function MentorActivitiesManager() {
     </div>
     {loading ? <div role="status" className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-3xl bg-slate-200 motion-reduce:animate-none" />)}</div>
       : visible.length === 0 ? <div className="mt-8 rounded-3xl border-2 border-dashed border-blue-300 bg-blue-50 p-10 text-center"><h2 className="text-2xl font-black">{activities.length ? "אין פעילויות בסינון הזה" : "עוד לא פתחת פעילות"}</h2><p className="mt-2 text-slate-600">אפשר להתחיל מטיוטה ולפרסם כשהכול מוכן.</p><Link href="/dashboard/mentor/activities/new" className="mt-6 inline-block rounded-2xl bg-blue-700 px-7 py-4 font-black text-white shadow-md">פתיחת פעילות חדשה</Link></div>
-      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
+      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onRegistrations={() => setRegistrationsActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
     {preview && <PreviewDialog activity={preview} onClose={() => { setPreview(null); requestAnimationFrame(() => previewTrigger.current?.focus()); }} />}
     {updatesActivity && <UpdatesDialog activity={updatesActivity} token={token} onClose={() => setUpdatesActivity(null)} />}
+    {registrationsActivity && <RegistrationsDialog activity={registrationsActivity} token={token} onClose={() => setRegistrationsActivity(null)} />}
     {confirmAction && <ConfirmDialog action={confirmAction} busy={busyId === confirmAction.activity.id} onClose={() => !busyId && setConfirmAction(null)} onConfirm={executeConfirmed} />}
   </section>;
 }
 
-function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onImage: (file: File) => void }) {
+function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onRegistrations, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onRegistrations: () => void; onImage: (file: File) => void }) {
   const next = nextSession(activity.sessions);
   const registered = activity.registration_counts?.registered ?? 0;
   const waitlisted = activity.registration_counts?.waitlisted ?? 0;
@@ -190,11 +194,36 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
       <button type="button" onClick={(event) => onPreview(event.currentTarget)} className={secondary}>פרטים נוספים</button>
       {activity.status === "draft" && <button type="button" disabled={busy} onClick={() => onConfirm("publish")} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white disabled:opacity-50">פרסום הפעילות</button>}
       {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onUpdates} className={primary}>עדכונים לנרשמים</button>}
+      {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onRegistrations} className={secondary}>ניהול הרשמות</button>}
       {activity.status === "published" && <button type="button" disabled={busy} onClick={() => onConfirm("cancel")} className={danger}>ביטול</button>}
       <div className="w-full rounded-xl bg-white/70 p-3"><button type="button" disabled={busy} onClick={onDuplicate} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white disabled:opacity-50">יצירת פעילות חדשה על בסיס זו</button><p className="mt-2 text-xs leading-5 text-slate-600">תיווצר טיוטה חדשה. הפעילות המקורית לא תשתנה, ויש לבחור תאריך ושעות חדשים.</p></div>
       {(activity.status === "draft" || (activity.status === "cancelled" && (activity.registration_counts?.total ?? 0) === 0)) && <div className="w-full border-t border-red-200 pt-3"><button type="button" disabled={busy} onClick={() => onConfirm("delete")} className={danger}>{activity.status === "draft" ? "מחיקת טיוטה" : "מחיקת פעילות מבוטלת"}</button></div>}
     </div>
   </article>;
+}
+
+function RegistrationsDialog({ activity, token, onClose }: { activity: Activity; token: string; onClose: () => void }) {
+  const [rows, setRows] = useState<ActivityRegistration[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState("");
+  async function load() {
+    setLoading(true);
+    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const body = await response.json().catch(() => ({}));
+    setRows(response.ok ? body.registrations ?? [] : []);
+    setNotice(response.ok ? "" : body.error ?? "לא ניתן לטעון את ההרשמות.");
+    setLoading(false);
+  }
+  useEffect(() => { void load(); }, []);
+  async function setApproval(row: ActivityRegistration, approved: boolean) {
+    if (!row.parentUserId) return;
+    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ parentUserId: row.parentUserId, approved }) });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return setNotice(body.error ?? "לא ניתן לעדכן את הרשאת הקשר.");
+    setRows((current) => current.map((item) => item.parentUserId === row.parentUserId ? { ...item, contactApproved: approved } : item));
+    setNotice(approved ? "הטלפון זמין כעת להורה הרשום." : "הרשאת הצגת הטלפון בוטלה.");
+  }
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section role="dialog" aria-modal="true" aria-label="ניהול הרשמות" className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-5"><div><p className="font-bold text-blue-700">ניהול הרשמות</p><h2 className="text-2xl font-black">{activity.title}</h2></div><button type="button" onClick={onClose} aria-label="סגירת חלון ההרשמות" className="grid size-11 place-items-center rounded-full bg-slate-100 text-2xl font-black">×</button></header><div className="space-y-4 p-5">{notice && <p role="status" className="rounded-xl bg-blue-50 p-3 font-bold text-blue-900">{notice}</p>}{loading ? <p>טוען הרשמות...</p> : rows.length ? rows.map((row) => <article key={row.id} className="rounded-2xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className={`rounded-full px-3 py-1 text-sm font-black ${row.status === "registered" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-900"}`}>{row.status === "registered" ? "רשום/ה" : "רשימת המתנה"}</span><h3 className="mt-3 text-xl font-black">{row.childName}</h3>{row.status === "registered" && <><p className="mt-1">הורה: {row.parentName}</p>{row.parentPhone ? <a dir="ltr" href={`tel:${row.parentPhone}`} className="font-black text-blue-700 underline">{row.parentPhone}</a> : <p className="text-slate-500">לא נשמר מספר טלפון</p>}</>}</div>{activity.contact_phone_visibility === "mentor_approved" && row.status === "registered" && <button type="button" onClick={() => setApproval(row, !row.contactApproved)} className={row.contactApproved ? danger : primary}>{row.contactApproved ? "ביטול הצגת הטלפון" : "אישור הצגת הטלפון להורה"}</button>}</div>{row.status === "waitlisted" && <p className="mt-3 text-sm text-slate-600">פרטי ההורה ייחשפו רק לאחר מעבר להרשמה מאושרת.</p>}</article>) : <p className="rounded-xl bg-slate-50 p-4">אין כרגע הרשמות פעילות.</p>}<button type="button" onClick={onClose} className={primary}>סגירה</button></div></section></div>;
 }
 
 function ConfirmDialog({ action, busy, onClose, onConfirm }: { action: NonNullable<ConfirmAction>; busy: boolean; onClose: () => void; onConfirm: (reason?: string) => void }) {

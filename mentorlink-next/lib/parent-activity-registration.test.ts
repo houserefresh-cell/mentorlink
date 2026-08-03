@@ -87,4 +87,7 @@ test("parent registrations page presents a richer details and status experience"
   assert.match(registrationsPage, /סגירת החלון/);
   assert.match(registrationsPage, /מקומות פנויים/);
   assert.match(registrationsPage, /לא נדרש להביא ציוד/);
+  assert.match(registrationsPage, /איסוף/);
+  assert.match(registrationsPage, /נגישות והתאמות/);
+  assert.match(registrationsPage, /פנויים מתוך/);
 });
