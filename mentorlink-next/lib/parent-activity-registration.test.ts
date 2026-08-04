@@ -80,3 +80,14 @@ test("mentor cards provide direct access to their activities and registration ca
   assert.match(directory, /מעבר לפעילות ולהרשמה/);
   assert.match(discovery, /id={`activity-\${activity\.id}`}/);
 });
+
+test("parent registrations page presents a richer details and status experience", () => {
+  const registrationsPage = fs.readFileSync("app/dashboard/parent/activities/ParentRegistrations.tsx", "utf8");
+  assert.match(registrationsPage, /פרטי הפעילות/);
+  assert.match(registrationsPage, /סגירת החלון/);
+  assert.match(registrationsPage, /מקומות פנויים/);
+  assert.match(registrationsPage, /לא נדרש להביא ציוד/);
+  assert.match(registrationsPage, /איסוף/);
+  assert.match(registrationsPage, /נגישות והתאמות/);
+  assert.match(registrationsPage, /פנויים מתוך/);
+});

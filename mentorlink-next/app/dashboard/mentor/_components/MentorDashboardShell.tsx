@@ -14,6 +14,7 @@ export const mentorNavigation = [
  {href:"/dashboard/mentor/subjects",label:"המקצועות והתחומים שלי"},
  {href:"/dashboard/mentor/activities/new",label:"פתיחת פעילות חדשה"},
  {href:"/dashboard/mentor/activities",label:"הפעילויות שלי"},
+ {href:"/dashboard/mentor/feedback",label:"משובים שקיבלתי"},
  {href:"/dashboard/mentor/discover",label:"חיפוש חונכים ופעילויות"},
  {href:"/dashboard/mentor/account",label:"החשבון שלי"},
 ] as const;

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type ActivityInfoKind = "subject" | "location" | "audience" | "participants" | "equipment" | "pickup" | "accessibility" | "cancellation" | "price" | "date" | "description";
+export type ActivityInfoKind = "subject" | "location" | "audience" | "participants" | "equipment" | "pickup" | "accessibility" | "cancellation" | "price" | "date" | "description" | "phone";
 
 export type ActivityInfoItem = { kind: ActivityInfoKind; title: string; content: ReactNode };
 
@@ -11,6 +11,7 @@ const tones: Record<ActivityInfoKind, string> = {
   accessibility: "border-teal-300 bg-teal-50", cancellation: "border-rose-300 bg-rose-50",
   price: "border-lime-300 bg-lime-50", date: "border-sky-300 bg-sky-50",
   description: "border-slate-300 bg-slate-50",
+  phone: "border-fuchsia-300 bg-fuchsia-50",
 };
 
 export function ActivityInfoGrid({ items }: { items: ActivityInfoItem[] }) {
@@ -33,6 +34,7 @@ function ActivityIcon({ kind }: { kind: ActivityInfoKind }) {
     pickup: <><path d="M3 16V7h13l4 5v4"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M16 8v4h4"/></>,
     accessibility: <><circle cx="12" cy="4" r="2"/><path d="M8 8h8l-2 5h-4zM12 8v13M8 21h8M7 13l-3 5M17 13l3 5"/></>,
     cancellation: <><circle cx="12" cy="12" r="9"/><path d="m8 8 8 8M16 8l-8 8"/></>,
+    phone: <><path d="M6.5 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-2.5l-4-1.5-1.5 2a15 15 0 0 1-9.5-9.5l2-1.5z"/></>,
     price: <><circle cx="12" cy="12" r="9"/><path d="M15 8.5c-.7-.6-1.6-.9-2.7-.9-1.5 0-2.6.8-2.6 2s1 1.8 2.7 2.2 2.7 1 2.7 2.4-1.2 2.2-2.9 2.2c-1.2 0-2.3-.4-3.1-1.1M12 6v12"/></>,
     date: <><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01"/></>,
     description: <><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5"/></>,

@@ -36,6 +36,7 @@ type Activity = {
   image_alt: string | null;
   sessions: Session[];
   registration_counts: { registered: number; waitlisted: number; total: number };
+  contact_phone_visibility: "public" | "registered_parents" | "mentor_approved";
 };
 type ConfirmAction = { kind: "publish" | "cancel" | "delete"; activity: Activity } | null;
 type Notice = { type: "success" | "error"; text: string } | null;
@@ -65,6 +66,7 @@ export function MentorActivitiesManager() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [preview, setPreview] = useState<Activity | null>(null);
   const [updatesActivity, setUpdatesActivity] = useState<Activity | null>(null);
+  const [registrationsActivity, setRegistrationsActivity] = useState<Activity | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const previewTrigger = useRef<HTMLButtonElement | null>(null);
 
@@ -166,14 +168,15 @@ export function MentorActivitiesManager() {
     </div>
     {loading ? <div role="status" className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-3xl bg-slate-200 motion-reduce:animate-none" />)}</div>
       : visible.length === 0 ? <div className="mt-8 rounded-3xl border-2 border-dashed border-blue-300 bg-blue-50 p-10 text-center"><h2 className="text-2xl font-black">{activities.length ? "אין פעילויות בסינון הזה" : "עוד לא פתחת פעילות"}</h2><p className="mt-2 text-slate-600">אפשר להתחיל מטיוטה ולפרסם כשהכול מוכן.</p><Link href="/dashboard/mentor/activities/new" className="mt-6 inline-block rounded-2xl bg-blue-700 px-7 py-4 font-black text-white shadow-md">פתיחת פעילות חדשה</Link></div>
-      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
+      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onRegistrations={() => setRegistrationsActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
     {preview && <PreviewDialog activity={preview} onClose={() => { setPreview(null); requestAnimationFrame(() => previewTrigger.current?.focus()); }} />}
     {updatesActivity && <UpdatesDialog activity={updatesActivity} token={token} onClose={() => setUpdatesActivity(null)} />}
+    {registrationsActivity && <RegistrationsDialog activity={registrationsActivity} token={token} onClose={() => setRegistrationsActivity(null)} />}
     {confirmAction && <ConfirmDialog action={confirmAction} busy={busyId === confirmAction.activity.id} onClose={() => !busyId && setConfirmAction(null)} onConfirm={executeConfirmed} />}
   </section>;
 }
 
-function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onImage: (file: File) => void }) {
+function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onRegistrations, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onRegistrations: () => void; onImage: (file: File) => void }) {
   const next = nextSession(activity.sessions);
   const registered = activity.registration_counts?.registered ?? 0;
   const waitlisted = activity.registration_counts?.waitlisted ?? 0;
@@ -188,8 +191,10 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
     <div className="mt-auto flex flex-wrap gap-2 border-t border-black/10 pt-4" aria-label={`פעולות עבור ${activity.title ?? "הפעילות"}`}>
       {(activity.status === "draft" || (activity.status === "published" && registered + waitlisted === 0)) && <Link href={`/dashboard/mentor/activities/${activity.id}/edit`} className="rounded-xl bg-blue-700 px-4 py-2 font-black text-white">עריכת הפעילות</Link>}
       <button type="button" onClick={(event) => onPreview(event.currentTarget)} className={secondary}>פרטים נוספים</button>
+      {registered + waitlisted > 0 && <button type="button" onClick={onRegistrations} className={secondary}>ניהול הרשמות ({registered + waitlisted})</button>}
       {activity.status === "draft" && <button type="button" disabled={busy} onClick={() => onConfirm("publish")} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white disabled:opacity-50">פרסום הפעילות</button>}
       {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onUpdates} className={primary}>עדכונים לנרשמים</button>}
+      {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onRegistrations} className={secondary}>ניהול הרשמות</button>}
       {activity.status === "published" && <button type="button" disabled={busy} onClick={() => onConfirm("cancel")} className={danger}>ביטול</button>}
       <div className="w-full rounded-xl bg-white/70 p-3"><button type="button" disabled={busy} onClick={onDuplicate} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white disabled:opacity-50">יצירת פעילות חדשה על בסיס זו</button><p className="mt-2 text-xs leading-5 text-slate-600">תיווצר טיוטה חדשה. הפעילות המקורית לא תשתנה, ויש לבחור תאריך ושעות חדשים.</p></div>
       {(activity.status === "draft" || (activity.status === "cancelled" && (activity.registration_counts?.total ?? 0) === 0)) && <div className="w-full border-t border-red-200 pt-3"><button type="button" disabled={busy} onClick={() => onConfirm("delete")} className={danger}>{activity.status === "draft" ? "מחיקת טיוטה" : "מחיקת פעילות מבוטלת"}</button></div>}
@@ -267,6 +272,51 @@ function UpdatesDialog({ activity, token, onClose }: { activity: Activity; token
     <section className="mt-6"><h3 className="text-xl font-black">עדכונים שנשלחו</h3><div className="mt-3 grid gap-3">{updates.length ? updates.map((update) => <article key={update.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap justify-between gap-2 text-sm font-bold text-slate-500"><span>{update.recipient_scope === "all_active" ? "לכל הנרשמים" : "להורה מסוים"}</span><time>{new Date(update.created_at).toLocaleString("he-IL")}</time></div><p className="mt-2 whitespace-pre-wrap text-slate-800">{update.body}</p></article>) : <p className="rounded-xl bg-slate-50 p-4 text-slate-600">טרם נשלחו עדכונים.</p>}</div></section>
   </section></div>;
 }
+type RegistrationContact = {
+  id: string;
+  parentUserId: string;
+  parentName: string;
+  parentPhone: string | null;
+  parentEmail: string | null;
+  childName: string;
+  status: "registered" | "waitlisted";
+  contactApproved: boolean;
+  child: { grade: string | null; school_name: string | null } | null;
+  interests: string[];
+  parentProfile: { city: string | null; street: string | null; wants_home_mentoring: boolean; house_number: string | null; entrance: string | null; apartment: string | null; address_notes: string | null } | null;
+};
+
+function RegistrationsDialog({ activity, token, onClose }: { activity: Activity; token: string; onClose: () => void }) {
+  const [rows, setRows] = useState<RegistrationContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void fetch(`/api/mentor-activities/${activity.id}/registrations`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error);
+        setRows(body.registrations ?? []);
+      })
+      .catch(() => setMessage("לא ניתן לטעון את פרטי המשפחות."))
+      .finally(() => setLoading(false));
+  }, [activity.id, token]);
+
+  async function setApproval(row: RegistrationContact, approved: boolean) {
+    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ parentUserId: row.parentUserId, approved }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return setMessage(body.error ?? "לא ניתן לעדכן את הרשאת הקשר.");
+    setRows((current) => current.map((item) => item.parentUserId === row.parentUserId ? { ...item, contactApproved: approved } : item));
+    setMessage(approved ? "הטלפון של החונך זמין כעת להורה הרשום." : "הרשאת הצגת הטלפון של החונך בוטלה.");
+  }
+
+  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section role="dialog" aria-modal="true" aria-label="ניהול הרשמות" className="mx-auto my-5 max-w-4xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><header className="flex items-start justify-between gap-4"><div><p className="font-black text-blue-700">ניהול הרשמות</p><h2 className="text-2xl font-black">{activity.title}</h2></div><button type="button" onClick={onClose} aria-label="סגירת חלון ההרשמות" className="grid size-11 place-items-center rounded-full bg-slate-100 text-2xl">×</button></header>{message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-4 font-bold text-blue-900">{message}</p>}{loading ? <p className="mt-6">טוען...</p> : <div className="mt-6 grid gap-4">{rows.length ? rows.map((row) => <article key={row.id} className="rounded-2xl border-2 border-slate-200 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{row.childName}</h3><p className="font-bold text-slate-700">הורה: {row.parentName}</p></div><span className={`rounded-full px-3 py-1 text-sm font-black ${row.status === "registered" ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{row.status === "registered" ? "רשום/ה" : "רשימת המתנה"}</span></div><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><Contact label="טלפון" value={row.parentPhone ?? "טרם נשמר"} /><Contact label="אימייל" value={row.parentEmail ?? "טרם נשמר"} /><Contact label="כיתה" value={row.child?.grade ?? "לא צוינה"} /><Contact label="בית ספר" value={row.child?.school_name ?? "לא צוין"} /><Contact label="תחומי עניין" value={row.interests.join(" · ") || "לא צוינו"} /><Contact label="כתובת בסיסית" value={[row.parentProfile?.city, row.parentProfile?.street].filter(Boolean).join(" · ") || "לא צוינה"} />{row.parentProfile?.wants_home_mentoring && <Contact label="כתובת לחונכות בבית" value={[row.parentProfile.street, row.parentProfile.house_number, row.parentProfile.entrance && `כניסה ${row.parentProfile.entrance}`, row.parentProfile.apartment && `דירה ${row.parentProfile.apartment}`, row.parentProfile.city, row.parentProfile.address_notes].filter(Boolean).join(" · ")} />}</dl><div className="mt-4 flex flex-wrap gap-2">{row.parentPhone && <><a href={`tel:${row.parentPhone.replace(/[^0-9+]/g, "")}`} className={primary}>התקשרות להורה</a><a target="_blank" rel="noreferrer" href={`https://wa.me/${row.parentPhone.replace(/[^0-9]/g, "").replace(/^0/, "972")}`} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white">WhatsApp להורה</a></>}{activity.contact_phone_visibility === "mentor_approved" && row.status === "registered" && <button type="button" onClick={() => setApproval(row, !row.contactApproved)} className={row.contactApproved ? danger : secondary}>{row.contactApproved ? "ביטול הצגת הטלפון להורה" : "אישור הצגת הטלפון להורה"}</button>}</div></article>) : <p className="rounded-xl bg-slate-50 p-4">אין כרגע הרשמות פעילות.</p>}<button type="button" onClick={onClose} className={primary}>סגירה</button></div>}</section></div>;
+}
+function Contact({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-slate-50 p-3"><dt className="font-bold text-slate-500">{label}</dt><dd className="mt-1 font-black text-slate-900">{value}</dd></div>}
 function PreviewDialog({ activity, onClose }: { activity: Activity; onClose: () => void }) {
   const audience = audienceText(activity);
   useEffect(() => { const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; document.addEventListener("keydown", closeOnEscape); return () => document.removeEventListener("keydown", closeOnEscape); }, [onClose]);

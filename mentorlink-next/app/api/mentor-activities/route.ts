@@ -63,6 +63,9 @@ export async function POST(request: Request) {
     if (saved.error || !saved.data) {
       const conflict = rpcConflict(saved.error?.message);
       if (conflict) return Response.json({ error: "Activity conflicts with the mentor calendar", code: conflict }, { status: 409 });
+      if (saved.error?.message.includes("PUBLIC_PHONE_REQUIRES_PARENT_CONSENT")) {
+        return Response.json({ error: "כדי להציג מספר טלפון לכל ההורים נדרש אישור הורה מפורש. אפשר לבחור הצגה רק לאחר הרשמה.", code: "PUBLIC_PHONE_REQUIRES_PARENT_CONSENT" }, { status: 403 });
+      }
       throw new Error("activity save failed");
     }
     const activity = await loadOwnedActivity(client, authentication.user.id, saved.data);
