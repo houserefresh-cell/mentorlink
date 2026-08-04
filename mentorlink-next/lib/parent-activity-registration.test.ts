@@ -77,8 +77,12 @@ test("mentor cards provide direct access to their activities and registration ca
   const directory = fs.readFileSync("app/_components/PublicMentorDirectory.tsx", "utf8");
   assert.match(directory, /פעילויות של החונך — לצפייה ולהרשמה/);
   assert.match(directory, /href={`#activity-\${activity\.id}`}/);
+  assert.match(directory, /activities\.length===1\?openParentActivity\(activities\[0\]\.id\)/);
+  assert.match(directory, /mentorlink:open-activity/);
   assert.match(directory, /מעבר לפעילות ולהרשמה/);
   assert.match(discovery, /id={`activity-\${activity\.id}`}/);
+  assert.match(discovery, /window\.addEventListener\(OPEN_ACTIVITY_EVENT, openFromEvent\)/);
+  assert.match(discovery, /setDetails\(activity\)/);
 });
 
 test("parent registrations page presents a richer details and status experience", () => {

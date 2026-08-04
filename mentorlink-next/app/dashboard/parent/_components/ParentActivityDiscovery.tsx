@@ -24,6 +24,7 @@ type Activity = {
 const gradeLabels: Record<string, string> = { kindergarten: "גן חובה", ...Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`grade_${index + 1}`, index < 9 ? `${String.fromCharCode(1488 + index)}׳` : ["י׳", "י״א", "י״ב"][index - 9]])) };
 const locationLabels: Record<string, string> = { mentor_home: "בית החונך", mentee_home: "בית החניך", school: "בית ספר", public_place: "מקום ציבורי", sports_park: "ספורטק", community_center: "מרכז קהילתי", sports_complex: "מתחם ספורט", online: "מקוון", other: "מקום אחר" };
 const accessibilityLabels: Record<string, string> = { wheelchair: "נגישות לכיסא גלגלים", accessible_restroom: "שירותים נגישים", accessible_parking: "חניה נגישה", visual_impairment: "התאמה ללקות ראייה", hearing_impairment: "התאמה ללקות שמיעה", written_visual_instructions: "הוראות כתובות או חזותיות", sensory_friendly: "סביבה מותאמת לרגישות חושית", companion_allowed: "אפשרות למלווה", unknown: "מומלץ ליצור קשר לפני ההרשמה" };
+const OPEN_ACTIVITY_EVENT = "mentorlink:open-activity";
 
 export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMentor[] }) {
   const [activities, setActivities] = useState<Activity[]>([]), [children, setChildren] = useState<Child[]>([]), [registrations, setRegistrations] = useState<RegistrationStatus[]>([]);
@@ -45,6 +46,27 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     setLoading(false);
   }
   useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    function openActivity(activityId: string | null) {
+      if (!activityId) return;
+      const activity = activities.find((item) => item.id === activityId);
+      if (activity) setDetails(activity);
+    }
+    function openFromHash() {
+      const match = window.location.hash.match(/^#activity-(.+)$/);
+      openActivity(match?.[1] ?? null);
+    }
+    function openFromEvent(event: Event) {
+      openActivity((event as CustomEvent<{ activityId?: string }>).detail?.activityId ?? null);
+    }
+    openFromHash();
+    window.addEventListener("hashchange", openFromHash);
+    window.addEventListener(OPEN_ACTIVITY_EVENT, openFromEvent);
+    return () => {
+      window.removeEventListener("hashchange", openFromHash);
+      window.removeEventListener(OPEN_ACTIVITY_EVENT, openFromEvent);
+    };
+  }, [activities]);
   const registrationState = useMemo(() => {
     return registrations.reduce<Map<string, Map<string, string>>>((map, row) => {
       const activityMap = map.get(row.activity_id) ?? new Map<string, string>();
