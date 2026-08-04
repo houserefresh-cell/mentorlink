@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     subjectIds.length ? admin.from("subjects").select("id, name, category").in("id", subjectIds) : Promise.resolve({ data: [], error: null }),
     mentorIds.length ? admin.from("mentor_publication").select("user_id, public_booking_id").in("user_id", mentorIds).eq("status", "published") : Promise.resolve({ data: [], error: null }),
     mentorIds.length ? admin.from("mentor_parent_consents").select("user_id, contact_confirmed, status").in("user_id", mentorIds).eq("status", "approved") : Promise.resolve({ data: [], error: null }),
-    admin.from("parent_children").select("id").eq("parent_user_id", user.id),
+    admin.from("parent_children").select("id, first_name").eq("parent_user_id", user.id),
   ]);
   if (sessions.error || registrations.error || profiles.error || subjects.error || publications.error || parentConsents.error || parentChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת הפעילויות." }, { status: 500 });
   const publicActivities = (activities.data ?? []).flatMap((activity) => {
@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     const registered = counts.filter((row) => row.status === "registered").length;
     const parentActiveChildIds = new Set(counts.filter((row) => row.parent_user_id === user.id).map((row) => row.child_id));
     const allChildrenRegistered = (parentChildren.data?.length ?? 0) > 0 && parentActiveChildIds.size >= (parentChildren.data?.length ?? 0);
+    const registeredChildNames = (parentChildren.data ?? []).filter((child) => parentActiveChildIds.has(child.id)).map((child) => child.first_name);
     const imageUrl = activity.image_path ? admin.storage.from("activity-images").getPublicUrl(activity.image_path).data.publicUrl : null;
     const isAdult = mentor?.birth_date ? new Date(mentor.birth_date) <= new Date(new Date().setFullYear(new Date().getFullYear() - 18)) : false;
     const hasContactConsent = (parentConsents.data ?? []).some((row) => row.user_id === activity.mentor_user_id && row.contact_confirmed === true);
@@ -48,7 +49,9 @@ export async function GET(request: Request) {
       cancellationPolicy: activity.cancellation_policy, registrationDeadline: activity.registration_deadline,
       contactPhoneVisibility: activity.contact_phone_visibility, mentorPhone,
       imageUrl, imageAlt: activity.image_alt,
-      registrationOpen: Boolean(activity.registration_deadline && new Date(activity.registration_deadline) > new Date()) && !allChildrenRegistered,
+      registrationOpen: Boolean(activity.registration_deadline && new Date(activity.registration_deadline) > new Date()),
+      allChildrenRegistered,
+      registeredChildNames,
       registrationUnavailableReason: allChildrenRegistered ? "הילדים כבר רשומים" : null,
       sessions: upcoming, registeredCount: registered,
       waitlistedCount: counts.filter((row) => row.status === "waitlisted").length,

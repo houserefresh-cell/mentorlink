@@ -73,6 +73,16 @@ test("published upcoming activities remain visible without child preferences", (
   assert.match(discovery, /ההרשמה נסגרה/);
 });
 
+test("family registration state does not falsely close an open activity", () => {
+  assert.match(activityApi, /registrationOpen: Boolean\(activity\.registration_deadline/);
+  assert.doesNotMatch(activityApi, /registrationOpen:[^\n]+&& !allChildrenRegistered/);
+  assert.match(activityApi, /registeredChildNames/);
+  assert.match(activityApi, /allChildrenRegistered,/);
+  assert.match(discovery, /registeredChildrenLabel\(activity\.registeredChildNames\)/);
+  assert.match(discovery, /activity\.registrationOpen&&!activity\.allChildrenRegistered/);
+  assert.match(discovery, /הילדים כבר רשומים/);
+});
+
 test("mentor cards provide direct access to their activities and registration cards", () => {
   const directory = fs.readFileSync("app/_components/PublicMentorDirectory.tsx", "utf8");
   assert.match(directory, /פעילויות של החונך — לצפייה ולהרשמה/);
