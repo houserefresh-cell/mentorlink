@@ -50,13 +50,23 @@ grant execute on function public.notify_mentor_activity_registration()
 to service_role;
 
 -- Preserve the established activity-save implementation and persist the new
--- contact policy in the same transaction through a private wrapper.
-alter function public.save_mentor_activity(uuid, uuid, jsonb, jsonb, boolean)
-  rename to save_mentor_activity_before_contact_visibility;
+-- contact policy in the same transaction through a private wrapper. Some
+-- environments already received this private function from the first version
+-- of migration 031, so only rename the public implementation when needed.
+do $$
+begin
+  if to_regprocedure(
+    'public.save_mentor_activity_before_contact_visibility(uuid,uuid,jsonb,jsonb,boolean)'
+  ) is null then
+    alter function public.save_mentor_activity(uuid, uuid, jsonb, jsonb, boolean)
+      rename to save_mentor_activity_before_contact_visibility;
+  end if;
+end;
+$$;
 revoke all on function public.save_mentor_activity_before_contact_visibility(uuid, uuid, jsonb, jsonb, boolean)
 from public, anon, authenticated, service_role;
 
-create function public.save_mentor_activity(
+create or replace function public.save_mentor_activity(
   p_activity_id uuid,
   p_mentor_user_id uuid,
   p_activity jsonb,
