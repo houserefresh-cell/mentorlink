@@ -42,7 +42,6 @@ type ConfirmAction = { kind: "publish" | "cancel" | "delete"; activity: Activity
 type Notice = { type: "success" | "error"; text: string } | null;
 type Recipient = { parentUserId: string; childFirstNames: string[] };
 type ActivityUpdate = { id: string; recipient_scope: "all_active" | "parent"; recipient_parent_user_id: string | null; update_type: string; body: string; delay_minutes: number | null; proposed_start_at: string | null; proposed_end_at: string | null; created_at: string };
-type ActivityRegistration = { id: string; parentUserId: string | null; parentName: string | null; parentPhone: string | null; childName: string; status: "registered" | "waitlisted"; registeredAt: string; contactApproved: boolean };
 
 const STATUS: Record<Status, { label: string; badge: string; card: string }> = {
   draft: { label: "טיוטה", badge: "bg-amber-100 text-amber-900", card: "border-amber-200 bg-amber-50/70" },
@@ -203,30 +202,6 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
   </article>;
 }
 
-function RegistrationsDialog({ activity, token, onClose }: { activity: Activity; token: string; onClose: () => void }) {
-  const [rows, setRows] = useState<ActivityRegistration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notice, setNotice] = useState("");
-  async function load() {
-    setLoading(true);
-    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-    const body = await response.json().catch(() => ({}));
-    setRows(response.ok ? body.registrations ?? [] : []);
-    setNotice(response.ok ? "" : body.error ?? "לא ניתן לטעון את ההרשמות.");
-    setLoading(false);
-  }
-  useEffect(() => { void load(); }, []);
-  async function setApproval(row: ActivityRegistration, approved: boolean) {
-    if (!row.parentUserId) return;
-    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ parentUserId: row.parentUserId, approved }) });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) return setNotice(body.error ?? "לא ניתן לעדכן את הרשאת הקשר.");
-    setRows((current) => current.map((item) => item.parentUserId === row.parentUserId ? { ...item, contactApproved: approved } : item));
-    setNotice(approved ? "הטלפון זמין כעת להורה הרשום." : "הרשאת הצגת הטלפון בוטלה.");
-  }
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section role="dialog" aria-modal="true" aria-label="ניהול הרשמות" className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-3xl bg-white shadow-2xl"><header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white p-5"><div><p className="font-bold text-blue-700">ניהול הרשמות</p><h2 className="text-2xl font-black">{activity.title}</h2></div><button type="button" onClick={onClose} aria-label="סגירת חלון ההרשמות" className="grid size-11 place-items-center rounded-full bg-slate-100 text-2xl font-black">×</button></header><div className="space-y-4 p-5">{notice && <p role="status" className="rounded-xl bg-blue-50 p-3 font-bold text-blue-900">{notice}</p>}{loading ? <p>טוען הרשמות...</p> : rows.length ? rows.map((row) => <article key={row.id} className="rounded-2xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className={`rounded-full px-3 py-1 text-sm font-black ${row.status === "registered" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-900"}`}>{row.status === "registered" ? "רשום/ה" : "רשימת המתנה"}</span><h3 className="mt-3 text-xl font-black">{row.childName}</h3>{row.status === "registered" && <><p className="mt-1">הורה: {row.parentName}</p>{row.parentPhone ? <a dir="ltr" href={`tel:${row.parentPhone}`} className="font-black text-blue-700 underline">{row.parentPhone}</a> : <p className="text-slate-500">לא נשמר מספר טלפון</p>}</>}</div>{activity.contact_phone_visibility === "mentor_approved" && row.status === "registered" && <button type="button" onClick={() => setApproval(row, !row.contactApproved)} className={row.contactApproved ? danger : primary}>{row.contactApproved ? "ביטול הצגת הטלפון" : "אישור הצגת הטלפון להורה"}</button>}</div>{row.status === "waitlisted" && <p className="mt-3 text-sm text-slate-600">פרטי ההורה ייחשפו רק לאחר מעבר להרשמה מאושרת.</p>}</article>) : <p className="rounded-xl bg-slate-50 p-4">אין כרגע הרשמות פעילות.</p>}<button type="button" onClick={onClose} className={primary}>סגירה</button></div></section></div>;
-}
-
 function ConfirmDialog({ action, busy, onClose, onConfirm }: { action: NonNullable<ConfirmAction>; busy: boolean; onClose: () => void; onConfirm: (reason?: string) => void }) {
   const [reason, setReason] = useState("");
   const copy = action.kind === "publish" ? { title: "פרסום הפעילות", text: "הפעילות תופיע למשפחות ותהיה פתוחה להרשמה. לפרסם עכשיו?", confirm: "אישור ופרסום" } : action.kind === "cancel" ? { title: "ביטול הפעילות", text: "הפעילות תיסגר להרשמה ותסומן כמבוטלת. לבטל עכשיו?", confirm: "אישור ביטול" } : { title: "מחיקת הטיוטה", text: "הטיוטה וכל המפגשים שלה יימחקו לצמיתות. למחוק עכשיו?", confirm: "אישור מחיקה" };
@@ -297,11 +272,49 @@ function UpdatesDialog({ activity, token, onClose }: { activity: Activity; token
     <section className="mt-6"><h3 className="text-xl font-black">עדכונים שנשלחו</h3><div className="mt-3 grid gap-3">{updates.length ? updates.map((update) => <article key={update.id} className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap justify-between gap-2 text-sm font-bold text-slate-500"><span>{update.recipient_scope === "all_active" ? "לכל הנרשמים" : "להורה מסוים"}</span><time>{new Date(update.created_at).toLocaleString("he-IL")}</time></div><p className="mt-2 whitespace-pre-wrap text-slate-800">{update.body}</p></article>) : <p className="rounded-xl bg-slate-50 p-4 text-slate-600">טרם נשלחו עדכונים.</p>}</div></section>
   </section></div>;
 }
-type RegistrationContact={id:string;parentUserId:string;parentName:string;parentPhone:string|null;parentEmail:string|null;childName:string;status:"registered"|"waitlisted";child:{grade:string|null;school_name:string|null}|null;interests:string[];parentProfile:{city:string|null;street:string|null;wants_home_mentoring:boolean;house_number:string|null;entrance:string|null;apartment:string|null;address_notes:string|null}|null};
-function RegistrationsDialog({activity,token,onClose}:{activity:Activity;token:string;onClose:()=>void}){
- const[rows,setRows]=useState<RegistrationContact[]>([]),[loading,setLoading]=useState(true),[message,setMessage]=useState("");
- useEffect(()=>{void fetch(`/api/mentor-activities/${activity.id}/registrations`,{headers:{Authorization:`Bearer ${token}`},cache:"no-store"}).then(async response=>{const body=await response.json();if(!response.ok)throw new Error(body.error);setRows(body.registrations??[])}).catch(()=>setMessage("לא ניתן לטעון את פרטי המשפחות.")).finally(()=>setLoading(false))},[activity.id,token]);
- return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4"><section role="dialog" aria-modal="true" className="mx-auto my-5 max-w-4xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><header className="flex items-start justify-between gap-4"><div><p className="font-black text-blue-700">ניהול הרשמות</p><h2 className="text-2xl font-black">{activity.title}</h2></div><button onClick={onClose} className="grid size-11 place-items-center rounded-full bg-slate-100 text-2xl">×</button></header>{message&&<p className="mt-4 rounded-xl bg-red-50 p-4 font-bold text-red-800">{message}</p>}{loading?<p className="mt-6">טוען...</p>:<div className="mt-6 grid gap-4">{rows.map(row=><article key={row.id} className="rounded-2xl border-2 border-slate-200 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{row.childName}</h3><p className="font-bold text-slate-700">הורה: {row.parentName}</p></div><span className={`rounded-full px-3 py-1 text-sm font-black ${row.status==="registered"?"bg-emerald-100 text-emerald-900":"bg-amber-100 text-amber-900"}`}>{row.status==="registered"?"רשום/ה":"רשימת המתנה"}</span></div><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><Contact label="טלפון" value={row.parentPhone??"טרם נשמר"}/><Contact label="אימייל" value={row.parentEmail??"טרם נשמר"}/><Contact label="כיתה" value={row.child?.grade??"לא צוינה"}/><Contact label="בית ספר" value={row.child?.school_name??"לא צוין"}/><Contact label="תחומי עניין" value={row.interests.join(" · ")||"לא צוינו"}/><Contact label="כתובת בסיסית" value={[row.parentProfile?.city,row.parentProfile?.street].filter(Boolean).join(" · ")||"לא צוינה"}/>{row.parentProfile?.wants_home_mentoring&&<Contact label="כתובת לחונכות בבית" value={[row.parentProfile.street,row.parentProfile.house_number,row.parentProfile.entrance&&`כניסה ${row.parentProfile.entrance}`,row.parentProfile.apartment&&`דירה ${row.parentProfile.apartment}`,row.parentProfile.city,row.parentProfile.address_notes].filter(Boolean).join(" · ")}/>}</dl>{row.parentPhone&&<div className="mt-4 flex flex-wrap gap-2"><a href={`tel:${row.parentPhone.replace(/[^0-9+]/g,"")}`} className={primary}>התקשרות להורה</a><a target="_blank" rel="noreferrer" href={`https://wa.me/${row.parentPhone.replace(/[^0-9]/g,"").replace(/^0/,"972")}`} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white">WhatsApp להורה</a></div>}</article>)}</div>}</section></div>
+type RegistrationContact = {
+  id: string;
+  parentUserId: string;
+  parentName: string;
+  parentPhone: string | null;
+  parentEmail: string | null;
+  childName: string;
+  status: "registered" | "waitlisted";
+  contactApproved: boolean;
+  child: { grade: string | null; school_name: string | null } | null;
+  interests: string[];
+  parentProfile: { city: string | null; street: string | null; wants_home_mentoring: boolean; house_number: string | null; entrance: string | null; apartment: string | null; address_notes: string | null } | null;
+};
+
+function RegistrationsDialog({ activity, token, onClose }: { activity: Activity; token: string; onClose: () => void }) {
+  const [rows, setRows] = useState<RegistrationContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    void fetch(`/api/mentor-activities/${activity.id}/registrations`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error);
+        setRows(body.registrations ?? []);
+      })
+      .catch(() => setMessage("לא ניתן לטעון את פרטי המשפחות."))
+      .finally(() => setLoading(false));
+  }, [activity.id, token]);
+
+  async function setApproval(row: RegistrationContact, approved: boolean) {
+    const response = await fetch(`/api/mentor-activities/${activity.id}/registrations`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ parentUserId: row.parentUserId, approved }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return setMessage(body.error ?? "לא ניתן לעדכן את הרשאת הקשר.");
+    setRows((current) => current.map((item) => item.parentUserId === row.parentUserId ? { ...item, contactApproved: approved } : item));
+    setMessage(approved ? "הטלפון של החונך זמין כעת להורה הרשום." : "הרשאת הצגת הטלפון של החונך בוטלה.");
+  }
+
+  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section role="dialog" aria-modal="true" aria-label="ניהול הרשמות" className="mx-auto my-5 max-w-4xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7"><header className="flex items-start justify-between gap-4"><div><p className="font-black text-blue-700">ניהול הרשמות</p><h2 className="text-2xl font-black">{activity.title}</h2></div><button type="button" onClick={onClose} aria-label="סגירת חלון ההרשמות" className="grid size-11 place-items-center rounded-full bg-slate-100 text-2xl">×</button></header>{message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-4 font-bold text-blue-900">{message}</p>}{loading ? <p className="mt-6">טוען...</p> : <div className="mt-6 grid gap-4">{rows.length ? rows.map((row) => <article key={row.id} className="rounded-2xl border-2 border-slate-200 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="text-xl font-black">{row.childName}</h3><p className="font-bold text-slate-700">הורה: {row.parentName}</p></div><span className={`rounded-full px-3 py-1 text-sm font-black ${row.status === "registered" ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-900"}`}>{row.status === "registered" ? "רשום/ה" : "רשימת המתנה"}</span></div><dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2"><Contact label="טלפון" value={row.parentPhone ?? "טרם נשמר"} /><Contact label="אימייל" value={row.parentEmail ?? "טרם נשמר"} /><Contact label="כיתה" value={row.child?.grade ?? "לא צוינה"} /><Contact label="בית ספר" value={row.child?.school_name ?? "לא צוין"} /><Contact label="תחומי עניין" value={row.interests.join(" · ") || "לא צוינו"} /><Contact label="כתובת בסיסית" value={[row.parentProfile?.city, row.parentProfile?.street].filter(Boolean).join(" · ") || "לא צוינה"} />{row.parentProfile?.wants_home_mentoring && <Contact label="כתובת לחונכות בבית" value={[row.parentProfile.street, row.parentProfile.house_number, row.parentProfile.entrance && `כניסה ${row.parentProfile.entrance}`, row.parentProfile.apartment && `דירה ${row.parentProfile.apartment}`, row.parentProfile.city, row.parentProfile.address_notes].filter(Boolean).join(" · ")} />}</dl><div className="mt-4 flex flex-wrap gap-2">{row.parentPhone && <><a href={`tel:${row.parentPhone.replace(/[^0-9+]/g, "")}`} className={primary}>התקשרות להורה</a><a target="_blank" rel="noreferrer" href={`https://wa.me/${row.parentPhone.replace(/[^0-9]/g, "").replace(/^0/, "972")}`} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white">WhatsApp להורה</a></>}{activity.contact_phone_visibility === "mentor_approved" && row.status === "registered" && <button type="button" onClick={() => setApproval(row, !row.contactApproved)} className={row.contactApproved ? danger : secondary}>{row.contactApproved ? "ביטול הצגת הטלפון להורה" : "אישור הצגת הטלפון להורה"}</button>}</div></article>) : <p className="rounded-xl bg-slate-50 p-4">אין כרגע הרשמות פעילות.</p>}<button type="button" onClick={onClose} className={primary}>סגירה</button></div>}</section></div>;
 }
 function Contact({label,value}:{label:string;value:string}){return <div className="rounded-xl bg-slate-50 p-3"><dt className="font-bold text-slate-500">{label}</dt><dd className="mt-1 font-black text-slate-900">{value}</dd></div>}
 function PreviewDialog({ activity, onClose }: { activity: Activity; onClose: () => void }) {

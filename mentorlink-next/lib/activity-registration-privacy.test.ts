@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const migration = fs.readFileSync("supabase/migrations/202608030031_complete_activity_registration_privacy.sql", "utf8");
+const migration = [
+  "supabase/migrations/202608030031_complete_activity_registration_privacy.sql",
+  "supabase/migrations/202608040033_finalize_activity_registration_management.sql",
+].map((path) => fs.readFileSync(path, "utf8")).join("\n");
 const mentorApi = fs.readFileSync("app/api/mentor-activities/[activityId]/registrations/route.ts", "utf8");
 const parentApi = fs.readFileSync("app/api/parent/activity-registrations/route.ts", "utf8");
 const manager = fs.readFileSync("app/dashboard/mentor/activities/_components/MentorActivitiesManager.tsx", "utf8");
@@ -45,13 +48,13 @@ test("parent phone requires a registered row and mentor UI supports explicit app
   assert.match(parentApi, /const isRegistered = registration\.status === "registered"/);
   assert.match(parentApi, /mentor_approved[\s\S]*approvedActivityIds/);
   assert.match(mentorApi, /contactApproved/);
-  assert.match(mentorApi, /parentUserId: row\.status === "registered"/);
+  assert.match(mentorApi, /parentUserId: row\.parent_user_id/);
   assert.match(manager, /ניהול הרשמות/);
   assert.match(manager, /אישור הצגת הטלפון להורה/);
 });
 
 test("cancellation revokes stale approval and promotes the oldest waitlisted child", () => {
   assert.match(migration, /delete from public\.mentor_activity_contact_approvals/);
-  assert.match(migration, /order by created_at for update skip locked limit 1/);
+  assert.match(migration, /order by created_at[\s\S]*for update skip locked[\s\S]*limit 1/);
   assert.match(migration, /התפנה מקום בפעילות/);
 });
