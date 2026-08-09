@@ -25,10 +25,11 @@ test("details dialog contains no inquiry or meeting form", () => {
 });
 
 test("one directory action state permits only one top-level modal", () => {
-  assert.match(directory, /type DirectoryAction = "details" \| "inquiry" \| "meeting"/);
-  assert.match(directory, /activeInteraction\?\.action === "details"/);
-  assert.match(directory, /activeInteraction\?\.action === "inquiry"/);
-  assert.match(directory, /activeInteraction\?\.action === "meeting"/);
+  assert.match(directory, /type DirectoryAction="details"\|"activities"\|"inquiry"\|"meeting"/);
+  assert.match(directory, /activeInteraction\?\.action\s*===\s*"details"/);
+  assert.match(directory, /activeInteraction\?\.action\s*===\s*"activities"/);
+  assert.match(directory, /activeInteraction\?\.action\s*===\s*"inquiry"/);
+  assert.match(directory, /activeInteraction\?\.action\s*===\s*"meeting"/);
   assert.match(directory, /setActiveInteraction\(\{ mentor, action \}\)/);
   assert.match(directory, /setActiveInteraction\(null\)/);
 });

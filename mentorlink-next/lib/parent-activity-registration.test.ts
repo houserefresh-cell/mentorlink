@@ -86,10 +86,13 @@ test("family registration state does not falsely close an open activity", () => 
 test("mentor cards provide direct access to their activities and registration cards", () => {
   const directory = fs.readFileSync("app/_components/PublicMentorDirectory.tsx", "utf8");
   assert.match(directory, /פעילויות של החונך — לצפייה ולהרשמה/);
-  assert.match(directory, /href={`#activity-\${activity\.id}`}/);
+  assert.match(directory, /openActivity\(activity\.id\)/);
   assert.match(directory, /activities\.length===1\?openParentActivity\(activities\[0\]\.id\)/);
+  assert.match(directory, /onOpen\(mentor,"activities",event\.currentTarget\)/);
+  assert.match(directory, /function MentorActivitiesDialog/);
+  assert.doesNotMatch(directory.slice(directory.indexOf("function MentorDetailsDialog"), directory.indexOf("function Avatar")), /הפעילויות של החונך/);
   assert.match(directory, /mentorlink:open-activity/);
-  assert.match(directory, /מעבר לפעילות ולהרשמה/);
+  assert.match(directory, /פרטי הפעילות והרשמה/);
   assert.match(discovery, /id={`activity-\${activity\.id}`}/);
   assert.match(discovery, /window\.addEventListener\(OPEN_ACTIVITY_EVENT, openFromEvent\)/);
   assert.match(discovery, /setDetails\(activity\)/);
