@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import MentorOnboardingPage from "../../dashboard/mentor/onboarding/page";
 import { resolveMentorRegistrationView } from "../../../lib/mentor-register-view";
+import RegistrationSupport from "@/app/_components/RegistrationSupport";
 
 type OwnerType = "mentor" | "parent_guardian";
 
@@ -133,11 +134,11 @@ export default function MentorRegisterPage() {
   }
 
   if (view === "onboarding") {
-    return <MentorOnboardingPage />;
+    return <div className="registration-surface"><MentorOnboardingPage /><RegistrationSupport compact /></div>;
   }
 
   return (
-    <main dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 px-4 py-8 sm:px-6 sm:py-12">
+    <main dir="rtl" className="registration-surface min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto w-full max-w-xl">
         <div className="mb-8 text-center">
           <p className="mb-3 font-bold text-blue-600">שלב 1</p>
@@ -175,6 +176,7 @@ export default function MentorRegisterPage() {
           <button type="button" onClick={continueWithGoogle} disabled={loading || !firstName.trim() || !lastName.trim()} className="w-full rounded-xl border border-slate-300 bg-white py-4 font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50">המשך עם Google</button>
           {message && <p className={`mt-5 rounded-xl p-4 text-center ${message.startsWith("שגיאה") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{message}</p>}
         </div>
+        <RegistrationSupport />
         <p className="mt-7 text-center text-slate-600">כבר יש לכם חשבון? <Link href="/login" className="font-bold text-blue-600">התחברו כאן</Link></p>
       </div>
     </main>

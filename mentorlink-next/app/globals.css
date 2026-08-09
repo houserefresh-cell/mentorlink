@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -12,15 +13,36 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.registration-surface {
+  color-scheme: light;
+  color: #0f172a;
+}
+
+.registration-surface input:not([type="checkbox"]):not([type="radio"]),
+.registration-surface select,
+.registration-surface textarea {
+  background-color: #ffffff;
+  color: #020617;
+  opacity: 1;
+}
+
+.registration-surface input::placeholder,
+.registration-surface textarea::placeholder {
+  color: #475569;
+  opacity: 1;
+}
+
+.registration-surface input:disabled,
+.registration-surface select:disabled,
+.registration-surface textarea:disabled {
+  background-color: #e2e8f0;
+  color: #475569;
+  -webkit-text-fill-color: #475569;
+  opacity: 1;
 }

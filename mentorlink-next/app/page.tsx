@@ -3,6 +3,7 @@ import { Rubik } from "next/font/google";
 
 import PublicHeader from "@/app/_components/PublicHeader";
 import PublicMentorDirectory from "@/app/_components/PublicMentorDirectory";
+import SubjectDiscovery from "@/app/_components/SubjectDiscovery";
 import { getPublishedMentors } from "@/lib/public-mentor-data";
 import type { PublicMentor } from "@/lib/public-mentor-core";
 
@@ -11,13 +12,6 @@ const homeBodyFont = Rubik({
   display: "swap",
   weight: ["400", "500", "600", "700", "800", "900"],
 });
-
-const worlds = [
-  { icon: "⚽", title: "ספורט ותנועה", text: "כדורגל, כדורסל, כושר ועוד" },
-  { icon: "📚", title: "לימודים ושפות", text: "מתמטיקה, אנגלית, מדעים ועוד" },
-  { icon: "🎸", title: "יצירה ומוזיקה", text: "נגינה, ציור, צילום ויצירה" },
-  { icon: "💡", title: "טכנולוגיה והעשרה", text: "תכנות, רובוטיקה וכישורי חיים" },
-];
 
 const steps = [
   { number: "01", title: "מגלים", text: "מחפשים חונכים ופעילויות לפי תחום, גיל, אזור והעדפות." },
@@ -79,19 +73,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 pb-20 lg:px-8">
-        <div className="rounded-[2rem] border border-white/80 bg-white/80 p-5 shadow-xl shadow-slate-200/60 backdrop-blur md:p-8">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {worlds.map((world, index) => (
-              <article key={world.title} className={`rounded-3xl p-5 ${["bg-blue-50", "bg-amber-50", "bg-violet-50", "bg-cyan-50"][index]}`}>
-                <span className="text-3xl" aria-hidden>{world.icon}</span>
-                <h2 className="mt-4 text-lg font-black">{world.title}</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">{world.text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+      <SubjectDiscovery />
 
       <section className="bg-slate-950 py-20 text-white">
         <div className="mx-auto max-w-7xl px-5 lg:px-8">
