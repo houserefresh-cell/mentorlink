@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import RegistrationSupport from "@/app/_components/RegistrationSupport";
 import { supabase } from "@/lib/supabase";
 
 export default function ParentRegisterPage() {
@@ -81,7 +82,7 @@ export default function ParentRegisterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-12" dir="rtl">
+    <main className="registration-surface min-h-screen bg-slate-50 px-4 py-12" dir="rtl">
       <div className="mx-auto max-w-md">
         <Link
           href="/register"
@@ -238,6 +239,7 @@ export default function ParentRegisterPage() {
           </p>
         </div>
       </div>
+      <RegistrationSupport compact />
     </main>
   );
 }
