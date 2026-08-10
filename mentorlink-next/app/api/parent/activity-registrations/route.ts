@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   if (registrations.error) return Response.json({ error: "לא ניתן לטעון את ההרשמות." }, { status: 500 });
 
   const activityIds = [...new Set((registrations.data ?? []).map((row) => row.activity_id))];
-  const [activities, sessions, counts, approvals] = await Promise.all([
+  const [activities, sessions, counts, approvals, feedback] = await Promise.all([
     activityIds.length
       ? admin.from("mentor_activities").select("id, title, description, status, venue_name, location_type, address, location_details, min_participants, max_participants, minimum_age, maximum_age, suitable_grades, is_free, price, equipment, accessibility_options, accessibility_other, pickup_options, pickup_details, cancellation_policy, registration_deadline, contact_phone_visibility, mentor_user_id").in("id", activityIds)
       : Promise.resolve({ data: [], error: null }),
@@ -51,8 +51,11 @@ export async function GET(request: Request) {
     activityIds.length
       ? admin.from("mentor_activity_contact_approvals").select("activity_id").in("activity_id", activityIds).eq("parent_user_id", user.id)
       : Promise.resolve({ data: [], error: null }),
+    (registrations.data ?? []).length
+      ? admin.from("mentor_activity_feedback").select("registration_id").in("registration_id", (registrations.data ?? []).map((row) => row.id))
+      : Promise.resolve({ data: [], error: null }),
   ]);
-  if (activities.error || sessions.error || counts.error || approvals.error) return Response.json({ error: "לא ניתן להשלים את טעינת ההרשמות." }, { status: 500 });
+  if (activities.error || sessions.error || counts.error || approvals.error || feedback.error) return Response.json({ error: "לא ניתן להשלים את טעינת ההרשמות." }, { status: 500 });
 
   const mentorIds = [...new Set(((activities.data ?? []) as Array<{ mentor_user_id: string }>).map((row) => row.mentor_user_id).filter(Boolean))];
   const profiles = mentorIds.length ? await admin.from("mentor_profiles").select("user_id, first_name, last_name, phone, city").in("user_id", mentorIds) : { data: [], error: null };
@@ -60,6 +63,7 @@ export async function GET(request: Request) {
 
   const profileMap = new Map((profiles.data ?? []).map((row) => [row.user_id, row]));
   const approvedActivityIds = new Set((approvals.data ?? []).map((row) => row.activity_id));
+  const feedbackRegistrationIds = new Set((feedback.data ?? []).map((row) => row.registration_id));
   const countsByActivity = new Map<string, { registered: number; waitlisted: number }>();
   for (const row of counts.data ?? []) {
     const current = countsByActivity.get(row.activity_id) ?? { registered: 0, waitlisted: 0 };
@@ -81,6 +85,7 @@ export async function GET(request: Request) {
       ) ? mentor?.phone ?? null : null;
       return {
         ...registration,
+        feedback_submitted: feedbackRegistrationIds.has(registration.id),
         activity: activity
           ? {
               ...activity,

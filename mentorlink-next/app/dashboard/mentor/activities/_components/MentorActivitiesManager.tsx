@@ -36,6 +36,7 @@ type Activity = {
   image_alt: string | null;
   sessions: Session[];
   registration_counts: { registered: number; waitlisted: number; total: number };
+  registration_names: { registered: string[]; waitlisted: string[] };
   contact_phone_visibility: "public" | "registered_parents" | "mentor_approved";
 };
 type ConfirmAction = { kind: "publish" | "cancel" | "delete"; activity: Activity } | null;
@@ -168,7 +169,7 @@ export function MentorActivitiesManager() {
     </div>
     {loading ? <div role="status" className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-3xl bg-slate-200 motion-reduce:animate-none" />)}</div>
       : visible.length === 0 ? <div className="mt-8 rounded-3xl border-2 border-dashed border-blue-300 bg-blue-50 p-10 text-center"><h2 className="text-2xl font-black">{activities.length ? "אין פעילויות בסינון הזה" : "עוד לא פתחת פעילות"}</h2><p className="mt-2 text-slate-600">אפשר להתחיל מטיוטה ולפרסם כשהכול מוכן.</p><Link href="/dashboard/mentor/activities/new" className="mt-6 inline-block rounded-2xl bg-blue-700 px-7 py-4 font-black text-white shadow-md">פתיחת פעילות חדשה</Link></div>
-      : <div className="mt-8 grid auto-rows-fr items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onRegistrations={() => setRegistrationsActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
+      : <div className="mt-8 grid items-start gap-5 sm:grid-cols-2 xl:grid-cols-3">{visible.map((activity) => <ActivityCard key={activity.id} activity={activity} busy={busyId === activity.id} onPreview={(trigger) => { previewTrigger.current = trigger; setPreview(activity); }} onConfirm={(kind) => setConfirmAction({ kind, activity })} onDuplicate={() => duplicate(activity)} onUpdates={() => setUpdatesActivity(activity)} onRegistrations={() => setRegistrationsActivity(activity)} onImage={(file) => uploadImage(activity, file)} />)}</div>}
     {preview && <PreviewDialog activity={preview} onClose={() => { setPreview(null); requestAnimationFrame(() => previewTrigger.current?.focus()); }} />}
     {updatesActivity && <UpdatesDialog activity={updatesActivity} token={token} onClose={() => setUpdatesActivity(null)} />}
     {registrationsActivity && <RegistrationsDialog activity={registrationsActivity} token={token} onClose={() => setRegistrationsActivity(null)} />}
@@ -180,21 +181,22 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
   const next = nextSession(activity.sessions);
   const registered = activity.registration_counts?.registered ?? 0;
   const waitlisted = activity.registration_counts?.waitlisted ?? 0;
+  const registeredNames = activity.registration_names?.registered ?? [];
+  const waitlistedNames = activity.registration_names?.waitlisted ?? [];
   const available = activity.max_participants == null ? null : Math.max(0, activity.max_participants - registered);
-  return <article tabIndex={0} className={`relative z-0 flex h-full flex-col rounded-3xl border p-5 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:z-10 hover:scale-[1.025] hover:-translate-y-1 hover:shadow-xl focus-visible:z-10 focus-visible:scale-[1.025] focus-visible:-translate-y-1 focus-visible:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700 motion-reduce:transform-none motion-reduce:transition-none ${STATUS[activity.status].card}`}>
+  return <article tabIndex={0} className={`relative z-0 rounded-3xl border p-5 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:z-10 hover:scale-[1.025] hover:-translate-y-1 hover:shadow-xl focus-visible:z-10 focus-visible:scale-[1.025] focus-visible:-translate-y-1 focus-visible:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700 motion-reduce:transform-none motion-reduce:transition-none ${STATUS[activity.status].card}`}>
     <div className="flex items-start justify-between gap-3"><span className={`rounded-full px-3 py-1 text-sm font-black ${STATUS[activity.status].badge}`}>{STATUS[activity.status].label}</span><span className="text-sm font-bold text-slate-600">{activity.subject_name ?? "מקצוע לא זמין"}</span></div>
     <h2 className="mt-4 line-clamp-2 text-2xl font-black text-slate-950">{activity.title || "פעילות ללא כותרת"}</h2>
     {activity.image_url && <img src={activity.image_url} alt={activity.image_alt || activity.title || "תמונת הפעילות"} className="mt-3 h-36 w-full rounded-2xl object-cover" />}
     {(activity.status === "draft" || (activity.status === "published" && registered + waitlisted === 0)) && <label className="mt-3 cursor-pointer rounded-xl border border-violet-300 bg-white/80 px-4 py-2 text-center text-sm font-black text-violet-800">{activity.image_path ? "החלפת תמונת הפעילות" : "הוספת תמונת פעילות"}<input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) onImage(file); event.currentTarget.value = ""; }} /></label>}
     <DateHighlight activity={activity} session={next} />
-    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Metric label="מיקום" value={location(activity)} /><Metric label="מחיר" value={activity.is_free ? "ללא עלות" : `${activity.price ?? 0} ₪`} /><Metric label="רשומים" value={String(registered)} /><Metric label="רשימת המתנה" value={String(waitlisted)} /><Metric label="מקומות פנויים" value={available == null ? "—" : String(available)} /><Metric label="מכסה" value={activity.max_participants == null ? "—" : String(activity.max_participants)} /></dl>
-    <div className="mt-auto flex flex-wrap gap-2 border-t border-black/10 pt-4" aria-label={`פעולות עבור ${activity.title ?? "הפעילות"}`}>
+    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><Metric label="מיקום" value={location(activity)} /><Metric label="מחיר" value={activity.is_free ? "ללא עלות" : `${activity.price ?? 0} ₪`} /><Metric label="רשומים" value={registrationSummary(registered, registeredNames)} /><Metric label="רשימת המתנה" value={registrationSummary(waitlisted, waitlistedNames)} /><Metric label="מקומות פנויים" value={available == null ? "—" : String(available)} /><Metric label="מכסה" value={activity.max_participants == null ? "—" : String(activity.max_participants)} /></dl>
+    <div className="mt-5 flex flex-wrap gap-2 border-t border-black/10 pt-4" aria-label={`פעולות עבור ${activity.title ?? "הפעילות"}`}>
       {(activity.status === "draft" || (activity.status === "published" && registered + waitlisted === 0)) && <Link href={`/dashboard/mentor/activities/${activity.id}/edit`} className="rounded-xl bg-blue-700 px-4 py-2 font-black text-white">עריכת הפעילות</Link>}
       <button type="button" onClick={(event) => onPreview(event.currentTarget)} className={secondary}>פרטים נוספים</button>
       {registered + waitlisted > 0 && <button type="button" onClick={onRegistrations} className={secondary}>ניהול הרשמות ({registered + waitlisted})</button>}
       {activity.status === "draft" && <button type="button" disabled={busy} onClick={() => onConfirm("publish")} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white disabled:opacity-50">פרסום הפעילות</button>}
       {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onUpdates} className={primary}>עדכונים לנרשמים</button>}
-      {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onRegistrations} className={secondary}>ניהול הרשמות</button>}
       {activity.status === "published" && <button type="button" disabled={busy} onClick={() => onConfirm("cancel")} className={danger}>ביטול</button>}
       <div className="w-full rounded-xl bg-white/70 p-3"><button type="button" disabled={busy} onClick={onDuplicate} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white disabled:opacity-50">יצירת פעילות חדשה על בסיס זו</button><p className="mt-2 text-xs leading-5 text-slate-600">תיווצר טיוטה חדשה. הפעילות המקורית לא תשתנה, ויש לבחור תאריך ושעות חדשים.</p></div>
       {(activity.status === "draft" || (activity.status === "cancelled" && (activity.registration_counts?.total ?? 0) === 0)) && <div className="w-full border-t border-red-200 pt-3"><button type="button" disabled={busy} onClick={() => onConfirm("delete")} className={danger}>{activity.status === "draft" ? "מחיקת טיוטה" : "מחיקת פעילות מבוטלת"}</button></div>}
@@ -338,6 +340,13 @@ const GRADE_NAMES: Record<string, string> = Object.fromEntries(["א׳", "ב׳", 
 const PICKUP_NAMES: Record<string, string> = { school: "בית ספר", after_school: "צהרון", home: "בית", other: "מקום אחר" };
 const ACCESSIBILITY_NAMES: Record<string, string> = { wheelchair: "נגישות לכיסא גלגלים", accessible_restrooms: "שירותים נגישים", accessible_parking: "חניה נגישה", visual_impairment: "התאמה ללקות ראייה", hearing_impairment: "התאמה ללקות שמיעה", written_visual_instructions: "הוראות כתובות או חזותיות", sensory_friendly: "סביבה מותאמת לרגישות חושית", companion_allowed: "השתתפות עם מלווה", other: "התאמות אחרות", unknown: "לא ידוע – מומלץ ליצור קשר לפני ההרשמה" };
 function Metric({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-white/75 p-3"><dt className="text-slate-500">{label}</dt><dd className="mt-1 font-black text-slate-900">{value}</dd></div>; }
+
+function registrationSummary(count: number, names: string[]) {
+  if (!names.length) return String(count);
+  const visibleNames = names.slice(0, 3);
+  const remaining = names.length - visibleNames.length;
+  return `${count} — ${visibleNames.join(", ")}${remaining > 0 ? ` ועוד ${remaining}` : ""}`;
+}
 function DateHighlight({ activity, session }: { activity: Activity; session: Session | null }) {
   if (!session) return <div className="mt-4 rounded-2xl border border-slate-300 bg-white p-4 font-bold text-slate-600">אין מפגש עתידי מתוכנן</div>;
   const start = new Date(session.starts_at);

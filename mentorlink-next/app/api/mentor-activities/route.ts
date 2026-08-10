@@ -18,22 +18,39 @@ export async function GET(request: Request) {
     const subjectIds = [...new Set((activities.data ?? []).map((activity) => activity.subject_id).filter(Boolean))];
     const [sessions, registrations, subjects] = ids.length ? await Promise.all([
       client.from("mentor_activity_sessions").select("*").in("activity_id", ids).order("starts_at"),
-      client.from("mentor_activity_registrations").select("activity_id, status").in("activity_id", ids),
+      client.from("mentor_activity_registrations").select("activity_id, status, child_first_name").in("activity_id", ids),
       subjectIds.length
         ? client.from("subjects").select("id, name").in("id", subjectIds)
         : Promise.resolve({ data: [], error: null }),
     ]) : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
     if (sessions.error || registrations.error || subjects.error) throw new Error("activity children failed");
-    return Response.json({ activities: (activities.data ?? []).map((activity) => ({
-      ...activity,
-      image_url: activity.image_path ? client.storage.from("activity-images").getPublicUrl(activity.image_path).data.publicUrl : null,
-      subject_name: (subjects.data ?? []).find((subject) => subject.id === activity.subject_id)?.name ?? null,
-      sessions: (sessions.data ?? []).filter((session) => session.activity_id === activity.id),
-      registration_counts: registrationCounts((registrations.data ?? []).filter((registration) => registration.activity_id === activity.id)),
-    })) }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ activities: (activities.data ?? []).map((activity) => {
+      const activityRegistrations = (registrations.data ?? []).filter((registration) => registration.activity_id === activity.id);
+      return {
+        ...activity,
+        image_url: activity.image_path ? client.storage.from("activity-images").getPublicUrl(activity.image_path).data.publicUrl : null,
+        subject_name: (subjects.data ?? []).find((subject) => subject.id === activity.subject_id)?.name ?? null,
+        sessions: (sessions.data ?? []).filter((session) => session.activity_id === activity.id),
+        registration_counts: registrationCounts(activityRegistrations),
+        registration_names: {
+          registered: registrationNames(activityRegistrations, "registered"),
+          waitlisted: registrationNames(activityRegistrations, "waitlisted"),
+        },
+      };
+    }) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return Response.json({ error: "Unable to load activities", code: "ACTIVITY_LOAD_FAILED" }, { status: 500 });
   }
+}
+
+function registrationNames(
+  registrations: Array<{ status: string; child_first_name: string | null }>,
+  status: "registered" | "waitlisted",
+) {
+  return [...new Set(registrations
+    .filter((registration) => registration.status === status)
+    .map((registration) => registration.child_first_name?.trim())
+    .filter((name): name is string => Boolean(name)))];
 }
 
 export async function POST(request: Request) {

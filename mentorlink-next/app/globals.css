@@ -24,6 +24,12 @@ body {
   color: #0f172a;
 }
 
+.registration-surface label,
+.registration-surface legend {
+  color: #0f172a;
+  opacity: 1;
+}
+
 .registration-surface input:not([type="checkbox"]):not([type="radio"]),
 .registration-surface select,
 .registration-surface textarea {
@@ -34,8 +40,24 @@ body {
 
 .registration-surface input::placeholder,
 .registration-surface textarea::placeholder {
-  color: #475569;
+  color: #334155;
   opacity: 1;
+}
+
+.registration-surface input:-webkit-autofill,
+.registration-surface input:-webkit-autofill:hover,
+.registration-surface input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #020617;
+  box-shadow: 0 0 0 1000px #ffffff inset;
+  caret-color: #020617;
+}
+
+@media (forced-colors: active) {
+  .registration-surface input,
+  .registration-surface select,
+  .registration-surface textarea {
+    border: 2px solid CanvasText;
+  }
 }
 
 .registration-surface input:disabled,
