@@ -7,6 +7,7 @@ type Registration = {
   id: string;
   child_first_name: string;
   status: string;
+  feedback_submitted: boolean;
   activity: {
     title: string;
     status: string;
@@ -51,9 +52,9 @@ const tabs: Array<{ key: Tabs; label: string }> = [
   { key: "all", label: "הכול" },
   { key: "closest", label: "הקרובות" },
   { key: "future", label: "עתידיות" },
-  { key: "awaiting", label: "ממתינות" },
+  { key: "awaiting", label: "רשימת המתנה" },
   { key: "cancelled", label: "בוטלו" },
-  { key: "completed", label: "הושלמו" },
+  { key: "completed", label: "פעילויות שהסתיימו" },
 ];
 
 const locationLabels: Record<string, string> = {
@@ -175,7 +176,9 @@ export default function ParentRegistrations() {
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button type="button" onClick={() => setDetails(row)} className="rounded-xl border border-blue-300 px-4 py-2 font-black text-blue-800">פרטי הפעילות</button>
                     {row.activity?.mentor_phone && !completed && <ContactButtons phone={row.activity.mentor_phone} />}
-                    {completed && <Link href="/dashboard/parent/feedback" className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white">מילוי משוב</Link>}
+                    {completed && (row.feedback_submitted
+                      ? <Link href={`/dashboard/parent/feedback#feedback-${row.id}`} className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-2 font-black text-violet-800">צפייה במשוב שמילאתי</Link>
+                      : <Link href={`/dashboard/parent/feedback?registrationId=${row.id}`} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white">מילוי משוב</Link>)}
                     {row.status !== "cancelled" && !completed && (
                       <button type="button" onClick={() => cancel(row.id)} className="rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700">ביטול הרשמה לילד/ה</button>
                     )}

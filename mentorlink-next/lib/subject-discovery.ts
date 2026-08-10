@@ -34,7 +34,7 @@ export function categorySearchTerms(category: DiscoveryCategory) {
 }
 
 export function createSubjectSearchHref(targetPath: string, subjects: readonly string[], anchor = "mentor-search") {
-  const params = new URLSearchParams({ search: "1" });
+  const params = new URLSearchParams({ search: "1", discovery: "1" });
   for (const item of subjects) params.append("subject", item);
   return `${targetPath}?${params.toString()}#${anchor}`;
 }
