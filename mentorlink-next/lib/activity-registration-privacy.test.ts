@@ -9,6 +9,9 @@ const migration = [
 const mentorApi = fs.readFileSync("app/api/mentor-activities/[activityId]/registrations/route.ts", "utf8");
 const parentApi = fs.readFileSync("app/api/parent/activity-registrations/route.ts", "utf8");
 const manager = fs.readFileSync("app/dashboard/mentor/activities/_components/MentorActivitiesManager.tsx", "utf8");
+const registrationFeed = fs.readFileSync("app/api/mentor-activity-registrations/route.ts", "utf8");
+const registrationPage = fs.readFileSync("app/dashboard/mentor/activity-registrations/page.tsx", "utf8");
+const notificationMigration = fs.readFileSync("supabase/migrations/202608100034_activity_update_reads_and_registration_notifications.sql", "utf8");
 
 test("activity contact visibility has three explicit policies and a safe default", () => {
   assert.match(migration, /default 'registered_parents'/);
@@ -57,4 +60,20 @@ test("cancellation revokes stale approval and promotes the oldest waitlisted chi
   assert.match(migration, /delete from public\.mentor_activity_contact_approvals/);
   assert.match(migration, /order by created_at[\s\S]*for update skip locked[\s\S]*limit 1/);
   assert.match(migration, /התפנה מקום בפעילות/);
+});
+
+test("mentor receives a dedicated activity registration feed with family and session details", () => {
+  assert.match(notificationMigration, /הרשמה חדשה לפעילות/);
+  assert.match(notificationMigration, /dashboard\/mentor\/activity-registrations/);
+  assert.match(registrationFeed, /parent_profiles/);
+  assert.match(registrationFeed, /mentor_activity_sessions/);
+  assert.match(registrationPage, /הרשמות חדשות לפעילויות/);
+  assert.match(registrationPage, /חיוג להורה/);
+});
+
+test("activity updates can be read and moved to parent history", () => {
+  assert.match(notificationMigration, /mentor_activity_update_reads/);
+  const parentUpdates = fs.readFileSync("app/dashboard/parent/activities/ParentActivityUpdates.tsx", "utf8");
+  assert.match(parentUpdates, /העברה להיסטוריה/);
+  assert.match(parentUpdates, /readAt/);
 });

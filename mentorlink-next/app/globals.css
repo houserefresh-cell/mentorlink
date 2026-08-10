@@ -22,6 +22,11 @@ body {
 .registration-surface {
   color-scheme: light;
   color: #0f172a;
+  background-color: #fffaf3;
+  background-image:
+    radial-gradient(circle at 8% 12%, rgb(251 191 36 / 0.15), transparent 25rem),
+    radial-gradient(circle at 92% 28%, rgb(45 212 191 / 0.13), transparent 28rem),
+    linear-gradient(180deg, #fffaf3 0%, #ffffff 46%, #faf5ff 100%);
 }
 
 .registration-surface label,

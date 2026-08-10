@@ -82,7 +82,7 @@ export default function ParentRegisterPage() {
   }
 
   return (
-    <main className="registration-surface min-h-screen bg-slate-50 px-4 py-12" dir="rtl">
+    <main className="registration-surface min-h-screen px-4 py-12" dir="rtl">
       <div className="mx-auto max-w-md">
         <Link
           href="/register"

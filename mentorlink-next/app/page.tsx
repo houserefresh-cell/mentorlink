@@ -55,7 +55,7 @@ export default async function HomePage() {
             <div className="mt-9 grid max-w-3xl gap-3 sm:grid-cols-2">
               <article className="rounded-3xl border border-orange-200 bg-white/90 p-4 shadow-[0_16px_40px_-28px_rgba(124,45,18,0.5)]">
                 <p className="text-sm font-bold leading-6 text-[#62586e]">נרשמים בחינם ומתחילים לחפש חונכים ופעילויות שמתאימים לילדים שלכם.</p>
-                <Link href="/register/parent" className="mt-3 flex min-h-12 items-center justify-center rounded-2xl bg-[#17152b] px-5 py-3 text-center font-black text-white transition hover:-translate-y-0.5 hover:bg-[#5c2acb]">
+                <Link href="/register/parent" className="mt-3 flex min-h-12 items-center justify-center rounded-2xl bg-gradient-to-l from-[#0f9f9a] to-[#3468dd] px-5 py-3 text-center font-black text-white shadow-lg shadow-cyan-100 transition hover:-translate-y-0.5">
                   הרשמה וחיפוש חונך או פעילות
                 </Link>
               </article>
@@ -88,8 +88,8 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-10 grid gap-5 lg:grid-cols-2">
-            <ValueCard tone="bg-[#173f63]" title="מה ילדים מקבלים?" items={["ליווי אישי ותמיכה", "דמות קרובה ואכפתית", "חיזוק, התנסות והנאה"]} />
-            <ValueCard tone="bg-[#5b2a86]" title="מה חונכים מקבלים?" items={["ניסיון משמעותי ותרומה לקהילה", "אחריות והתפתחות אישית", "יוזמה, הובלה וקשרים"]} />
+            <ValueCard tone="bg-gradient-to-l from-[#e6fbf6] to-[#fff8e7] text-[#173f63]" title="מה ילדים מקבלים?" items={["ליווי אישי ותמיכה", "דמות קרובה ואכפתית", "חיזוק, התנסות והנאה"]} />
+            <ValueCard tone="bg-gradient-to-l from-[#f4eaff] to-[#fff2e5] text-[#4f276f]" title="מה חונכים מקבלים?" items={["ניסיון משמעותי ותרומה לקהילה", "אחריות והתפתחות אישית", "יוזמה, הובלה וקשרים"]} />
           </div>
 
           <ol className="relative mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -150,7 +150,7 @@ export default async function HomePage() {
               <p>MentorLink יוצרת חיבורים בין משפחות לבין חונכים מהקהילה, ומסייעת להציג חונכים ופעילויות שעשויים להתאים לילדכם לפי התחום, הגיל, האזור והמידע שנמסר במערכת.</p>
               <p>הפלטפורמה מספקת מידע וכלים להיכרות ולתיאום, אך הבחירה בחונך ובאופן קיום המפגש נשארת בידי ההורה. מומלץ להכיר את החונך, לשוחח עמו, לשאול את כל השאלות החשובות ולוודא מראש את מקום המפגש, אופיו ותנאיו.</p>
               <p>במפגשים הראשונים נכון שההורה יהיה נוכח או מעורב, ושהמפגש יתקיים במקום מוכר ומתאים. ככל שההיכרות מתפתחת ונבנה אמון, ההורה יכול להחליט בהדרגה מהי רמת המעורבות שבה הוא מרגיש בנוח.</p>
-              <p className="rounded-2xl bg-[#17152b] px-5 py-4 text-center font-black text-white">הפלטפורמה מחברת. ההיכרות בונה אמון. ההורה בוחר את הדרך המתאימה לילדו.</p>
+              <p className="rounded-2xl border border-orange-200 bg-[#fff5e8] px-5 py-4 text-center font-black text-[#5a351f] shadow-sm">♡ הפלטפורמה מחברת. ההיכרות בונה אמון. ההורה בוחר את הדרך המתאימה לילדו.</p>
             </div>
           </div>
         </div>
@@ -181,24 +181,25 @@ function HeroCommunityCard() {
   return (
     <div className="relative mx-auto w-full max-w-xl py-8" aria-label="חיבור בין חונכים לילדים בקהילה">
       <div className="absolute inset-8 rounded-[3rem] bg-gradient-to-br from-orange-400 via-fuchsia-500 to-teal-400 blur-2xl opacity-25" />
-      <div className="relative overflow-hidden rounded-[2.5rem] bg-[#17152b] p-7 text-white shadow-2xl sm:p-9">
+      <div className="relative overflow-hidden rounded-[2.5rem] border border-orange-200 bg-gradient-to-br from-[#fff8e9] via-[#f5ecff] to-[#e5fbf7] p-7 text-[#251b36] shadow-2xl sm:p-9">
         <div className="absolute -left-20 -top-20 h-56 w-56 rounded-full bg-fuchsia-500/30 blur-2xl" />
         <div className="absolute -bottom-24 -right-20 h-64 w-64 rounded-full bg-teal-400/25 blur-2xl" />
         <div className="relative flex items-center justify-between">
-          <span className="border-r-2 border-orange-300 pr-3 text-xs font-extrabold text-slate-200">קרוב לבית • פתוח לרעיונות</span>
+          <span className="border-r-2 border-orange-400 pr-3 text-sm font-extrabold text-[#6c3c21]">כישרונות מהקהילה, הזדמנויות לצמוח</span>
           <span className="text-3xl text-amber-300">✦</span>
         </div>
         <div className="relative mt-12 flex items-end justify-center gap-5 text-center">
           <CommunityPerson color="from-cyan-400 to-teal-500" icon="⚽" label="ספורט" />
           <div className="-translate-y-5">
             <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-violet-400 to-fuchsia-500 text-3xl font-black shadow-lg ring-4 ring-white/10">A+</div>
-            <p className="mt-3 text-sm font-bold text-slate-200">לימודים</p>
+            <p className="mt-3 text-sm font-bold text-[#4f276f]">לימודים</p>
           </div>
           <CommunityPerson color="from-amber-300 to-orange-500" icon="♪" label="יצירה" />
         </div>
-        <div className="relative mt-8 rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-          <p className="text-sm text-slate-300">הרעיון פשוט</p>
-          <p className="mt-1 text-xl font-black">ידע, ניסיון וסקרנות עוברים מאדם לאדם.</p>
+        <div className="relative mt-8 rounded-3xl border border-white/70 bg-white/75 p-5 shadow-sm backdrop-blur">
+          <p className="text-lg font-black text-[#8b3d18]">הרעיון פשוט</p>
+          <p className="mt-2 text-xl font-black leading-8">לכל ילד וילדה יש תחומי עניין, כישרונות וסקרנות שמחכים למקום הנכון לצמוח בו.</p>
+          <p className="mt-2 font-semibold leading-7 text-[#62586e]">ב־MentorLink מוצאים חונכים ופעילויות מהקהילה, מכירים, שואלים ובוחרים יחד את החיבור שמתאים לילד שלכם.</p>
         </div>
       </div>
     </div>
@@ -206,15 +207,15 @@ function HeroCommunityCard() {
 }
 
 function CommunityPerson({ color, icon, label }: { color: string; icon: string; label: string }) {
-  return <div><div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br ${color} text-2xl font-black shadow-lg ring-4 ring-white/10`}>{icon}</div><p className="mt-3 text-sm font-bold text-slate-200">{label}</p></div>;
+  return <div><div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br ${color} text-2xl font-black shadow-lg ring-4 ring-white/70`}>{icon}</div><p className="mt-3 text-sm font-bold text-[#4f276f]">{label}</p></div>;
 }
 
 function ValueCard({ tone, title, items }: { tone: string; title: string; items: string[] }) {
   return (
-    <article className={`rounded-[2rem] ${tone} p-7 text-white shadow-xl`}>
+    <article className={`rounded-[2rem] ${tone} border border-white p-7 shadow-xl`}>
       <h3 className="text-2xl font-black">{title}</h3>
       <ul className="mt-5 grid gap-3 sm:grid-cols-3">
-        {items.map((item, index) => <li key={item} className="rounded-2xl bg-white/10 p-4 font-bold leading-6"><span className="mb-3 block text-2xl">{["♡", "✦", "↗"][index]}</span>{item}</li>)}
+        {items.map((item, index) => <li key={item} className="rounded-2xl bg-white/70 p-4 font-bold leading-6"><span className="mb-3 block text-2xl">{["♡", "✦", "↗"][index]}</span>{item}</li>)}
       </ul>
     </article>
   );

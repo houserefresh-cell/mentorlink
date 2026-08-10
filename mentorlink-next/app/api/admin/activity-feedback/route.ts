@@ -23,7 +23,9 @@ export async function PATCH(request:Request){
   const current=await admin.from("mentor_activity_feedback").select("allow_public_quote").eq("id",body.id).maybeSingle();
   if(current.error||!current.data)return Response.json({error:"המשוב לא נמצא."},{status:404});
   if(body.publicationStatus==="approved"&&!current.data.allow_public_quote)return Response.json({error:"לא ניתן לפרסם משוב ללא הסכמת ההורה."},{status:422});
-  const result=await admin.from("mentor_activity_feedback").update({admin_handling_status:body.handlingStatus,publication_status:body.publicationStatus,admin_notes:typeof body.adminNotes==="string"?body.adminNotes.trim().slice(0,2000):null,reviewed_at:new Date().toISOString(),reviewed_by:administrator.id}).eq("id",body.id);
-  if(result.error)throw result.error;return adminApiSuccess({ok:true});
+  const result=await admin.from("mentor_activity_feedback").update({admin_handling_status:body.handlingStatus,publication_status:body.publicationStatus,admin_notes:typeof body.adminNotes==="string"?body.adminNotes.trim().slice(0,2000):null,reviewed_at:new Date().toISOString(),reviewed_by:administrator.id}).eq("id",body.id).select("id,admin_handling_status,publication_status").maybeSingle();
+  if(result.error)throw result.error;
+  if(!result.data)return Response.json({error:"המשוב לא עודכן. יש לרענן ולנסות שוב."},{status:409});
+  return adminApiSuccess({ok:true,feedback:result.data});
  }catch(error){return adminApiError(error)}
 }
