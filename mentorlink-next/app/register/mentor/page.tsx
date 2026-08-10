@@ -138,7 +138,7 @@ export default function MentorRegisterPage() {
   }
 
   return (
-    <main dir="rtl" className="registration-surface min-h-screen bg-gradient-to-b from-blue-50 via-white to-indigo-50 px-4 py-8 sm:px-6 sm:py-12">
+    <main dir="rtl" className="registration-surface min-h-screen px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto w-full max-w-xl">
         <div className="mb-8 text-center">
           <p className="mb-3 font-bold text-blue-600">שלב 1</p>

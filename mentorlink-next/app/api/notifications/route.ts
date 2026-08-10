@@ -25,9 +25,14 @@ export async function PATCH(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required" }, { status: 401 });
   try {
+    const body = await request.json().catch(() => ({})) as { registrationOnly?: unknown };
     const client = createSupabaseAdmin();
-    const result = await client.from("notifications").update({ read_at: new Date().toISOString() })
+    let query = client.from("notifications").update({ read_at: new Date().toISOString() })
       .eq("user_id", user.id).is("read_at", null);
+    if (body.registrationOnly === true) {
+      query = query.in("title", ["הרשמה חדשה לפעילות", "הצטרפות לרשימת ההמתנה"]);
+    }
+    const result = await query;
     if (result.error) throw new Error("update failed");
     return Response.json({ success: true });
   } catch {
