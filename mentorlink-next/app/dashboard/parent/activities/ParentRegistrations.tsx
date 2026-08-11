@@ -40,7 +40,7 @@ type Registration = {
   sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
 };
 
-type Tabs = "all" | "closest" | "future" | "awaiting" | "cancelled" | "completed";
+type Tabs = "closest" | "awaiting" | "cancelled" | "completed" | "all";
 
 const status: Record<string, { label: string; style: string }> = {
   registered: { label: "רשום/ה", style: "bg-green-100 text-green-800" },
@@ -49,12 +49,11 @@ const status: Record<string, { label: string; style: string }> = {
 };
 
 const tabs: Array<{ key: Tabs; label: string }> = [
-  { key: "all", label: "הכול" },
-  { key: "closest", label: "הקרובות" },
-  { key: "future", label: "עתידיות" },
+  { key: "closest", label: "קרובות" },
   { key: "awaiting", label: "רשימת המתנה" },
   { key: "cancelled", label: "בוטלו" },
-  { key: "completed", label: "פעילויות שהסתיימו" },
+  { key: "completed", label: "הסתיימו" },
+  { key: "all", label: "הכול" },
 ];
 
 const locationLabels: Record<string, string> = {
@@ -74,7 +73,8 @@ export default function ParentRegistrations() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [details, setDetails] = useState<Registration | null>(null);
-  const [view, setView] = useState<Tabs>("all");
+  const [view, setView] = useState<Tabs>("closest");
+  const [selectedChild, setSelectedChild] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -104,23 +104,25 @@ export default function ParentRegistrations() {
       return (left.activity?.title ?? "").localeCompare(right.activity?.title ?? "");
     });
 
-    const tabbed = sorted.filter((row) => {
+    const childRows = selectedChild === "all" ? sorted : sorted.filter((row) => row.child_first_name === selectedChild);
+    const tabbed = childRows.filter((row) => {
       const next = nextByRow[row.id];
-      const completed = row.status !== "cancelled" && (
+      const cancelled = row.status === "cancelled" || row.activity?.status === "cancelled";
+      const completed = !cancelled && (
         row.activity?.status === "completed" ||
         (row.sessions.length > 0 && row.sessions.every((session) => new Date(session.ends_at).getTime() < Date.now()))
       );
-      const closestId = sorted.find((item) => item.status === "registered" && nextByRow[item.id])?.id;
-      if (view === "closest") return row.id === closestId;
-      if (view === "future") return Boolean(next) && !completed && row.status === "registered";
+      if (view === "closest") return Boolean(next) && !completed && row.status === "registered";
       if (view === "awaiting") return row.status === "waitlisted";
-      if (view === "cancelled") return row.status === "cancelled";
+      if (view === "cancelled") return cancelled;
       if (view === "completed") return completed;
       return true;
     });
 
     return tabbed;
-  }, [nextByRow, rows, view]);
+  }, [nextByRow, rows, selectedChild, view]);
+
+  const childNames = useMemo(() => [...new Set(rows.map((row) => row.child_first_name).filter(Boolean))], [rows]);
 
   async function cancel(id: string) {
     if (!confirm("לבטל את ההרשמה של הילד/ה לפעילות?")) return;
@@ -137,6 +139,13 @@ export default function ParentRegistrations() {
       {message && <p role="status" className="mb-4 rounded-xl bg-blue-50 p-4 font-bold text-blue-900">{message}</p>}
       {rows.length ? (
         <div className="space-y-5">
+          {childNames.length > 1 && <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-3 shadow-sm">
+            <p className="mb-2 text-sm font-black text-violet-900">הצגת פעילויות לפי ילד/ה</p>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setSelectedChild("all")} className={`rounded-full px-4 py-2 text-sm font-black ${selectedChild === "all" ? "bg-violet-700 text-white" : "bg-white text-violet-900"}`}>כל הילדים</button>
+              {childNames.map((child) => <button key={child} type="button" onClick={() => setSelectedChild(child)} className={`rounded-full px-4 py-2 text-sm font-black ${selectedChild === child ? "bg-violet-700 text-white" : "bg-white text-violet-900"}`}>{child}</button>)}
+            </div>
+          </div>}
           <div className="flex flex-wrap gap-2 rounded-2xl border bg-white p-3 shadow-sm">
             {tabs.map((tab) => (
               <button key={tab.key} type="button" onClick={() => setView(tab.key)} className={`rounded-full px-4 py-2 text-sm font-black transition ${view === tab.key ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-700"}`}>
@@ -148,8 +157,9 @@ export default function ParentRegistrations() {
           <div className="grid gap-5 md:grid-cols-2">
             {visibleRows.map((row) => {
               const next = nextByRow[row.id];
-              const completed = row.status !== "cancelled" && row.sessions.length > 0 && row.sessions.every(session => new Date(session.ends_at).getTime() < Date.now());
-              const badge = completed ? { label: "הפעילות הסתיימה", style: "bg-slate-200 text-slate-900" } : status[row.status] ?? status.cancelled;
+              const cancelled = row.status === "cancelled" || row.activity?.status === "cancelled";
+              const completed = !cancelled && (row.activity?.status === "completed" || (row.sessions.length > 0 && row.sessions.every(session => new Date(session.ends_at).getTime() < Date.now())));
+              const badge = cancelled ? status.cancelled : completed ? { label: "הפעילות הסתיימה", style: "bg-slate-200 text-slate-900" } : status[row.status] ?? status.cancelled;
               return (
                 <article key={row.id} className="rounded-3xl border bg-white p-6 shadow-sm">
                   <div className="flex items-start justify-between gap-3">
@@ -176,10 +186,10 @@ export default function ParentRegistrations() {
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button type="button" onClick={() => setDetails(row)} className="rounded-xl border border-blue-300 px-4 py-2 font-black text-blue-800">פרטי הפעילות</button>
                     {row.activity?.mentor_phone && !completed && <ContactButtons phone={row.activity.mentor_phone} />}
-                    {completed && (row.feedback_submitted
+                    {completed && row.status === "registered" && (row.feedback_submitted
                       ? <Link href={`/dashboard/parent/feedback#feedback-${row.id}`} className="rounded-xl border border-violet-300 bg-violet-50 px-4 py-2 font-black text-violet-800">צפייה במשוב שמילאתי</Link>
                       : <Link href={`/dashboard/parent/feedback?registrationId=${row.id}`} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white">מילוי משוב</Link>)}
-                    {row.status !== "cancelled" && !completed && (
+                    {!cancelled && !completed && (
                       <button type="button" onClick={() => cancel(row.id)} className="rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700">ביטול הרשמה לילד/ה</button>
                     )}
                   </div>
@@ -187,6 +197,7 @@ export default function ParentRegistrations() {
               );
             })}
           </div>
+          {!visibleRows.length && <div className="rounded-3xl border border-dashed bg-white p-8 text-center"><h2 className="text-xl font-black">אין פעילויות בקטגוריה הזו</h2><p className="mt-2 text-slate-600">אפשר לבחור ילד אחר או לעבור ל״הכול״.</p></div>}
         </div>
       ) : (
         <div className="rounded-3xl border border-dashed bg-white p-10 text-center">

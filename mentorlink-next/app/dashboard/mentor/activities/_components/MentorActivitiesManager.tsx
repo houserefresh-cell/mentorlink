@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { ActivityInfoGrid, type ActivityInfoItem } from "./ActivityInfoGrid";
 
 type Status = "draft" | "published" | "cancelled" | "completed";
+type ActivityFilter = "full" | "registered" | "empty" | "completed" | "draft" | "cancelled" | "all";
 type Session = { id: string; starts_at: string; ends_at: string; estimated_overrun: "none" | "5_10_minutes" | "15_20_minutes" };
 type Activity = {
   id: string;
@@ -39,7 +40,7 @@ type Activity = {
   registration_names: { registered: string[]; waitlisted: string[] };
   contact_phone_visibility: "public" | "registered_parents" | "mentor_approved";
 };
-type ConfirmAction = { kind: "publish" | "cancel" | "delete"; activity: Activity } | null;
+type ConfirmAction = { kind: "publish" | "cancel" | "restore" | "delete"; activity: Activity } | null;
 type Notice = { type: "success" | "error"; text: string } | null;
 type Recipient = { parentUserId: string; childFirstNames: string[] };
 type ActivityUpdate = { id: string; recipient_scope: "all_active" | "parent"; recipient_parent_user_id: string | null; update_type: string; body: string; delay_minutes: number | null; proposed_start_at: string | null; proposed_end_at: string | null; created_at: string };
@@ -61,7 +62,7 @@ export function MentorActivitiesManager() {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [filter, setFilter] = useState<"all" | Status>("all");
+  const [filter, setFilter] = useState<ActivityFilter>("full");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -96,7 +97,13 @@ export function MentorActivitiesManager() {
       const body = await response.json().catch(() => ({}));
       if (!active) return;
       if (!response.ok) throw new Error(body.error);
-      setActivities(body.activities ?? []);
+      const loadedActivities: Activity[] = body.activities ?? [];
+      setActivities(loadedActivities);
+      const requestedActivity = new URLSearchParams(window.location.search).get("activity");
+      if (requestedActivity && loadedActivities.some((activity) => activity.id === requestedActivity)) {
+        setFilter("all");
+        window.setTimeout(() => document.getElementById(`activity-${requestedActivity}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+      }
     } catch {
       if (active) setNotice({ type: "error", text: "לא ניתן לטעון את הפעילויות כרגע." });
     } finally {
@@ -104,10 +111,12 @@ export function MentorActivitiesManager() {
     }
   }
 
-  const visible = useMemo(
-    () => filter === "all" ? activities : activities.filter((activity) => activity.status === filter),
-    [activities, filter],
-  );
+  const filters: Array<{ key: ActivityFilter; label: string }> = [
+    { key: "full", label: "פעילויות מלאות" }, { key: "registered", label: "עם נרשמים" },
+    { key: "empty", label: "חדשות ללא נרשמים" }, { key: "completed", label: "הסתיימו" },
+    { key: "draft", label: "טיוטות" }, { key: "cancelled", label: "בוטלו" }, { key: "all", label: "הכול" },
+  ];
+  const visible = useMemo(() => [...activities].filter((activity) => matchesFilter(activity, filter)).sort(compareActivities), [activities, filter]);
 
   async function executeConfirmed(reason = "") {
     if (!confirmAction || busyId) return;
@@ -121,11 +130,16 @@ export function MentorActivitiesManager() {
       });
       const body = response.status === 204 ? {} : await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error);
+      if (kind === "restore" && body.needsNewDate) {
+        setConfirmAction(null);
+        router.push(`/dashboard/mentor/activities/${activity.id}/edit?restored=1&needsNewDate=1`);
+        return;
+      }
       setConfirmAction(null);
-      setNotice({ type: "success", text: kind === "publish" ? "הפעילות פורסמה בהצלחה." : kind === "cancel" ? "הפעילות בוטלה." : "הטיוטה נמחקה." });
+      setNotice({ type: "success", text: kind === "publish" ? "הפעילות פורסמה בהצלחה." : kind === "cancel" ? "הפעילות בוטלה וההורים עודכנו." : kind === "restore" ? "הפעילות הוחזרה כטיוטה לבדיקה לפני פרסום מחדש." : "הטיוטה נמחקה." });
       await loadActivities(token);
-    } catch {
-      setNotice({ type: "error", text: kind === "publish" ? "לא ניתן לפרסם את הפעילות. בדקו שכל הפרטים הושלמו ושהמועד פנוי." : kind === "cancel" ? "לא ניתן לבטל את הפעילות כרגע." : "לא ניתן למחוק את הטיוטה כרגע." });
+    } catch (error) {
+      setNotice({ type: "error", text: error instanceof Error && error.message ? error.message : kind === "publish" ? "לא ניתן לפרסם את הפעילות. בדקו שכל הפרטים הושלמו ושהמועד פנוי." : kind === "cancel" ? "לא ניתן לבטל את הפעילות כרגע." : "לא ניתן להשלים את הפעולה." });
     } finally { setBusyId(null); }
   }
 
@@ -165,7 +179,7 @@ export function MentorActivitiesManager() {
     </header>
     {notice && <p role={notice.type === "error" ? "alert" : "status"} className={`mt-5 rounded-2xl p-4 font-bold ${notice.type === "error" ? "bg-red-50 text-red-800" : "bg-green-50 text-green-800"}`}>{notice.text}</p>}
     <div className="mt-7 flex flex-wrap gap-2" aria-label="סינון לפי סטטוס">
-      {(["all", "draft", "published", "cancelled", "completed"] as const).map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`rounded-full border px-4 py-2 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${filter === value ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-blue-400"}`}>{value === "all" ? "הכול" : STATUS[value].label}</button>)}
+      {filters.map(({ key, label }) => <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)} className={`rounded-full border px-4 py-2 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 ${filter === key ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-blue-400"}`}>{label} ({activities.filter((activity) => matchesFilter(activity, key)).length})</button>)}
     </div>
     {loading ? <div role="status" className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-72 animate-pulse rounded-3xl bg-slate-200 motion-reduce:animate-none" />)}</div>
       : visible.length === 0 ? <div className="mt-8 rounded-3xl border-2 border-dashed border-blue-300 bg-blue-50 p-10 text-center"><h2 className="text-2xl font-black">{activities.length ? "אין פעילויות בסינון הזה" : "עוד לא פתחת פעילות"}</h2><p className="mt-2 text-slate-600">אפשר להתחיל מטיוטה ולפרסם כשהכול מוכן.</p><Link href="/dashboard/mentor/activities/new" className="mt-6 inline-block rounded-2xl bg-blue-700 px-7 py-4 font-black text-white shadow-md">פתיחת פעילות חדשה</Link></div>
@@ -177,14 +191,14 @@ export function MentorActivitiesManager() {
   </section>;
 }
 
-function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onRegistrations, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onRegistrations: () => void; onImage: (file: File) => void }) {
+function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpdates, onRegistrations, onImage }: { activity: Activity; busy: boolean; onPreview: (trigger: HTMLButtonElement) => void; onConfirm: (kind: "publish" | "cancel" | "restore" | "delete") => void; onDuplicate: () => void; onUpdates: () => void; onRegistrations: () => void; onImage: (file: File) => void }) {
   const next = nextSession(activity.sessions);
   const registered = activity.registration_counts?.registered ?? 0;
   const waitlisted = activity.registration_counts?.waitlisted ?? 0;
   const registeredNames = activity.registration_names?.registered ?? [];
   const waitlistedNames = activity.registration_names?.waitlisted ?? [];
   const available = activity.max_participants == null ? null : Math.max(0, activity.max_participants - registered);
-  return <article tabIndex={0} className={`relative z-0 rounded-3xl border p-5 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:z-10 hover:scale-[1.025] hover:-translate-y-1 hover:shadow-xl focus-visible:z-10 focus-visible:scale-[1.025] focus-visible:-translate-y-1 focus-visible:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700 motion-reduce:transform-none motion-reduce:transition-none ${STATUS[activity.status].card}`}>
+  return <article id={`activity-${activity.id}`} tabIndex={0} className={`scroll-mt-24 relative z-0 rounded-3xl border p-5 shadow-sm transition-[transform,box-shadow] duration-200 ease-out hover:z-10 hover:scale-[1.025] hover:-translate-y-1 hover:shadow-xl focus-visible:z-10 focus-visible:scale-[1.025] focus-visible:-translate-y-1 focus-visible:shadow-xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-blue-700 motion-reduce:transform-none motion-reduce:transition-none ${STATUS[activity.status].card}`}>
     <div className="flex items-start justify-between gap-3"><span className={`rounded-full px-3 py-1 text-sm font-black ${STATUS[activity.status].badge}`}>{STATUS[activity.status].label}</span><span className="text-sm font-bold text-slate-600">{activity.subject_name ?? "מקצוע לא זמין"}</span></div>
     <h2 className="mt-4 line-clamp-2 text-2xl font-black text-slate-950">{activity.title || "פעילות ללא כותרת"}</h2>
     {activity.image_url && <img src={activity.image_url} alt={activity.image_alt || activity.title || "תמונת הפעילות"} className="mt-3 h-36 w-full rounded-2xl object-cover" />}
@@ -198,6 +212,7 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
       {activity.status === "draft" && <button type="button" disabled={busy} onClick={() => onConfirm("publish")} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white disabled:opacity-50">פרסום הפעילות</button>}
       {activity.status === "published" && registered + waitlisted > 0 && <button type="button" disabled={busy} onClick={onUpdates} className={primary}>עדכונים לנרשמים</button>}
       {activity.status === "published" && <button type="button" disabled={busy} onClick={() => onConfirm("cancel")} className={danger}>ביטול</button>}
+      {activity.status === "cancelled" && <button type="button" disabled={busy} onClick={() => onConfirm("restore")} className="rounded-xl bg-emerald-700 px-4 py-2 font-black text-white disabled:opacity-50">החזרת הפעילות</button>}
       <div className="w-full rounded-xl bg-white/70 p-3"><button type="button" disabled={busy} onClick={onDuplicate} className="rounded-xl bg-violet-700 px-4 py-2 font-black text-white disabled:opacity-50">יצירת פעילות חדשה על בסיס זו</button><p className="mt-2 text-xs leading-5 text-slate-600">תיווצר טיוטה חדשה. הפעילות המקורית לא תשתנה, ויש לבחור תאריך ושעות חדשים.</p></div>
       {(activity.status === "draft" || (activity.status === "cancelled" && (activity.registration_counts?.total ?? 0) === 0)) && <div className="w-full border-t border-red-200 pt-3"><button type="button" disabled={busy} onClick={() => onConfirm("delete")} className={danger}>{activity.status === "draft" ? "מחיקת טיוטה" : "מחיקת פעילות מבוטלת"}</button></div>}
     </div>
@@ -206,8 +221,8 @@ function ActivityCard({ activity, busy, onPreview, onConfirm, onDuplicate, onUpd
 
 function ConfirmDialog({ action, busy, onClose, onConfirm }: { action: NonNullable<ConfirmAction>; busy: boolean; onClose: () => void; onConfirm: (reason?: string) => void }) {
   const [reason, setReason] = useState("");
-  const copy = action.kind === "publish" ? { title: "פרסום הפעילות", text: "הפעילות תופיע למשפחות ותהיה פתוחה להרשמה. לפרסם עכשיו?", confirm: "אישור ופרסום" } : action.kind === "cancel" ? { title: "ביטול הפעילות", text: "הפעילות תיסגר להרשמה ותסומן כמבוטלת. לבטל עכשיו?", confirm: "אישור ביטול" } : { title: "מחיקת הטיוטה", text: "הטיוטה וכל המפגשים שלה יימחקו לצמיתות. למחוק עכשיו?", confirm: "אישור מחיקה" };
-  return <div role="presentation" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div role="alertdialog" aria-modal="true" aria-labelledby="activity-confirm-title" className="w-full max-w-lg rounded-3xl bg-white p-6 text-right shadow-2xl"><h2 id="activity-confirm-title" className="text-2xl font-black">{copy.title}</h2><p className="mt-3 leading-7 text-slate-700">{copy.text}</p>{action.kind === "cancel" && <label className="mt-4 grid gap-2 font-bold">סיבת הביטול לנרשמים<textarea required minLength={3} maxLength={2000} value={reason} onChange={(event) => setReason(event.target.value)} className="min-h-28 rounded-xl border border-slate-300 p-3" /></label>}<div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={onClose} className={secondary}>חזרה</button><button type="button" onClick={() => onConfirm(reason)} disabled={busy || (action.kind === "cancel" && reason.trim().length < 3)} className={action.kind === "publish" ? primary : danger}>{busy ? "מבצע..." : copy.confirm}</button></div></div></div>;
+  const copy = action.kind === "publish" ? { title: "פרסום הפעילות", text: "הפעילות תופיע למשפחות ותהיה פתוחה להרשמה. לפרסם עכשיו?", confirm: "אישור ופרסום" } : action.kind === "cancel" ? { title: "ביטול הפעילות", text: "אם קיימים נרשמים הם יקבלו הודעה עם הסיבה. ניתן לבטל עצמאית רק עד 24 שעות לפני המפגש. לבטל עכשיו?", confirm: "אישור ביטול" } : action.kind === "restore" ? { title: "החזרת הפעילות", text: "הפעילות תחזור כטיוטה. יש לבדוק את המועד והפרטים לפני פרסום מחדש; הרשמות קודמות לא יוחזרו אוטומטית.", confirm: "החזרה כטיוטה" } : { title: "מחיקת הטיוטה", text: "הטיוטה וכל המפגשים שלה יימחקו לצמיתות. למחוק עכשיו?", confirm: "אישור מחיקה" };
+  return <div role="presentation" className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div role="alertdialog" aria-modal="true" aria-labelledby="activity-confirm-title" className="w-full max-w-lg rounded-3xl bg-white p-6 text-right shadow-2xl"><h2 id="activity-confirm-title" className="text-2xl font-black">{copy.title}</h2><p className="mt-3 leading-7 text-slate-700">{copy.text}</p>{action.kind === "cancel" && <label className="mt-4 grid gap-2 font-bold">סיבת הביטול לנרשמים<textarea required minLength={3} maxLength={2000} value={reason} onChange={(event) => setReason(event.target.value)} className="min-h-28 rounded-xl border border-slate-300 p-3" /></label>}<div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={busy} onClick={onClose} className={secondary}>חזרה</button><button type="button" onClick={() => onConfirm(reason)} disabled={busy || (action.kind === "cancel" && reason.trim().length < 3)} className={action.kind === "cancel" || action.kind === "delete" ? danger : primary}>{busy ? "מבצע..." : copy.confirm}</button></div></div></div>;
 }
 
 function UpdatesDialog({ activity, token, onClose }: { activity: Activity; token: string; onClose: () => void }) {
@@ -347,8 +362,27 @@ function registrationSummary(count: number, names: string[]) {
   const remaining = names.length - visibleNames.length;
   return `${count} — ${visibleNames.join(", ")}${remaining > 0 ? ` ועוד ${remaining}` : ""}`;
 }
+
+function matchesFilter(activity: Activity, filter: ActivityFilter) {
+  const registered = activity.registration_counts?.registered ?? 0;
+  const capacity = activity.max_participants;
+  if (filter === "all") return true;
+  if (filter === "full") return activity.status === "published" && capacity != null && capacity > 0 && registered >= capacity;
+  if (filter === "registered") return activity.status === "published" && registered > 0 && (capacity == null || registered < capacity);
+  if (filter === "empty") return activity.status === "published" && registered === 0;
+  return activity.status === filter;
+}
+
+function compareActivities(left: Activity, right: Activity) {
+  const leftDate = nextSession(left.sessions)?.starts_at;
+  const rightDate = nextSession(right.sessions)?.starts_at;
+  if (leftDate && rightDate) return Date.parse(leftDate) - Date.parse(rightDate);
+  if (leftDate) return -1;
+  if (rightDate) return 1;
+  return (left.title ?? "").localeCompare(right.title ?? "", "he");
+}
 function DateHighlight({ activity, session }: { activity: Activity; session: Session | null }) {
-  if (!session) return <div className="mt-4 rounded-2xl border border-slate-300 bg-white p-4 font-bold text-slate-600">אין מפגש עתידי מתוכנן</div>;
+  if (!session) return <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4"><p className="font-black text-amber-950">טרם נקבע מועד עתידי לפעילות</p><p className="mt-1 text-sm font-bold text-amber-800">יש לעדכן תאריך ושעה לפני פרסום או חידוש הפעילות.</p>{(activity.status === "draft" || (activity.status === "published" && (activity.registration_counts?.total ?? 0) === 0)) && <Link href={`/dashboard/mentor/activities/${activity.id}/edit`} className="mt-3 inline-block rounded-xl border border-amber-400 bg-white px-4 py-2 font-black text-amber-950">עדכון מועד הפעילות</Link>}</div>;
   const start = new Date(session.starts_at);
   const end = new Date(session.ends_at);
   const weekday = new Intl.DateTimeFormat("he-IL", { weekday: "long" }).format(start);

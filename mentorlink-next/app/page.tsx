@@ -49,7 +49,7 @@ export default async function HomePage() {
               </span>
             </h1>
             <p className="mt-7 max-w-3xl text-lg font-bold leading-8 text-[#49435c] sm:text-xl">
-              משפחות מוצאות חונכות אישית ופעילויות בתחומי לימודים, ספורט, יצירה וטכנולוגיה —
+              משפחות מוצאות חונכות אישית ופעילויות בתחומי לימודים, ספורט, יצירה, טכנולוגיה — וזאת רק ההתחלה.
               וחונכים משתפים את הידע והכישרון שלהם, יוצרים קשרים וצוברים ניסיון בתוך הקהילה.
             </p>
             <div className="mt-9 grid max-w-3xl gap-3 sm:grid-cols-2">
