@@ -74,7 +74,10 @@ export async function PATCH(request: Request, context: Context) {
       if (loaded.activity.status !== "cancelled") return Response.json({ error: "רק פעילות מבוטלת ניתנת להחזרה.", code: "ACTIVITY_NOT_RESTORABLE" }, { status: 409 });
       const latestSession = [...loaded.activity.sessions].sort((left: { starts_at: string; ends_at: string }, right: { starts_at: string; ends_at: string }) => Date.parse(right.starts_at) - Date.parse(left.starts_at))[0];
       const needsNewDate = !latestSession || Date.parse(latestSession.ends_at) <= Date.now();
-      const restored = await loaded.client.from("mentor_activities").update({ status: "draft", cancelled_at: null, completed_at: null, updated_at: new Date().toISOString() }).eq("id", loaded.activityId).eq("mentor_user_id", loaded.user.id).eq("status", "cancelled").select("id").maybeSingle();
+      const restored = await loaded.client.rpc("restore_mentor_activity_as_draft", {
+        p_activity_id: loaded.activityId,
+        p_mentor_user_id: loaded.user.id,
+      });
       if (restored.error || !restored.data) return Response.json({ error: "לא ניתן להחזיר את הפעילות כרגע.", code: "ACTIVITY_RESTORE_FAILED" }, { status: 409 });
       const activity = await loadOwnedActivity(loaded.client, loaded.user.id, loaded.activityId);
       return Response.json({ activity, needsNewDate });
