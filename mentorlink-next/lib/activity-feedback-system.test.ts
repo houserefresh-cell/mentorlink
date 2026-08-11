@@ -8,12 +8,18 @@ const mentorApi = fs.readFileSync("app/api/mentor-feedback/route.ts", "utf8");
 const adminApi = fs.readFileSync("app/api/admin/activity-feedback/route.ts", "utf8");
 const registrations = fs.readFileSync("app/dashboard/parent/activities/ParentRegistrations.tsx", "utf8");
 const parentShell = fs.readFileSync("app/dashboard/parent/_components/ParentDashboardShell.tsx", "utf8");
+const activityUpdatesApi = fs.readFileSync("app/api/parent/activity-updates/route.ts", "utf8");
 
 test("feedback is tied to one completed registration and uses explicit five-point scores", () => {
   assert.match(migration, /registration_id uuid not null unique/);
   assert.match(migration, /professionalism between 1 and 5/);
   assert.match(parentApi, /ניתן למלא משוב רק לאחר סיום הפעילות/);
+  assert.match(parentApi, /eq\("status","registered"\)/);
   assert.match(parentApi, /כבר נשלח משוב עבור הרשמה זו/);
+});
+
+test("a parent with multiple children can archive an activity update", () => {
+  assert.match(activityUpdatesApi, /eq\("parent_user_id",user\.id\)\.limit\(1\)\.maybeSingle\(\)/);
 });
 
 test("mentor feedback excludes private safety and moderation fields", () => {
@@ -31,8 +37,9 @@ test("administrator receives complete safety and publication workflow", () => {
 
 test("completed registrations cannot be cancelled and lead to feedback", () => {
   assert.match(registrations, /completed \? \{ label: "הפעילות הסתיימה"/);
-  assert.match(registrations, /row\.status !== "cancelled" && !completed/);
-  assert.match(registrations, /href="\/dashboard\/parent\/feedback"/);
+  assert.match(registrations, /!cancelled && !completed/);
+  assert.match(registrations, /completed && row\.status === "registered"/);
+  assert.match(registrations, /dashboard\/parent\/feedback\?registrationId/);
   assert.match(parentShell, /pendingCount/);
   assert.match(parentShell, /bg-violet-200/);
 });
