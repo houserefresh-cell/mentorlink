@@ -9,6 +9,8 @@ const adminApi = fs.readFileSync("app/api/admin/activity-feedback/route.ts", "ut
 const registrations = fs.readFileSync("app/dashboard/parent/activities/ParentRegistrations.tsx", "utf8");
 const parentShell = fs.readFileSync("app/dashboard/parent/_components/ParentDashboardShell.tsx", "utf8");
 const activityUpdatesApi = fs.readFileSync("app/api/parent/activity-updates/route.ts", "utf8");
+const restoreMigration = fs.readFileSync("supabase/migrations/202608110036_restore_cancelled_activity_consistently.sql", "utf8");
+const activityApi = fs.readFileSync("app/api/mentor-activities/[activityId]/route.ts", "utf8");
 
 test("feedback is tied to one completed registration and uses explicit five-point scores", () => {
   assert.match(migration, /registration_id uuid not null unique/);
@@ -42,4 +44,12 @@ test("completed registrations cannot be cancelled and lead to feedback", () => {
   assert.match(registrations, /dashboard\/parent\/feedback\?registrationId/);
   assert.match(parentShell, /pendingCount/);
   assert.match(parentShell, /bg-violet-200/);
+});
+
+test("restoring an old cancelled activity never revives stale registrations", () => {
+  assert.match(restoreMigration, /activity\.status = 'cancelled'/);
+  assert.match(restoreMigration, /registration\.status in \('registered', 'waitlisted'\)/);
+  assert.match(restoreMigration, /create or replace function public\.restore_mentor_activity_as_draft/);
+  assert.match(restoreMigration, /set status = 'cancelled'/);
+  assert.match(activityApi, /rpc\("restore_mentor_activity_as_draft"/);
 });
