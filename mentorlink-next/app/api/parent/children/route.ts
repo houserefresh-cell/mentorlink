@@ -2,10 +2,11 @@ import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 const grades = new Set(["kindergarten", ...Array.from({ length: 12 }, (_, index) => `grade_${index + 1}`)]);
+const clean = (value: unknown, maximum: number) => typeof value === "string" && value.trim().length <= maximum ? value.trim() : "";
 
 async function childrenWithInterests(parentUserId: string) {
   const admin = createSupabaseAdmin();
-  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, accommodation_notes, created_at").eq("parent_user_id", parentUserId).order("created_at");
+  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, accommodation_notes, default_mentor_message, auto_include_mentor_message, created_at").eq("parent_user_id", parentUserId).order("created_at");
   if (children.error) return { data: null, error: children.error };
   const ids = (children.data ?? []).map((child) => child.id);
   const interests = ids.length ? await admin.from("parent_child_subject_interests").select("child_id, subject_id, subjects(name, category)").in("child_id", ids) : { data: [], error: null };
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: null, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
   if (result.error?.code === "23505") return Response.json({ error: "כבר קיים ילד בשם הזה בחשבון." }, { status: 409 });
   if (result.error || !result.data) return Response.json({ error: result.error?.message.includes("INVALID_SUBJECT") ? "אחד מתחומי העניין אינו זמין." : "לא ניתן לשמור את פרטי הילד/ה." }, { status: result.error?.message.includes("INVALID_SUBJECT") ? 400 : 500 });
-  await admin.from("parent_children").update({ last_name: lastName || null }).eq("id", result.data).eq("parent_user_id", user.id);
+  await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", result.data).eq("parent_user_id", user.id);
   const refreshed = await childrenWithInterests(user.id);
   return Response.json({ child: refreshed.data?.find((child) => child.id === result.data) }, { status: 201 });
 }
@@ -64,7 +65,7 @@ export async function PATCH(request: Request) {
   const admin = createSupabaseAdmin();
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: id, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
   if (result.error || !result.data) return Response.json({ error: result.error?.message.includes("INVALID_SUBJECT") ? "אחד מתחומי העניין אינו זמין." : "לא ניתן לעדכן את פרטי הילד/ה." }, { status: result.error?.message.includes("INVALID_SUBJECT") ? 400 : 422 });
-  await admin.from("parent_children").update({ last_name: lastName || null }).eq("id", id).eq("parent_user_id", user.id);
+  await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", id).eq("parent_user_id", user.id);
   const refreshed = await childrenWithInterests(user.id);
   return Response.json({ child: refreshed.data?.find((child) => child.id === id) });
 }

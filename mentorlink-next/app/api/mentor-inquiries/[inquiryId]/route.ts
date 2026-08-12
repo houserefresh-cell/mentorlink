@@ -40,25 +40,27 @@ export async function PATCH(
     let title: string;
     let body: string;
     let href: string;
-    if (action === "respond" && isMentor && ["pending", "responded"].includes(row.status)) {
+    if (action === "respond" && (isMentor || isParent) && ["pending", "responded", "closed"].includes(row.status)) {
       if (response.length < 2) return Response.json({ error: "יש לכתוב תשובה." }, { status: 400 });
       Object.assign(update, {
         status: "responded",
-        mentor_response: response,
+        ...(isMentor?{mentor_response: response}:{}), archived_at:null,
         responded_at: new Date().toISOString(),
       });
-      recipientId = row.parent_user_id;
+      recipientId = isMentor?row.parent_user_id:row.mentor_user_id;
       kind = "mentor_inquiry_responded";
-      title = "החונך השיב לפנייה";
-      body = "ממתינה לך תשובה חדשה באזור האישי.";
-      href = "/dashboard/parent";
-    } else if (action === "close" && isMentor && ["pending", "responded"].includes(row.status)) {
-      Object.assign(update, { status: "closed", closed_at: new Date().toISOString() });
-      recipientId = row.parent_user_id;
+      title = isMentor?"החונך השיב לפנייה":"הודעה חדשה מההורה";
+      body = "ממתינה לך הודעה חדשה בשיחה.";
+      href = isMentor?"/dashboard/parent/requests":"/dashboard/mentor/inquiries";
+    } else if (action === "close" && ["pending", "responded"].includes(row.status)) {
+      Object.assign(update, { status: "closed", closed_at: new Date().toISOString(), archived_at:new Date().toISOString() });
+      recipientId = isMentor?row.parent_user_id:row.mentor_user_id;
       kind = "mentor_inquiry_closed";
       title = "הפנייה טופלה";
       body = "הפנייה עודכנה באזור האישי.";
-      href = "/dashboard/parent";
+      href = isMentor?"/dashboard/parent/requests":"/dashboard/mentor/inquiries";
+    } else if (action === "reopen" && row.status==="closed") {
+      Object.assign(update,{status:"responded",closed_at:null,archived_at:null});recipientId=isMentor?row.parent_user_id:row.mentor_user_id;kind="mentor_inquiry_responded";title="השיחה חזרה לפעילות";body="השיחה הוחזרה לשיחות הפעילות.";href=isMentor?"/dashboard/parent/requests":"/dashboard/mentor/inquiries";
     } else if (action === "cancel" && isParent && ["pending", "responded"].includes(row.status)) {
       Object.assign(update, { status: "cancelled", cancelled_at: new Date().toISOString() });
       recipientId = row.mentor_user_id;
@@ -74,6 +76,7 @@ export async function PATCH(
       .select("id, status, mentor_response").maybeSingle();
     if (result.error) throw new Error("update failed");
     if (!result.data) return Response.json({ error: "הפנייה כבר השתנתה." }, { status: 409 });
+    if(action==="respond") await client.from("mentor_inquiry_messages").insert({inquiry_id:inquiryId,sender_user_id:user.id,sender_role:isMentor?"mentor":"parent",body:response});
     const recipient = await client.auth.admin.getUserById(recipientId);
     await deliverInquiryUpdate(client, {
       userId: recipientId,

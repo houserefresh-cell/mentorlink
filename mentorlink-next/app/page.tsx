@@ -42,10 +42,10 @@ export default async function HomePage() {
               <span className="h-2.5 w-2.5 rounded-full bg-teal-500" />
               כישרון מקומי פוגש הזדמנות מקומית
             </div>
-            <h1 className="mt-7 max-w-4xl text-5xl font-black leading-[1.05] tracking-[-0.035em] sm:text-6xl lg:text-7xl">
-              חונכים מהקהילה.
+            <h1 className="mt-7 max-w-4xl text-4xl font-black leading-[1.12] tracking-[-0.025em] sm:text-5xl lg:text-6xl">
+              חיבורים טובים מתחילים כאן.
               <span className="block bg-gradient-to-l from-[#ef6b32] via-[#a629d8] to-[#087f8c] bg-clip-text text-transparent">
-                הזדמנויות לצמוח יחד.
+                מכירים, לומדים וצומחים יחד.
               </span>
             </h1>
             <p className="mt-7 max-w-3xl text-lg font-bold leading-8 text-[#49435c] sm:text-xl">
@@ -76,6 +76,14 @@ export default async function HomePage() {
       </section>
 
       <SubjectDiscovery />
+
+      <section className="bg-gradient-to-l from-[#fff1df] via-[#fffaf3] to-[#e9fbf7] py-14">
+        <div className="mx-auto max-w-5xl px-5 text-center lg:px-8">
+          <p className="text-sm font-black text-[#9b3b12]">הטוב שבקהילה לפעמים קרוב יותר ממה שנדמה</p>
+          <h2 className="mt-2 text-3xl font-black text-[#173f63] sm:text-4xl">לפעמים החיבור נמצא ממש מעבר לדלת</h2>
+          <p className="mx-auto mt-5 max-w-4xl text-lg font-semibold leading-9 text-[#514a60]">הבן של השכנים מחפש מישהו להתאמן איתו בכדורגל. אחותו חולמת ללמוד פסנתר, אבל קשה למצוא מורה מתאים. ובמרחק כמה בתים גר חונך צעיר שאוהב כדורגל ומנגן בפסנתר כבר שמונה שנים. הם חיים באותה קהילה — ועדיין לא הכירו. MentorLink נועדה לעזור לחיבורים הטובים האלה לקרות: בין ילדים לחונכים, בין משפחות, ובין אנשים שיש להם הרבה מה לתת זה לזה.</p>
+        </div>
+      </section>
 
       <section id="how-it-works" className="relative scroll-mt-24 overflow-hidden bg-[#fff1df] py-20">
         <div className="absolute -right-20 top-20 h-64 w-64 rounded-full bg-orange-200/50 blur-3xl" />

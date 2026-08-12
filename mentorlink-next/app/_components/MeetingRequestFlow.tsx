@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[]; subjects: string[] };
-type ParentChild = { id: string; first_name: string; grade: string | null };
+type ParentChild = { id: string; first_name: string; grade: string | null; default_mentor_message: string | null; auto_include_mentor_message: boolean };
 type Config = {
   mentor: {
     bookingId: string;
@@ -202,7 +202,7 @@ export default function MeetingRequestFlow({
                 {selectedDate && <Choice title="שעה" values={dateSlots.map((item) => item.startAt)} selected={slot?.startAt ?? ""} format={formatTime} onSelect={(value) => { setSlot(dateSlots.find((item) => item.startAt === value) ?? null); setDuration(0); }} />}
                 {slot && <Choice title="ד. משך הפגישה" values={slot.durations.map(String)} selected={String(duration || "")} format={(value) => `${value} דקות`} onSelect={(value) => setDuration(Number(value))} />}
                 <fieldset><legend className="mb-2 font-black">ה. עבור מי הפגישה?</legend>
-                  {children.length > 0 && <div className="mb-4 flex flex-wrap gap-2">{children.map((child) => <button key={child.id} type="button" aria-pressed={selectedChildId === child.id} onClick={() => { setSelectedChildId(child.id); setChildName(child.first_name); setGrade(gradeLabel(child.grade)); }} className={`min-h-11 rounded-full border px-4 py-2 font-black ${selectedChildId === child.id ? "border-violet-700 bg-violet-700 text-white" : "border-violet-200 bg-violet-50 text-violet-950"}`}>{child.first_name}{child.grade ? ` · ${gradeLabel(child.grade)}` : ""}</button>)}</div>}
+                  {children.length > 0 && <div className="mb-4 flex flex-wrap gap-2">{children.map((child) => <button key={child.id} type="button" aria-pressed={selectedChildId === child.id} onClick={() => { setSelectedChildId(child.id); setChildName(child.first_name); setGrade(gradeLabel(child.grade)); setMessage(child.auto_include_mentor_message ? child.default_mentor_message ?? "" : ""); }} className={`min-h-11 rounded-full border px-4 py-2 font-black ${selectedChildId === child.id ? "border-violet-700 bg-violet-700 text-white" : "border-violet-200 bg-violet-50 text-violet-950"}`}>{child.first_name}{child.grade ? ` · ${gradeLabel(child.grade)}` : ""}</button>)}</div>}
                   <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="שם פרטי של הילד/ה"><input value={childName} onChange={(event) => setChildName(event.target.value)} maxLength={60} /></Field>
                   <Field label="כיתה או גיל"><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">בחירה</option>{GRADES.map((value) => <option key={value}>{value}</option>)}</select></Field>

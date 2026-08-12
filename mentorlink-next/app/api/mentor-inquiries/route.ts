@@ -51,6 +51,13 @@ export async function POST(request: Request) {
       return Response.json({ error: "הפנייה כבר נשלחה." }, { status: 409 });
     }
     if (insert.error || !insert.data) throw new Error("insert failed");
+    const firstMessage = await client.from("mentor_inquiry_messages").insert({
+      inquiry_id: insert.data.id,
+      sender_user_id: user.id,
+      sender_role: "parent",
+      body: message,
+    });
+    if (firstMessage.error) throw new Error("message insert failed");
     const mentorUser = await client.auth.admin.getUserById(mentor.mentorUserId);
     await deliverInquiryUpdate(client, {
       userId: mentor.mentorUserId,
@@ -76,7 +83,7 @@ export async function GET(request: Request) {
     const client = createSupabaseAdmin();
     const ownerColumn = user.role === "parent" ? "parent_user_id" : "mentor_user_id";
     const result = await client.from("mentor_inquiries")
-      .select("id, mentor_user_id, subject, child_grade_or_age, message, status, mentor_response, responded_at, closed_at, cancelled_at, created_at")
+      .select("id, parent_user_id, mentor_user_id, subject, child_grade_or_age, message, status, mentor_response, responded_at, closed_at, cancelled_at, archived_at, created_at")
       .eq(ownerColumn, user.id)
       .order("created_at", { ascending: false });
     if (result.error) throw new Error("query failed");
@@ -100,9 +107,14 @@ export async function GET(request: Request) {
         }
       }
     }
+    const messages = rows.length ? await client.from("mentor_inquiry_messages").select("id,inquiry_id,sender_role,body,created_at").in("inquiry_id",rows.map(row=>row.id)).order("created_at") : {data:[]};
+    const parentIds=[...new Set(rows.map(row=>row.parent_user_id))];
+    const parents=user.role==="mentor"&&parentIds.length?await client.from("parent_profiles").select("user_id,first_name,last_name,phone").in("user_id",parentIds):{data:[]};
     return Response.json({
-      inquiries: rows.map(({ mentor_user_id, ...row }) => ({
+      inquiries: rows.map(({ mentor_user_id, parent_user_id, ...row }) => ({
         ...row,
+        messages:(messages.data??[]).filter(message=>message.inquiry_id===row.id),
+        ...(user.role==="mentor"?{parent:(parents.data??[]).find(parent=>parent.user_id===parent_user_id)??null}:{}),
         ...(user.role === "parent"
           ? { mentor: mentorSummaries.get(mentor_user_id) ?? null }
           : {}),
