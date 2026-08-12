@@ -12,7 +12,7 @@ export default function PublicHeader() {
     <header dir="rtl" className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
         <Link href="/" aria-label="MentorLink — דף הבית" className="flex shrink-0 items-center gap-3">
-          <Image src="/mentorlink-logo.png" alt="" width={132} height={58} priority className="h-14 w-auto object-contain" />
+          <Image src="/mentorlink-logo.png" alt="" width={160} height={76} priority className="h-16 w-auto scale-125 object-contain sm:h-20" />
         </Link>
         <nav aria-label="ניווט ציבורי" className="hidden items-center gap-7 text-sm font-bold text-slate-600 md:flex">
           {navigation.map((item) => <Link key={item.href} href={item.href} className="transition hover:text-blue-600">{item.label}</Link>)}

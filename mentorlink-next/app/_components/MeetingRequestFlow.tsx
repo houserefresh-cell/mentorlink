@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[]; subjects: string[] };
+type ParentChild = { id: string; first_name: string; grade: string | null };
 type Config = {
   mentor: {
     bookingId: string;
@@ -53,6 +54,8 @@ export default function MeetingRequestFlow({
   const [status, setStatus] = useState("");
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const [loadingLater, setLoadingLater] = useState(false);
+  const [children, setChildren] = useState<ParentChild[]>([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
 
 
   useEffect(() => {
@@ -61,7 +64,8 @@ export default function MeetingRequestFlow({
       supabase.auth.getSession(),
       fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}`).then(async (response) => ({ ok: response.ok, body: await response.json() })),
     ]).then(([session, scheduling]) => {
-      setAccessToken(session.data.session?.access_token ?? null);
+      const nextToken = session.data.session?.access_token ?? null;
+      setAccessToken(nextToken);
       setRole(session.data.session?.user.user_metadata?.role ?? null);
       setAuthState("resolved");
       if (scheduling.ok && scheduling.body?.mentor && Array.isArray(scheduling.body?.slots)) {
@@ -70,6 +74,12 @@ export default function MeetingRequestFlow({
       } else {
         setConfig(null);
         setConfigError(scheduling.body?.error ?? "לא ניתן לטעון את המועדים הזמינים.");
+      }
+      if (nextToken && session.data.session?.user.user_metadata?.role === "parent") {
+        void fetch("/api/parent/children", { headers: { Authorization: `Bearer ${nextToken}` }, cache: "no-store" })
+          .then(async (response) => response.ok ? response.json() : { children: [] })
+          .then((body) => setChildren(body.children ?? []))
+          .catch(() => setChildren([]));
       }
     }).catch(() => { setAuthState("resolved"); setConfigError("לא ניתן לטעון את המועדים הזמינים."); });
   }, [mentorBookingId, open]);
@@ -191,10 +201,12 @@ export default function MeetingRequestFlow({
                 {mode && <Choice title="ג. בחירת יום" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = subjectSlots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); setSlot(first ?? null); setDuration(0); }} />}
                 {selectedDate && <Choice title="שעה" values={dateSlots.map((item) => item.startAt)} selected={slot?.startAt ?? ""} format={formatTime} onSelect={(value) => { setSlot(dateSlots.find((item) => item.startAt === value) ?? null); setDuration(0); }} />}
                 {slot && <Choice title="ד. משך הפגישה" values={slot.durations.map(String)} selected={String(duration || "")} format={(value) => `${value} דקות`} onSelect={(value) => setDuration(Number(value))} />}
-                <fieldset><legend className="mb-2 font-black">ה. פרטי הילד/ה</legend><div className="grid gap-4 sm:grid-cols-2">
+                <fieldset><legend className="mb-2 font-black">ה. עבור מי הפגישה?</legend>
+                  {children.length > 0 && <div className="mb-4 flex flex-wrap gap-2">{children.map((child) => <button key={child.id} type="button" aria-pressed={selectedChildId === child.id} onClick={() => { setSelectedChildId(child.id); setChildName(child.first_name); setGrade(gradeLabel(child.grade)); }} className={`min-h-11 rounded-full border px-4 py-2 font-black ${selectedChildId === child.id ? "border-violet-700 bg-violet-700 text-white" : "border-violet-200 bg-violet-50 text-violet-950"}`}>{child.first_name}{child.grade ? ` · ${gradeLabel(child.grade)}` : ""}</button>)}</div>}
+                  <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="שם פרטי של הילד/ה"><input value={childName} onChange={(event) => setChildName(event.target.value)} maxLength={60} /></Field>
                   <Field label="כיתה או גיל"><select value={grade} onChange={(event) => setGrade(event.target.value)}><option value="">בחירה</option>{GRADES.map((value) => <option key={value}>{value}</option>)}</select></Field>
-                </div></fieldset>
+                </div>{children.length > 0 && <p className="mt-2 text-sm font-bold text-slate-600">בחירת ילד ממלאת אוטומטית את השם והכיתה. עדיין אפשר לעדכן ידנית לפני השליחה.</p>}</fieldset>
                 <Field label="ו. במה נדרשת עזרה"><textarea value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={500} rows={3} /></Field>
                 <Field label="ז. הודעה קצרה לחונך (לא חובה)"><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={500} rows={2} /></Field>
                 {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>{childName} · {grade}</p></div>}
@@ -232,4 +244,10 @@ function formatDate(value: string) {
 }
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+function gradeLabel(value: string | null) {
+  if (!value) return "";
+  if (value === "kindergarten") return "גן";
+  const number = Number(value.replace("grade_", ""));
+  return Number.isInteger(number) && number > 0 ? GRADES[number - 1] ?? value : value;
 }

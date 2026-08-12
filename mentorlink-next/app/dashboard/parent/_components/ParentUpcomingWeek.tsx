@@ -36,11 +36,39 @@ export default function ParentUpcomingWeek() {
     return () => { active = false; };
   }, []);
 
-  const grouped = useMemo(() => items, [items]);
+  const activities = useMemo(() => items.filter((item) => item.kind === "activity"), [items]);
+  const meetings = useMemo(() => items.filter((item) => item.kind === "meeting"), [items]);
   return <section aria-labelledby="parent-upcoming-week" className="mt-6 rounded-3xl border border-teal-200 bg-white p-5 shadow-sm sm:p-7">
-    <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="font-black text-teal-700">במבט אחד</p><h2 id="parent-upcoming-week" className="mt-1 text-2xl font-black">השבוע הקרוב</h2></div><Link href="/dashboard/parent/activities" className="font-black text-blue-700 underline">לכל הפעילויות</Link></div>
-    {loading ? <p className="mt-5 text-slate-600">טוען את השבוע הקרוב...</p> : grouped.length ? <div className="mt-5 grid gap-3 sm:grid-cols-2">{grouped.map((item) => <Link key={item.id} href={item.kind === "activity" ? "/dashboard/parent/activities" : "/dashboard/parent/requests"} className="rounded-2xl border border-slate-200 bg-gradient-to-l from-teal-50 to-amber-50 p-4 transition hover:-translate-y-0.5 hover:shadow-md"><div className="flex items-start justify-between gap-3"><strong className="text-lg">{item.title}</strong><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-800">עבור {item.child}</span></div><p className="mt-2 font-black text-slate-800">{dateTime(item.startsAt, item.endsAt)}</p><p className="mt-1 text-sm text-slate-600">{item.place}</p></Link>)}</div> : <div className="mt-5 rounded-2xl bg-teal-50 p-5"><p className="font-black text-teal-950">השבוע עדיין פתוח להזדמנויות חדשות.</p><p className="mt-1 text-teal-900">כשתיקבע פעילות או פגישה, היא תופיע כאן באופן מסודר.</p></div>}
+    <div><p className="font-black text-teal-700">במבט אחד</p><h2 id="parent-upcoming-week" className="mt-1 text-2xl font-black">השבוע הקרוב</h2></div>
+    {loading ? <p className="mt-5 text-slate-600">טוען את השבוע הקרוב...</p> : <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <UpcomingColumn title="פעילויות קרובות" href="/dashboard/parent/activities" empty="אין פעילויות בשבוע הקרוב." items={activities} />
+      <UpcomingColumn title="פגישות קרובות" href="/dashboard/parent/requests" empty="אין פגישות בשבוע הקרוב." items={meetings} />
+    </div>}
   </section>;
+}
+
+function UpcomingColumn({ title, href, empty, items }: { title: string; href: string; empty: string; items: WeekItem[] }) {
+  return <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+    <div className="flex items-center justify-between gap-3"><h3 className="text-xl font-black">{title}</h3><Link href={href} className="text-sm font-black text-blue-700 underline">לכל הפרטים</Link></div>
+    {items.length ? <div className="mt-3 grid gap-3">{items.map((item) => <UpcomingCard key={item.id} item={item} href={href} />)}</div> : <p className="mt-3 rounded-xl bg-white p-4 text-sm font-bold text-slate-600">{empty}</p>}
+  </section>;
+}
+
+function UpcomingCard({ item, href }: { item: WeekItem; href: string }) {
+  const proximity = dayProximity(item.startsAt);
+  return <Link href={href} className={`relative overflow-hidden rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-md ${proximity === 0 ? "border-amber-400 bg-amber-100" : proximity === 1 ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
+    {proximity !== null && <span className="mb-2 inline-flex rounded-full bg-amber-300 px-3 py-1 text-xs font-black text-amber-950">{proximity === 0 ? "היום" : "מחר"}</span>}
+    <div className="flex items-start justify-between gap-3"><strong className="text-lg">{item.title}</strong><span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-800">עבור {item.child}</span></div>
+    <p className="mt-2 font-black text-slate-800">{dateTime(item.startsAt, item.endsAt)}</p><p className="mt-1 text-sm text-slate-600">{item.place}</p>
+  </Link>;
+}
+
+function dayProximity(value: string) {
+  const event = new Date(value), now = new Date();
+  const eventDay = new Date(event.getFullYear(), event.getMonth(), event.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const difference = Math.round((eventDay - today) / 86_400_000);
+  return difference === 0 || difference === 1 ? difference : null;
 }
 
 function dateTime(start: string, end: string | null) {

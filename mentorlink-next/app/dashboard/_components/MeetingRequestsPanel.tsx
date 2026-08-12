@@ -29,6 +29,7 @@ type Meeting = {
 };
 
 type MentorMeetingView = "mentor-action" | "waiting-parent" | "upcoming-approved" | "history";
+type ParentMeetingView = "requests" | "meetings" | "history";
 
 export default function MeetingRequestsPanel({ role, view = "mentor-action" }: { role: "parent" | "mentor"; view?: MentorMeetingView }) {
   const [token, setToken] = useState("");
@@ -39,6 +40,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
   const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">("loading");
+  const [parentView, setParentView] = useState<ParentMeetingView>("requests");
 
   const load = useCallback(async (accessToken: string) => {
     setLoadState("loading");
@@ -138,23 +140,29 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
     <section dir="rtl" className="mt-8" aria-labelledby="meeting-requests-title">
       {role === "parent" ? (
         <>
-          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="parent-action-title">
+          {groups.actionRequired.length > 0 && <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="parent-action-title">
             <h2 id="parent-action-title" className="text-2xl font-black text-amber-950">בקשות שממתינות לתשובתך</h2>
             <p className="mt-2 text-sm text-amber-900">מועדים חלופיים שהחונך הציע וממתינים לאישור או לדחייה שלך.</p>
             <h3 className="mt-4 text-lg font-black text-amber-950">דורשות פעולה ממני</h3>
             <RequestList requests={groups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} empty="אין כרגע בקשות שממתינות לתשובתך." />
-          </section>
+          </section>}
 
-          <div className="mt-8 flex items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
             <h2 id="meeting-requests-title" className="text-2xl font-black">הבקשות והפגישות שלי</h2>
             <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
+            </div>
+            <Link href="/dashboard/parent#mentor-search" className="rounded-xl bg-blue-700 px-5 py-3 font-black text-white">בקשת פגישה חדשה</Link>
           </div>
-          <div className="mt-5 space-y-7">
-            <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup title="מאושרות וקרובות" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup title="התקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
-            <RequestGroup title="היסטוריה" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+          <nav className="mt-5 grid gap-2 rounded-2xl bg-blue-700 p-2 text-white sm:grid-cols-3" aria-label="סינון בקשות ופגישות">
+            <ParentTab label="בקשות פתוחות" count={groups.waitingForMentor.length + groups.actionRequired.length} selected={parentView === "requests"} onClick={() => setParentView("requests")} />
+            <ParentTab label="פגישות קרובות" count={groups.upcoming.length} selected={parentView === "meetings"} onClick={() => setParentView("meetings")} />
+            <ParentTab label="היסטוריה" count={groups.completed.length + groups.closed.length + groups.history.length} selected={parentView === "history"} onClick={() => setParentView("history")} />
+          </nav>
+          <div className="mt-6 space-y-7">
+            {parentView === "requests" && <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />}
+            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />}
+            {parentView === "history" && <><RequestGroup title="פגישות שהתקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /><RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /><RequestGroup title="היסטוריה נוספת" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /></>}
           </div>
         </>
       ) : (
@@ -171,6 +179,10 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
     </section>
   );
+}
+
+function ParentTab({ label, count, selected, onClick }: { label: string; count: number; selected: boolean; onClick: () => void }) {
+  return <button type="button" onClick={onClick} aria-pressed={selected} className={`min-h-12 rounded-xl px-4 py-3 font-black transition ${selected ? "bg-white text-blue-800 shadow" : "bg-blue-600 text-white hover:bg-blue-500"}`}>{label} <span aria-label={`${count} פריטים`}>({count})</span></button>;
 }
 
 type ListProps = {
