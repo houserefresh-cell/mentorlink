@@ -35,8 +35,8 @@ export default function MentorActivityRegistrationsPage() {
     <p className="font-black text-violet-700">הקהילה בפעילויות שלי</p>
     <h1 className="mt-2 text-3xl font-black">הרשמות חדשות לפעילויות</h1>
     <p className="mt-3 text-slate-600">כל ילד שנרשם או הצטרף לרשימת המתנה, עם פרטי ההורה והמפגש.</p>
-    <nav className="mt-6 flex flex-wrap gap-2" aria-label="סינון הרשמות">
-      {([['all','הכול'],['registered','רשומים'],['waitlisted','רשימת המתנה']] as const).map(([key,label]) => <button key={key} onClick={() => setView(key)} className={`rounded-full px-5 py-2 font-black ${view === key ? "bg-violet-700 text-white" : "border bg-white"}`}>{label} ({key === 'all' ? rows.length : rows.filter(row => row.status === key).length})</button>)}
+    <nav className="mt-6 grid gap-2 rounded-2xl bg-blue-700 p-2 sm:grid-cols-3" aria-label="סינון הרשמות">
+      {([['all','הכול'],['registered','רשומים'],['waitlisted','רשימת המתנה']] as const).map(([key,label]) => <button key={key} onClick={() => setView(key)} className={`min-h-12 rounded-xl px-5 py-2 font-black ${view === key ? "bg-white text-blue-800" : "text-white hover:bg-blue-600"}`}>{label} ({key === 'all' ? rows.length : rows.filter(row => row.status === key).length})</button>)}
     </nav>
     {loading ? <p className="mt-8">טוען הרשמות...</p> : error ? <p role="alert" className="mt-8 rounded-2xl bg-red-50 p-5 font-bold text-red-800">{error}</p> : <div className="mt-7 grid gap-5 md:grid-cols-2">{shown.map((row) => {
       const childName = [row.child.first_name, row.child.last_name].filter(Boolean).join(" ");

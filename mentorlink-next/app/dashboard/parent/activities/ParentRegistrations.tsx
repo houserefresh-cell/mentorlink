@@ -40,7 +40,7 @@ type Registration = {
   sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
 };
 
-type Tabs = "closest" | "awaiting" | "cancelled" | "completed" | "all";
+type Tabs = "closest" | "awaiting" | "cancelled" | "completed";
 
 const status: Record<string, { label: string; style: string }> = {
   registered: { label: "רשום/ה", style: "bg-green-100 text-green-800" },
@@ -53,7 +53,6 @@ const tabs: Array<{ key: Tabs; label: string }> = [
   { key: "awaiting", label: "רשימת המתנה" },
   { key: "cancelled", label: "בוטלו" },
   { key: "completed", label: "הסתיימו" },
-  { key: "all", label: "הכול" },
 ];
 
 const locationLabels: Record<string, string> = {
@@ -146,15 +145,15 @@ export default function ParentRegistrations() {
               {childNames.map((child) => <button key={child} type="button" onClick={() => setSelectedChild(child)} className={`rounded-full px-4 py-2 text-sm font-black ${selectedChild === child ? "bg-violet-700 text-white" : "bg-white text-violet-900"}`}>{child}</button>)}
             </div>
           </div>}
-          <div className="flex flex-wrap gap-2 rounded-2xl border bg-white p-3 shadow-sm">
+          <div className="grid gap-2 rounded-2xl bg-blue-700 p-2 shadow-sm sm:grid-cols-4">
             {tabs.map((tab) => (
-              <button key={tab.key} type="button" onClick={() => setView(tab.key)} className={`rounded-full px-4 py-2 text-sm font-black transition ${view === tab.key ? "bg-blue-700 text-white" : "bg-slate-100 text-slate-700"}`}>
-                {tab.label}
+              <button key={tab.key} type="button" onClick={() => setView(tab.key)} className={`min-h-12 rounded-xl px-4 py-2 font-black transition ${view === tab.key ? "bg-white text-blue-800" : "text-white hover:bg-blue-600"}`}>
+                {tab.label} ({rows.filter((row) => { const next=nextByRow[row.id]; const cancelled=row.status==="cancelled"||row.activity?.status==="cancelled"; const completed=!cancelled&&(row.activity?.status==="completed"||(row.sessions.length>0&&row.sessions.every((session)=>new Date(session.ends_at).getTime()<Date.now()))); return tab.key==="closest"?Boolean(next)&&!completed&&row.status==="registered":tab.key==="awaiting"?row.status==="waitlisted":tab.key==="cancelled"?cancelled:completed; }).length})
               </button>
             ))}
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,28rem),1fr))]">
             {visibleRows.map((row) => {
               const next = nextByRow[row.id];
               const cancelled = row.status === "cancelled" || row.activity?.status === "cancelled";
@@ -197,7 +196,7 @@ export default function ParentRegistrations() {
               );
             })}
           </div>
-          {!visibleRows.length && <div className="rounded-3xl border border-dashed bg-white p-8 text-center"><h2 className="text-xl font-black">אין פעילויות בקטגוריה הזו</h2><p className="mt-2 text-slate-600">אפשר לבחור ילד אחר או לעבור ל״הכול״.</p></div>}
+          {!visibleRows.length && <div className="rounded-3xl border border-dashed bg-white p-8 text-center"><h2 className="text-xl font-black">אין פעילויות בקטגוריה הזו</h2><p className="mt-2 text-slate-600">אפשר לבחור ילד אחר או קטגוריה אחרת.</p></div>}
         </div>
       ) : (
         <div className="rounded-3xl border border-dashed bg-white p-10 text-center">

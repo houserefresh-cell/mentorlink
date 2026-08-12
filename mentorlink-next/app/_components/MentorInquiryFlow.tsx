@@ -8,6 +8,7 @@ const GRADES = [
   "גן", "כיתה א׳", "כיתה ב׳", "כיתה ג׳", "כיתה ד׳", "כיתה ה׳", "כיתה ו׳",
   "כיתה ז׳", "כיתה ח׳", "כיתה ט׳", "כיתה י׳", "כיתה י״א", "כיתה י״ב",
 ];
+type ParentChild = { id:string; first_name:string; grade:string|null; default_mentor_message:string|null; auto_include_mentor_message:boolean };
 
 export default function MentorInquiryFlow({
   mentorBookingId,
@@ -32,12 +33,16 @@ export default function MentorInquiryFlow({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const [children,setChildren]=useState<ParentChild[]>([]);
+  const [selectedChildId,setSelectedChildId]=useState("");
 
   useEffect(() => {
     if (!open) return;
     void supabase.auth.getSession().then(({ data }) => {
       setToken(data.session?.access_token ?? "");
       setRole(data.session?.user.user_metadata?.role ?? "");
+      const accessToken=data.session?.access_token;
+      if(accessToken&&data.session?.user.user_metadata?.role==="parent") void fetch("/api/parent/children",{headers:{Authorization:`Bearer ${accessToken}`},cache:"no-store"}).then(async response=>response.ok?response.json():{children:[]}).then(body=>setChildren(body.children??[]));
     });
   }, [open]);
 
@@ -107,6 +112,7 @@ export default function MentorInquiryFlow({
           <p role="alert" className="mt-6 rounded-xl bg-red-50 p-4 font-bold text-red-700">רק חשבון הורה יכול לשלוח פנייה.</p>
         ) : (
           <div className="mt-6 space-y-5">
+            {children.length>0&&<fieldset><legend className="mb-2 font-black">עבור מי הפנייה?</legend><div className="flex flex-wrap gap-2">{children.map(child=><button key={child.id} type="button" onClick={()=>{setSelectedChildId(child.id);setGrade(child.grade??"");setMessage(child.auto_include_mentor_message?child.default_mentor_message??"":"")}} className={`rounded-full border px-4 py-2 font-black ${selectedChildId===child.id?"bg-violet-700 text-white":"bg-violet-50 text-violet-950"}`}>{child.first_name}{child.grade?` · ${child.grade}`:""}</button>)}</div><p className="mt-2 text-sm text-slate-600">הכיתה וההודעה הקבועה שמאושרת בחשבון מתמלאות אוטומטית, ותמיד אפשר לערוך לפני השליחה.</p></fieldset>}
             <label className="grid gap-2 font-bold">תחום (לא חובה)
               <select value={subject} onChange={(event) => setSubject(event.target.value)} className="min-h-12 rounded-xl border p-3">
                 <option value="">ללא תחום מסוים</option>

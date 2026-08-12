@@ -28,6 +28,9 @@ export async function GET(request:Request){
   activityIds.length?admin.from("mentor_activity_registrations").select("activity_id,status").in("activity_id",activityIds).eq("status","registered"):Promise.resolve({data:[],error:null}),
  ]);
  if(activities.error||sessions.error||children.error||activityFeedback.error||activityParticipants.error)return Response.json({error:"לא ניתן לטעון את המשובים."},{status:500});
+ const mentorIds=[...new Set([...(activities.data??[]).map(row=>row.mentor_user_id),...(meetings.data??[]).map(row=>row.mentor_user_id)].filter(Boolean))];
+ const mentorProfiles=mentorIds.length?await admin.from("mentor_profiles").select("user_id,first_name,last_name").in("user_id",mentorIds):{data:[]};
+ const mentorName=(userId:string|undefined)=>{const profile=(mentorProfiles.data??[]).find(row=>row.user_id===userId);return [profile?.first_name,profile?.last_name].filter(Boolean).join(" ")||"חונך/ת"};
  const now=Date.now();
  const activityFeedbackByRegistration=new Set((activityFeedback.data??[]).map(row=>row.registration_id));
  const meetingFeedbackByRequest=new Set((meetingFeedback.data??[]).map(row=>row.meeting_request_id));
@@ -38,8 +41,9 @@ export async function GET(request:Request){
  const meetingTasks=(meetings.data??[]).filter(row=>row.confirmed_end_at&&Date.parse(row.confirmed_end_at)<now&&!meetingFeedbackByRequest.has(row.id)).map(row=>({contextType:"meeting",contextId:row.id,meetingRequestId:row.id,title:row.subject||"פגישה עם חונך",activityTitle:row.subject||"פגישה עם חונך",childName:row.child_first_name||"ילד/ה",childGrade:row.child_grade_or_age||null,sessionStart:row.confirmed_start_at,sessionEnd:row.confirmed_end_at}));
  const submittedActivities=(activityFeedback.data??[]).map(item=>{const registration=(registrations.data??[]).find(row=>row.id===item.registration_id);const activity=(activities.data??[]).find(row=>row.id===item.activity_id);const child=(children.data??[]).find(row=>row.id===registration?.child_id);const activitySessions=(sessions.data??[]).filter(row=>row.activity_id===item.activity_id);return{...item,contextType:"activity",contextId:item.registration_id,title:activity?.title??"פעילות",activityTitle:activity?.title??"פעילות",childName:[child?.first_name,child?.last_name].filter(Boolean).join(" ")||"ילד/ה",childGrade:child?.grade??null,sessionStart:activitySessions[0]?.starts_at??null,sessionEnd:activitySessions.at(-1)?.ends_at??null,participantCount:(activityParticipants.data??[]).filter(row=>row.activity_id===item.activity_id).length,capacity:activity?.max_participants??null,location:[activity?.venue_name,activity?.location_details].filter(Boolean).join(" · ")||null};});
  const submittedMeetings=(meetingFeedback.data??[]).map(item=>{const meeting=(meetings.data??[]).find(row=>row.id===item.meeting_request_id);return{...item,contextType:"meeting",contextId:item.meeting_request_id,registration_id:item.meeting_request_id,title:meeting?.subject||"פגישה עם חונך",activityTitle:meeting?.subject||"פגישה עם חונך",childName:meeting?.child_first_name||"ילד/ה",childGrade:meeting?.child_grade_or_age??null,sessionStart:meeting?.confirmed_start_at??null,sessionEnd:meeting?.confirmed_end_at??null,participantCount:1,capacity:1,location:meeting?.meeting_mode==="online"?"מפגש מקוון":null};});
- const tasks=[...activityTasks,...meetingTasks].sort((a,b)=>Date.parse(b.sessionEnd??"")-Date.parse(a.sessionEnd??""));
- const feedback=[...submittedActivities,...submittedMeetings].sort((a,b)=>Date.parse(b.submitted_at)-Date.parse(a.submitted_at));
+ const withMentor=<T extends {contextType:string;contextId:string}>(item:T)=>{const mentorId=item.contextType==="meeting"?(meetings.data??[]).find(row=>row.id===item.contextId)?.mentor_user_id:(activities.data??[]).find(activity=>(registrations.data??[]).find(registration=>registration.id===item.contextId)?.activity_id===activity.id)?.mentor_user_id;return{...item,mentorName:mentorName(mentorId)}};
+ const tasks=[...activityTasks,...meetingTasks].map(withMentor).sort((a,b)=>Date.parse(b.sessionEnd??"")-Date.parse(a.sessionEnd??""));
+ const feedback=[...submittedActivities,...submittedMeetings].map(withMentor).sort((a,b)=>Date.parse(b.submitted_at)-Date.parse(a.submitted_at));
  return Response.json({tasks,feedback,pendingCount:tasks.length},{headers:{"Cache-Control":"no-store"}});
 }
 
