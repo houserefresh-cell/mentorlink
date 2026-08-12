@@ -11,6 +11,8 @@ const parentShell = fs.readFileSync("app/dashboard/parent/_components/ParentDash
 const activityUpdatesApi = fs.readFileSync("app/api/parent/activity-updates/route.ts", "utf8");
 const restoreMigration = fs.readFileSync("supabase/migrations/202608110036_restore_cancelled_activity_consistently.sql", "utf8");
 const activityApi = fs.readFileSync("app/api/mentor-activities/[activityId]/route.ts", "utf8");
+const meetingFeedbackMigration = fs.readFileSync("supabase/migrations/202608120037_add_meeting_feedback.sql", "utf8");
+const parentFeedbackPage = fs.readFileSync("app/dashboard/parent/feedback/page.tsx", "utf8");
 
 test("feedback is tied to one completed registration and uses explicit five-point scores", () => {
   assert.match(migration, /registration_id uuid not null unique/);
@@ -35,6 +37,17 @@ test("administrator receives complete safety and publication workflow", () => {
   assert.match(adminApi, /publication_status/);
   assert.match(adminApi, /admin_handling_status/);
   assert.match(adminApi, /publicationStatus==="approved"&&!current\.data\.allow_public_quote/);
+});
+
+test("activities and meetings share one contextual feedback experience", () => {
+  assert.match(meetingFeedbackMigration, /create table if not exists public\.mentor_meeting_feedback/);
+  assert.match(parentApi, /contextType==="meeting"/);
+  assert.match(parentApi, /mentor_meeting_feedback/);
+  assert.match(parentApi, /activityParticipants/);
+  assert.match(mentorApi, /contextType:"meeting"/);
+  assert.match(adminApi, /mentor_meeting_feedback/);
+  assert.match(parentFeedbackPage, /המשובים שמילאתי/);
+  assert.match(parentFeedbackPage, /participantCount/);
 });
 
 test("completed registrations cannot be cancelled and lead to feedback", () => {

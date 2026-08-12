@@ -73,3 +73,17 @@ body {
   -webkit-text-fill-color: #475569;
   opacity: 1;
 }
+
+/* Keep the full MentorLink mark visible and consistently sized in both dashboards. */
+header a[aria-label="MentorLink – עמוד הבית להורים"],
+header a[aria-label="MentorLink – עמוד הבית לחונכים"] {
+  width: 7.25rem;
+  height: 4rem;
+  flex-shrink: 0;
+  background: url("/mentorlink-logo.png") center / contain no-repeat;
+}
+
+header a[aria-label="MentorLink – עמוד הבית להורים"] > span,
+header a[aria-label="MentorLink – עמוד הבית לחונכים"] > span {
+  display: none;
+}
