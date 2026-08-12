@@ -9,6 +9,7 @@ export type PublicMentor = {
   ageGroups: string[];
   meetingModes: string[];
   availability: string[];
+  nextAvailability?: Array<{ startAt: string; meetingMode: string; durationMinutes: number }>;
   profilePhotoUrl?: string | null;
 };
 

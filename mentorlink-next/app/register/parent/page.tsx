@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import RegistrationSupport from "@/app/_components/RegistrationSupport";
+import RegistrationIntro from "@/app/_components/RegistrationIntro";
 import { supabase } from "@/lib/supabase";
 
 export default function ParentRegisterPage() {
@@ -83,7 +84,7 @@ export default function ParentRegisterPage() {
 
   return (
     <main className="registration-surface min-h-screen px-4 py-12" dir="rtl">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-6xl">
         <Link
           href="/register"
           className="mb-6 inline-block text-sm font-medium text-slate-600 hover:text-slate-900"
@@ -91,7 +92,9 @@ export default function ParentRegisterPage() {
           ← חזרה לבחירת סוג ההרשמה
         </Link>
 
-        <div className="rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+        <div className="grid items-start gap-7 lg:grid-cols-[0.9fr_1.1fr]">
+        <RegistrationIntro role="parent" />
+        <div className="rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-cyan-100 sm:p-8">
           <div className="mb-8 text-center">
             <div className="mb-4 text-5xl">👨‍👩‍👧</div>
 
@@ -237,9 +240,9 @@ export default function ParentRegisterPage() {
               התחברו כאן
             </Link>
           </p>
-        </div>
+        </div></div>
       </div>
-      <RegistrationSupport compact />
+      <div id="registration-help"><RegistrationSupport compact /></div>
     </main>
   );
 }
