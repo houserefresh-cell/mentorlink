@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getAgeFromBirthDate } from "@/lib/mentor-age";
+import AccountEmailPanel from "@/app/_components/AccountEmailPanel";
 
 type Completion = Record<string, boolean | null>;
 
@@ -62,6 +63,7 @@ export default function MentorAccountPage() {
       <p className="font-black text-blue-700">ניהול החשבון</p>
       <h1 className="mt-2 text-3xl font-black sm:text-4xl">החשבון שלי</h1>
       <p className="mt-3 text-slate-600">כאן אפשר לעדכן בכל עת את הפרטים שמילאתם בהרשמה.</p>
+      <div className="mt-7"><AccountEmailPanel /></div>
       <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((card) => {
           const state = completion[card.key];

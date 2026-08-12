@@ -207,7 +207,7 @@ function RequestGroup({ id, title, ...props }: ListProps & { id?: string; title:
 
 function RequestList({ requests, empty, ...props }: ListProps & { empty: string }) {
   if (!requests.length) return <p className="mt-3 rounded-2xl bg-white p-5 text-slate-600">{empty}</p>;
-  return <div className="mt-3 grid gap-4">{requests.map((item) => <MeetingCard key={item.id} item={item} {...props} />)}</div>;
+  return <div className="mt-3 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{requests.map((item) => <MeetingCard key={item.id} item={item} {...props} />)}</div>;
 }
 
 function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext }: Omit<ListProps, "requests"> & { item: Meeting }) {
@@ -216,13 +216,13 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
   const visual = meetingVisual(item, role);
   return (
-    <article className={`rounded-2xl border border-r-4 p-5 shadow-sm ${visual.card}`}>
+    <article className={`flex min-h-[22rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
         <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
       </div>
-      <p className="mt-2">{item.subject} · {item.meeting_mode}</p>
-      <p className="mt-2 text-sm text-slate-600">המועד המקורי: {formatDate(item.requested_start_at)} · {item.requested_duration_minutes} דקות</p>
+      <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
+      <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(item.requested_start_at)}</p><p className="mt-1 font-bold">אורך המפגש: {item.requested_duration_minutes} דקות</p></div>
       {item.proposed_start_at && item.proposed_duration_minutes ? (
         <p className="mt-2 rounded-xl bg-amber-50 p-3 font-bold text-amber-950">המועד החלופי: {formatDate(item.proposed_start_at)} · {item.proposed_duration_minutes} דקות</p>
       ) : null}
@@ -233,7 +233,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       {role === "mentor" ? <><p className="mt-2 text-slate-700">{item.help_goal}</p>{item.parent_message && <p className="mt-2 text-slate-600">{item.parent_message}</p>}</> : null}
       {item.mentor_response && <p className="mt-2 rounded-xl bg-slate-50 p-3">{item.mentor_response}</p>}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-auto flex flex-wrap gap-2 pt-5">
         {role === "parent" && item.status === "alternative_proposed" ? (
           <>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept_alternative", "לאשר את המועד החלופי?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור המועד החלופי</button>

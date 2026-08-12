@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import AccountEmailPanel from "@/app/_components/AccountEmailPanel";
 
 const empty = { firstName: "", lastName: "", phone: "", city: "", street: "", wantsHomeMentoring: false, houseNumber: "", entrance: "", apartment: "", addressNotes: "" };
 const field = "min-h-12 w-full rounded-xl border-2 border-slate-400 bg-white px-4 py-3 font-semibold text-slate-950 placeholder:text-slate-500 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100";
@@ -23,7 +24,7 @@ export default function ParentAccountPage() {
   }
   if (loading) return <p className="rounded-2xl bg-white p-6 font-bold">טוען את פרטי החשבון...</p>;
   return <section className="mx-auto max-w-4xl"><p className="font-black text-blue-700">הפרטים שלי</p><h1 className="mt-2 text-3xl font-black">החשבון שלי</h1><p className="mt-3 text-slate-700">הפרטים אינם ציבוריים. הם נפתחים רק לחונך שאליו פניתם או שאצלו נרשמתם לפעילות.</p>
-    <div className="mt-7 rounded-3xl border bg-white p-5 shadow-sm sm:p-7"><div className="grid gap-5 sm:grid-cols-2">
+    <div className="mt-7"><AccountEmailPanel /></div><div className="rounded-3xl border bg-white p-5 shadow-sm sm:p-7"><div className="grid gap-5 sm:grid-cols-2">
       <Field label="שם פרטי"><input className={field} value={form.firstName} onChange={e => setForm({...form, firstName:e.target.value})} /></Field>
       <Field label="שם משפחה"><input className={field} value={form.lastName} onChange={e => setForm({...form, lastName:e.target.value})} /></Field>
       <Field label="מספר טלפון"><input type="tel" dir="ltr" className={field+" text-left"} value={form.phone} onChange={e => setForm({...form, phone:e.target.value})} /></Field>

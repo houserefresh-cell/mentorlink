@@ -7,6 +7,7 @@ import { supabase } from "../../../lib/supabase";
 import MentorOnboardingPage from "../../dashboard/mentor/onboarding/page";
 import { resolveMentorRegistrationView } from "../../../lib/mentor-register-view";
 import RegistrationSupport from "@/app/_components/RegistrationSupport";
+import RegistrationIntro from "@/app/_components/RegistrationIntro";
 
 type OwnerType = "mentor" | "parent_guardian";
 
@@ -139,13 +140,16 @@ export default function MentorRegisterPage() {
 
   return (
     <main dir="rtl" className="registration-surface min-h-screen px-4 py-8 sm:px-6 sm:py-12">
-      <div className="mx-auto w-full max-w-xl">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="grid items-start gap-7 lg:grid-cols-[0.9fr_1.1fr]">
+        <RegistrationIntro role="mentor" />
+        <div>
         <div className="mb-8 text-center">
           <p className="mb-3 font-bold text-blue-600">שלב 1</p>
           <h1 className="mb-3 text-4xl font-extrabold text-slate-900">הצטרפות כחונכים</h1>
           <p className="text-lg text-slate-600">חשבון אחד מנהל פרופיל חונך אחד.</p>
         </div>
-        <div className="rounded-3xl border-2 border-blue-200 bg-white p-5 shadow-xl sm:p-8 md:p-10">
+        <div className="rounded-[2rem] border border-violet-200 bg-white p-5 shadow-xl sm:p-8 md:p-10">
           <div className="grid gap-5 md:grid-cols-2">
             <label className="text-base font-extrabold text-slate-950">שם פרטי<input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
             <label className="text-base font-extrabold text-slate-950">שם משפחה<input required value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
@@ -169,15 +173,16 @@ export default function MentorRegisterPage() {
           <form onSubmit={registerWithEmail} className="mt-6">
             <label className="text-base font-extrabold text-slate-950">אימייל<input type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 text-left font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
             <label className="mt-5 block text-base font-extrabold text-slate-950">סיסמה<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
-            <button disabled={loading} className="mt-7 w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white disabled:bg-slate-400">{loading ? "ממשיך..." : "הרשמה עם מייל"}</button>
+            <button disabled={loading} className="mt-7 w-full rounded-xl bg-gradient-to-l from-violet-700 to-fuchsia-600 py-4 text-lg font-bold text-white shadow-lg disabled:bg-slate-400">{loading ? "ממשיך..." : "הרשמה עם מייל"}</button>
           </form>
 
           <div className="my-6 flex items-center gap-3"><div className="h-px flex-1 bg-slate-200" /><span className="text-sm text-slate-500">או</span><div className="h-px flex-1 bg-slate-200" /></div>
           <button type="button" onClick={continueWithGoogle} disabled={loading || !firstName.trim() || !lastName.trim()} className="w-full rounded-xl border border-slate-300 bg-white py-4 font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50">המשך עם Google</button>
           {message && <p className={`mt-5 rounded-xl p-4 text-center ${message.startsWith("שגיאה") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{message}</p>}
         </div>
-        <RegistrationSupport />
+        <div id="registration-help"><RegistrationSupport /></div>
         <p className="mt-7 text-center text-slate-600">כבר יש לכם חשבון? <Link href="/login" className="font-bold text-blue-600">התחברו כאן</Link></p>
+        </div></div>
       </div>
     </main>
   );

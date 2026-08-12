@@ -11,6 +11,7 @@ import {
   type PublishedRow,
   type SubjectRow,
 } from "./public-mentor-core";
+import { loadSlots } from "./meeting-data";
 
 export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   const publications = await admin
@@ -50,11 +51,15 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
     }),
   );
 
+  const userIdByBookingId = new Map((publications.data ?? []).map((row) => [row.public_booking_id, row.user_id]));
   return Promise.all(mapped.map(async (mentor) => {
     const path = allowedPhotoPaths.get(mentor.bookingId);
-    if (!path) return mentor;
-    const { data } = await admin.storage.from("mentor-profile-photos").createSignedUrl(path, 3600);
-    return { ...mentor, profilePhotoUrl: data?.signedUrl ?? null };
+    const mentorUserId = userIdByBookingId.get(mentor.bookingId);
+    const [photo, slots] = await Promise.all([
+      path ? admin.storage.from("mentor-profile-photos").createSignedUrl(path, 3600) : Promise.resolve({ data: null }),
+      mentorUserId ? loadSlots(admin, mentorUserId, new Date(), 21).catch(() => []) : Promise.resolve([]),
+    ]);
+    return { ...mentor, profilePhotoUrl: photo.data?.signedUrl ?? null, nextAvailability: slots.slice(0, 4).map((slot) => ({ startAt: slot.startAt, meetingMode: slot.meetingMode, durationMinutes: slot.durations[0] })) };
   }));
 }
 
