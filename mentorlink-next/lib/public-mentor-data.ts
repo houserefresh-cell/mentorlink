@@ -42,6 +42,16 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
     availability: availability.data as AvailabilityRow[],
   });
 
+  const windowsResult = await admin.from("mentor_availability_windows").select("id, mentor_user_id, weekday, start_time, end_time, meeting_mode").in("mentor_user_id", ids).eq("is_active", true).order("weekday").order("start_time");
+  if (windowsResult.error) throw new Error("Unable to load mentor availability windows");
+  const windowIds = (windowsResult.data ?? []).map(window => window.id);
+  const linksResult = windowIds.length ? await admin.from("mentor_availability_window_subjects").select("window_id, subjects(name)").in("window_id", windowIds) : { data: [], error: null };
+  if (linksResult.error) throw new Error("Unable to load mentor availability subjects");
+  const subjectsByWindow = new Map<string,string[]>();
+  for (const link of linksResult.data ?? []) { const joined=Array.isArray(link.subjects)?link.subjects[0]:link.subjects; if(joined?.name)subjectsByWindow.set(link.window_id,[...(subjectsByWindow.get(link.window_id)??[]),joined.name]); }
+  const windowsByMentor = new Map<string,Array<{weekday:number;startTime:string;endTime:string;meetingMode:string;subjects:string[]}>>();
+  for(const window of windowsResult.data??[]){windowsByMentor.set(window.mentor_user_id,[...(windowsByMentor.get(window.mentor_user_id)??[]),{weekday:window.weekday,startTime:String(window.start_time).slice(0,5),endTime:String(window.end_time).slice(0,5),meetingMode:window.meeting_mode,subjects:[...new Set(subjectsByWindow.get(window.id)??[])]}])}
+
   const allowedPhotoPaths = new Map(
     (profiles.data ?? []).flatMap((profile) => {
       const consent = (consents.data ?? []).find((row) => row.user_id === profile.user_id);
@@ -59,7 +69,7 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
       path ? admin.storage.from("mentor-profile-photos").createSignedUrl(path, 3600) : Promise.resolve({ data: null }),
       mentorUserId ? loadSlots(admin, mentorUserId, new Date(), 21).catch(() => []) : Promise.resolve([]),
     ]);
-    return { ...mentor, profilePhotoUrl: photo.data?.signedUrl ?? null, nextAvailability: slots.slice(0, 4).map((slot) => ({ startAt: slot.startAt, meetingMode: slot.meetingMode, durationMinutes: slot.durations[0] })) };
+    return { ...mentor, profilePhotoUrl: photo.data?.signedUrl ?? null, weeklyAvailability: mentorUserId ? windowsByMentor.get(mentorUserId) ?? [] : [], nextAvailability: slots.slice(0, 4).map((slot) => ({ startAt: slot.startAt, meetingMode: slot.meetingMode, durationMinutes: slot.durations[0] })) };
   }));
 }
 
