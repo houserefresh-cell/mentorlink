@@ -24,6 +24,7 @@ export async function POST(request: Request) {
   const subject = text(payload.subject, 120);
   const meetingMode = text(payload.meetingMode, 20);
   const childFirstName = text(payload.childFirstName, 60);
+  const childId = text(payload.childId, 36);
   const childGradeOrAge = text(payload.childGradeOrAge, 40);
   const helpGoal = text(payload.helpGoal, 500);
   const parentMessage = text(payload.parentMessage, 500) || null;
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   if (
     !/^[0-9a-f-]{36}$/i.test(bookingId) ||
     !/^[0-9a-f-]{36}$/i.test(idempotencyKey) ||
-    !subject || !childFirstName || !childGradeOrAge ||
+    !subject || !childFirstName || !childGradeOrAge || !/^[0-9a-f-]{36}$/i.test(childId) ||
     helpGoal.length < 5 || !requestedStartAt
   ) return Response.json({ error: "Invalid meeting request" }, { status: 400 });
 
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
     const client = createSupabaseAdmin();
     const parentProfile = await client.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
     if (!parentProfile.data?.phone) return Response.json({ error: "לפני בקשת פגישה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
+    const child = await client.from("parent_children").select("id, first_name, grade").eq("id", childId).eq("parent_user_id", user.id).is("removed_at", null).maybeSingle();
+    if (!child.data) return Response.json({ error: "יש לבחור ילד/ה מהחשבון." }, { status: 422 });
     const mentor = await loadPublishedSchedulingMentor(client, bookingId);
     if (!mentor) return Response.json({ error: "Published mentor not found" }, { status: 404 });
     if (!mentor.subjects.includes(subject) || !mentor.meetingModes.includes(meetingMode)) {
@@ -61,6 +64,7 @@ export async function POST(request: Request) {
       idempotency_key: idempotencyKey,
       parent_user_id: user.id,
       mentor_user_id: mentor.mentorUserId,
+      child_id: childId,
       subject,
       child_first_name: childFirstName,
       child_grade_or_age: childGradeOrAge,
@@ -110,10 +114,12 @@ export async function GET(request: Request) {
   try {
     const client = createSupabaseAdmin();
     const column = user.role === "parent" ? "parent_user_id" : "mentor_user_id";
-    const { data, error } = await client.from("meeting_requests")
-      .select("id, mentor_user_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at")
+    let query = client.from("meeting_requests")
+      .select("id, mentor_user_id, child_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at, preparation_notes, equipment_notes, meeting_location, participant_names, archived_by_parent_at")
       .eq(column, user.id)
       .order("created_at", { ascending: false });
+    if (user.role === "parent") query = query.is("archived_by_parent_at", null);
+    const { data, error } = await query;
     if (error) throw new Error("query failed");
     const rows = [...(data ?? [])].sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
     const names = new Map<string, string>();

@@ -6,7 +6,7 @@ const clean = (value: unknown, maximum: number) => typeof value === "string" && 
 
 async function childrenWithInterests(parentUserId: string) {
   const admin = createSupabaseAdmin();
-  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, accommodation_notes, default_mentor_message, auto_include_mentor_message, created_at").eq("parent_user_id", parentUserId).order("created_at");
+  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, accommodation_notes, default_mentor_message, auto_include_mentor_message, created_at").eq("parent_user_id", parentUserId).is("removed_at", null).order("created_at");
   if (children.error) return { data: null, error: children.error };
   const ids = (children.data ?? []).map((child) => child.id);
   const interests = ids.length ? await admin.from("parent_child_subject_interests").select("child_id, subject_id, subjects(name, category)").in("child_id", ids) : { data: [], error: null };
@@ -68,4 +68,24 @@ export async function PATCH(request: Request) {
   await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", id).eq("parent_user_id", user.id);
   const refreshed = await childrenWithInterests(user.id);
   return Response.json({ child: refreshed.data?.find((child) => child.id === id) });
+}
+
+export async function DELETE(request: Request) {
+  const user = await authenticateMeetingUser(request.headers.get("authorization"));
+  if (!user) return Response.json({ error: "נדרשת התחברות." }, { status: 401 });
+  if (user.role !== "parent") return Response.json({ error: "הגישה מיועדת להורים בלבד." }, { status: 403 });
+  let payload: Record<string, unknown>;
+  try { payload = await request.json(); } catch { return Response.json({ error: "בקשה לא תקינה." }, { status: 400 }); }
+  const id = typeof payload.id === "string" ? payload.id : "";
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "ילד/ה לא תקינים." }, { status: 400 });
+  const admin = createSupabaseAdmin();
+  const [registrations, meetings] = await Promise.all([
+    admin.from("mentor_activity_registrations").select("id").eq("child_id", id).in("status", ["registered", "waitlisted"]).limit(1),
+    admin.from("meeting_requests").select("id").eq("parent_user_id", user.id).eq("child_id", id).in("status", ["pending", "alternative_proposed", "accepted"]).limit(1),
+  ]);
+  if (registrations.error || meetings.error) return Response.json({ error: "לא ניתן לבדוק התחייבויות עתידיות." }, { status: 500 });
+  if (registrations.data?.length || meetings.data?.length) return Response.json({ error: "לילד/ה קיימת פעילות או פגישה פעילה. יש לבטל אותה לפני ההסרה." }, { status: 409 });
+  const removed = await admin.from("parent_children").update({ removed_at: new Date().toISOString() }).eq("id", id).eq("parent_user_id", user.id).is("removed_at", null).select("id").maybeSingle();
+  if (removed.error || !removed.data) return Response.json({ error: "לא ניתן להסיר את הילד/ה." }, { status: 422 });
+  return Response.json({ removed: true });
 }

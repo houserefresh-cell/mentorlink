@@ -59,29 +59,6 @@ export default function ParentRegisterPage() {
     setLoading(false);
   }
 
-  async function continueWithGoogle() {
-    setLoading(true);
-    setError("");
-    const params = new URLSearchParams({
-      flow: "parent_register",
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-      phone: phone.trim(),
-      returnTo: new URLSearchParams(window.location.search).get("returnTo") ?? "",
-    });
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?${params}`,
-      },
-    });
-    if (oauthError) {
-      console.error("Parent Google registration failed", oauthError);
-      setError(oauthError.message);
-      setLoading(false);
-    }
-  }
-
   return (
     <main className="registration-surface min-h-screen px-4 py-12" dir="rtl">
       <div className="mx-auto max-w-6xl">
@@ -214,21 +191,6 @@ export default function ParentRegisterPage() {
               {loading ? "מבצע הרשמה..." : "הצטרפו לקהילת MentorLink"}
             </button>
           </form>
-
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-sm text-slate-500">או</span>
-            <div className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          <button
-            type="button"
-            onClick={continueWithGoogle}
-            disabled={loading}
-            className="w-full rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60"
-          >
-            המשך עם Google
-          </button>
 
           <p className="mt-6 text-center text-sm text-slate-600">
             כבר רשומים?{" "}

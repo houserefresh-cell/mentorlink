@@ -26,6 +26,10 @@ type Meeting = {
   confirmed_duration_minutes: number | null;
   created_at: string;
   updated_at: string;
+  preparation_notes: string | null;
+  equipment_notes: string | null;
+  meeting_location: string | null;
+  participant_names: string[];
 };
 
 type MentorMeetingView = "mentor-action" | "waiting-parent" | "upcoming-approved" | "history";
@@ -40,7 +44,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
   const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">("loading");
-  const [parentView, setParentView] = useState<ParentMeetingView>("requests");
+  const [parentView, setParentView] = useState<ParentMeetingView>("meetings");
 
   const load = useCallback(async (accessToken: string) => {
     setLoadState("loading");
@@ -130,6 +134,17 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
     }
   }
 
+  async function updateDetails(item: Meeting) {
+    const preparationNotes=window.prompt("מה צריך להכין לפגישה?",item.preparation_notes??""); if(preparationNotes===null)return;
+    const equipmentNotes=window.prompt("מה צריך להביא?",item.equipment_notes??""); if(equipmentNotes===null)return;
+    const meetingLocation=window.prompt("מיקום או קישור למפגש",item.meeting_location??""); if(meetingLocation===null)return;
+    const participants=window.prompt("שמות ילדים נוספים שתואמו עם הוריהם (מופרדים בפסיקים)",(item.participant_names??[]).join(", ")); if(participants===null)return;
+    const saveAsTemplate=window.confirm("לשמור את פרטי ההכנה גם כתבנית לפגישות הבאות בתחום הזה?");
+    setBusyId(item.id);
+    const response=await fetch(`/api/meeting-requests/${item.id}`,{method:"PATCH",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({action:"update_details",preparationNotes,equipmentNotes,meetingLocation,participantNames:participants.split(",").map(v=>v.trim()).filter(Boolean),saveAsTemplate})});
+    setMessage(response.ok?"פרטי המפגש עודכנו.":"לא ניתן לעדכן את פרטי המפגש."); if(response.ok)await load(token); setBusyId("");
+  }
+
   const groups = useMemo(() => groupParentRequests(requests), [requests]);
   const mentorGroups = useMemo(() => groupMentorRequests(requests), [requests]);
 
@@ -144,7 +159,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
             <h2 id="parent-action-title" className="text-2xl font-black text-amber-950">בקשות שממתינות לתשובתך</h2>
             <p className="mt-2 text-sm text-amber-900">מועדים חלופיים שהחונך הציע וממתינים לאישור או לדחייה שלך.</p>
             <h3 className="mt-4 text-lg font-black text-amber-950">דורשות פעולה ממני</h3>
-            <RequestList requests={groups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} empty="אין כרגע בקשות שממתינות לתשובתך." />
+            <RequestList requests={groups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} empty="אין כרגע בקשות שממתינות לתשובתך." />
           </section>}
 
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
@@ -155,14 +170,14 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
             <Link href="/dashboard/parent#mentor-search" className="rounded-xl bg-blue-700 px-5 py-3 font-black text-white">בקשת פגישה חדשה</Link>
           </div>
           <nav className="mt-5 grid gap-2 rounded-2xl bg-blue-700 p-2 text-white sm:grid-cols-3" aria-label="סינון בקשות ופגישות">
-            <ParentTab label="בקשות פתוחות" count={groups.waitingForMentor.length + groups.actionRequired.length} selected={parentView === "requests"} onClick={() => setParentView("requests")} />
             <ParentTab label="פגישות קרובות" count={groups.upcoming.length} selected={parentView === "meetings"} onClick={() => setParentView("meetings")} />
+            <ParentTab label="בקשות פתוחות" count={groups.waitingForMentor.length + groups.actionRequired.length} selected={parentView === "requests"} onClick={() => setParentView("requests")} />
             <ParentTab label="היסטוריה" count={groups.completed.length + groups.closed.length + groups.history.length} selected={parentView === "history"} onClick={() => setParentView("history")} />
           </nav>
           <div className="mt-6 space-y-7">
-            {parentView === "requests" && <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />}
-            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />}
-            {parentView === "history" && <><RequestGroup title="פגישות שהתקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /><RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /><RequestGroup title="היסטוריה נוספת" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} /></>}
+            {parentView === "requests" && <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} />}
+            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} />}
+            {parentView === "history" && <><RequestGroup title="פגישות שהתקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} /><RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} /><RequestGroup title="היסטוריה נוספת" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} /></>}
           </div>
         </>
       ) : (
@@ -173,7 +188,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
           </div>
           <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? item.active : item.inactive}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
           <div className="mt-5">
-            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} />
+            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={updateDetails} />
           </div>        </>
       )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
@@ -194,6 +209,7 @@ type ListProps = {
   setAlternatives: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   act: (id: string, action: string, confirmation: string) => Promise<void>;
   proposeNext: (item: Meeting) => Promise<void>;
+  updateDetails: (item: Meeting) => Promise<void>;
 };
 
 function RequestGroup({ id, title, ...props }: ListProps & { id?: string; title: string }) {
@@ -210,7 +226,7 @@ function RequestList({ requests, empty, ...props }: ListProps & { empty: string 
   return <div className="mt-3 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{requests.map((item) => <MeetingCard key={item.id} item={item} {...props} />)}</div>;
 }
 
-function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext }: Omit<ListProps, "requests"> & { item: Meeting }) {
+function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext, updateDetails }: Omit<ListProps, "requests"> & { item: Meeting }) {
   const confirmedStart = item.confirmed_start_at;
   const confirmedDuration = item.confirmed_duration_minutes;
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
@@ -232,6 +248,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
       {role === "mentor" ? <><p className="mt-2 text-slate-700">{item.help_goal}</p>{item.parent_message && <p className="mt-2 text-slate-600">{item.parent_message}</p>}</> : null}
       {item.mentor_response && <p className="mt-2 rounded-xl bg-slate-50 p-3">{item.mentor_response}</p>}
+      {(item.preparation_notes||item.equipment_notes||item.meeting_location||(item.participant_names??[]).length>0)&&<details className="mt-3 rounded-2xl border bg-white p-3"><summary className="cursor-pointer font-black">פרטי הפגישה</summary>{item.preparation_notes&&<p className="mt-2"><b>הכנה:</b> {item.preparation_notes}</p>}{item.equipment_notes&&<p><b>מה להביא:</b> {item.equipment_notes}</p>}{item.meeting_location&&<p><b>מיקום:</b> {item.meeting_location}</p>}{item.participant_names?.length>0&&<p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}</details>}
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
         {role === "parent" && item.status === "alternative_proposed" ? (
@@ -254,6 +271,8 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
             <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת המועד הזמין הבא</button>
           </>
         ) : null}
+        {role === "mentor" && ["pending","alternative_proposed","accepted"].includes(item.status)&&<button type="button" disabled={busyId===item.id} onClick={()=>void updateDetails(item)} className="min-h-11 rounded-xl border border-blue-400 bg-white px-4 py-2 font-bold text-blue-800">עדכון פרטי המפגש</button>}
+        {role === "parent" && ["cancelled","declined"].includes(item.status)&&<button type="button" disabled={busyId===item.id} onClick={()=>void act(item.id,"archive","להסיר את הבקשה מההיסטוריה?")} className="min-h-11 rounded-xl border px-4 py-2 font-bold">מחיקה מההיסטוריה</button>}
       </div>
     </article>
   );
@@ -297,7 +316,7 @@ function groupParentRequests(requests: Meeting[]) {
   return {
     actionRequired: newestFirst.filter((item) => item.status === "alternative_proposed"),
     waitingForMentor: newestFirst.filter((item) => item.status === "pending"),
-    upcoming: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) >= now),
+    upcoming: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) >= now).sort((left, right) => effectiveStart(left) - effectiveStart(right)),
     completed: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) < now),
     closed: newestFirst.filter((item) => ["declined", "cancelled"].includes(item.status)),
     history: newestFirst.filter((item) => !["alternative_proposed", "pending", "accepted", "declined", "cancelled"].includes(item.status)),

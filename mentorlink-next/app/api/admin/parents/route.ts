@@ -10,6 +10,7 @@ type AuthParent = {
   last_sign_in_at?: string;
   email_confirmed_at?: string;
   user_metadata?: Record<string, unknown>;
+  banned_until?: string;
 };
 
 function text(value: unknown) {
@@ -82,6 +83,7 @@ export async function GET(request: Request) {
             apartment: profile?.apartment ?? null,
             addressNotes: profile?.address_notes ?? null,
             profileComplete: Boolean(profile),
+            accountDisabled: Boolean(user.banned_until && Date.parse(user.banned_until) > Date.now()),
             children: children
               .filter((child) => child.parent_user_id === user.id)
               .map((child) => ({
@@ -99,4 +101,41 @@ export async function GET(request: Request) {
   } catch (error) {
     return adminApiError(error);
   }
+}
+
+export async function POST(request: Request) {
+  try {
+    await authorizeAdministrator(request.headers.get("authorization"));
+    const payload = await request.json() as Record<string, unknown>;
+    const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+    const firstName = typeof payload.firstName === "string" ? payload.firstName.trim() : "";
+    const lastName = typeof payload.lastName === "string" ? payload.lastName.trim() : "";
+    const password = typeof payload.password === "string" ? payload.password : "111111";
+    if (!/^\S+@\S+\.\S+$/.test(email) || !firstName || !lastName || password.length < 6) return Response.json({ error: "יש להזין שם מלא, אימייל תקין וסיסמה בת 6 תווים לפחות." }, { status: 400 });
+    const admin = createSupabaseAdmin();
+    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { role: "parent", first_name: firstName, last_name: lastName, must_change_password: true } });
+    if (created.error || !created.data.user) return Response.json({ error: created.error?.message ?? "לא ניתן ליצור את החשבון." }, { status: 422 });
+    return adminApiSuccess({ created: true, userId: created.data.user.id, email, temporaryPassword: password });
+  } catch (error) { return adminApiError(error); }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const administrator = await authorizeAdministrator(request.headers.get("authorization"));
+    const payload = await request.json() as Record<string, unknown>;
+    const userId = typeof payload.userId === "string" ? payload.userId : "";
+    const action = typeof payload.action === "string" ? payload.action : "";
+    if (!/^[0-9a-f-]{36}$/i.test(userId) || userId === administrator.id || !["suspend", "restore", "delete"].includes(action)) return Response.json({ error: "פעולה לא תקינה." }, { status: 400 });
+    const admin = createSupabaseAdmin();
+    const target = await admin.auth.admin.getUserById(userId);
+    if (!target.data.user || target.data.user.user_metadata?.role !== "parent") return Response.json({ error: "חשבון ההורה לא נמצא." }, { status: 404 });
+    if (action === "delete") {
+      const deleted = await admin.auth.admin.deleteUser(userId);
+      if (deleted.error) throw deleted.error;
+      return adminApiSuccess({ deleted: true });
+    }
+    const updated = await admin.auth.admin.updateUserById(userId, { ban_duration: action === "restore" ? "none" : "876000h" });
+    if (updated.error) throw updated.error;
+    return adminApiSuccess({ status: action === "restore" ? "active" : "suspended" });
+  } catch (error) { return adminApiError(error); }
 }
