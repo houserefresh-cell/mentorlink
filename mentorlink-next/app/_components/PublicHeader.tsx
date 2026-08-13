@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 
@@ -25,9 +27,9 @@ export default function PublicHeader() {
           <summary className="cursor-pointer list-none rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-black text-slate-800 marker:content-none">תפריט</summary>
           <nav aria-label="ניווט ציבורי לנייד" className="absolute left-0 top-12 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
             <div className="grid gap-1">
-              {navigation.map((item) => <Link key={item.href} href={item.href} className="rounded-xl px-4 py-3 font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700">{item.label}</Link>)}
-              <Link href="/register/mentor" className="rounded-xl px-4 py-3 font-bold text-blue-700 hover:bg-blue-50">הרשמה כחונך</Link>
-              <Link href="/login" className="mt-1 rounded-xl bg-slate-950 px-4 py-3 text-center font-bold text-white">התחברות</Link>
+              {navigation.map((item) => <Link key={item.href} href={item.href} onClick={closeMenu} className="rounded-xl px-4 py-3 font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700">{item.label}</Link>)}
+              <Link href="/register/mentor" onClick={closeMenu} className="rounded-xl px-4 py-3 font-bold text-blue-700 hover:bg-blue-50">הרשמה כחונך</Link>
+              <Link href="/login" onClick={closeMenu} className="mt-1 rounded-xl bg-slate-950 px-4 py-3 text-center font-bold text-white">התחברות</Link>
             </div>
           </nav>
         </details>
@@ -35,3 +37,5 @@ export default function PublicHeader() {
     </header>
   );
 }
+
+function closeMenu(event: React.MouseEvent<HTMLAnchorElement>){event.currentTarget.closest("details")?.removeAttribute("open")}

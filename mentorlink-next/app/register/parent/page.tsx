@@ -96,7 +96,6 @@ export default function ParentRegisterPage() {
         <RegistrationIntro role="parent" />
         <div className="rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-cyan-100 sm:p-8">
           <div className="mb-8 text-center">
-            <div className="mb-4 text-5xl">👨‍👩‍👧</div>
 
             <h1 className="text-3xl font-bold text-slate-900">
               הרשמת הורה

@@ -77,12 +77,18 @@ function MentorDetailsDialog({ mentor, activities, onActivities, onMeeting, onCl
         <div className="flex min-w-0 items-center gap-4 rounded-2xl bg-gradient-to-l from-blue-50 to-violet-50 p-4"><Avatar initial={initial} large photoUrl={mentor.profilePhotoUrl} /><div className="min-w-0"><p className="break-words text-2xl font-black">{mentor.displayName}</p>{mentor.city && <City city={mentor.city} />}</div></div>
         {mentor.subjects.length > 0 && <DetailsSection title="תחומי חונכות"><ul className="flex min-w-0 flex-wrap gap-1.5">{mentor.subjects.map((subject) => <li key={subject} className="max-w-full break-words rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-bold text-blue-800 [overflow-wrap:anywhere]">{subject}</li>)}</ul></DetailsSection>}
         {mentor.introduction && <DetailsSection title="קצת עליי"><p className="whitespace-pre-wrap break-words leading-7 text-slate-700">{mentor.introduction}</p></DetailsSection>}
-        <DetailsValues title="מתאים לגילאים" values={mentor.ageGroups} /><DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} /><DetailsValues title="אופן המפגש" values={mentor.meetingModes} /><DetailsValues title="זמינות כללית" values={mentor.availability} />
-        <DetailsSection title="המועדים הקרובים שאפשר לבקש">{mentor.nextAvailability?.length ? <ul className="grid gap-2">{mentor.nextAvailability.map((slot)=><li key={`${slot.startAt}-${slot.meetingMode}`} className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 font-bold">{formatAvailability(slot)}</li>)}</ul> : <p className="text-slate-600">עדיין לא פורסמו מועדים זמינים. אפשר לפנות לחונך ולבדוק יחד.</p>}</DetailsSection>
+        <DetailsValues title="מתאים לגילאים" values={mentor.ageGroups} /><DetailsValues title="ניסיון וסוגי חונכות" values={mentor.experience} /><DetailsValues title="אופן המפגש" values={mentor.meetingModes} />
+        <DetailsSection title="זמינות כללית"><WeeklyAvailability windows={mentor.weeklyAvailability??[]} fallback={mentor.availability}/></DetailsSection>
         <div className="mt-6 grid gap-3 sm:grid-cols-2">{onMeeting&&<button type="button" onClick={onMeeting} className="min-h-12 rounded-xl bg-blue-700 px-4 font-black text-white">בקשת פגישה</button>}<button type="button" disabled={!activities.length} onClick={onActivities} className="min-h-12 rounded-xl bg-violet-700 px-4 font-black text-white disabled:bg-slate-300">{activities.length?`פעילויות החונך (${activities.length})`:'אין כרגע פעילויות'}</button></div>
       </div>
     </dialog>
   );
+}
+const weekdayNames=["יום ראשון","יום שני","יום שלישי","יום רביעי","יום חמישי","יום שישי","שבת"];
+function WeeklyAvailability({windows,fallback}:{windows:NonNullable<PublicMentor["weeklyAvailability"]>;fallback:string[]}){
+  if(!windows.length)return fallback.length?<ul className="flex flex-wrap gap-2">{fallback.map(value=><li key={value} className="rounded-full bg-cyan-50 px-3 py-1.5 font-bold text-cyan-900">{value}</li>)}</ul>:<p className="text-slate-600">עדיין לא הוגדרה זמינות כללית.</p>;
+  const grouped=new Map<number,typeof windows>();for(const window of windows)grouped.set(window.weekday,[...(grouped.get(window.weekday)??[]),window]);
+  return <ul className="grid gap-2">{[...grouped].map(([weekday,items])=><li key={weekday} className="rounded-2xl border border-cyan-200 bg-cyan-50 p-3"><p className="font-black text-cyan-950">{weekdayNames[weekday]??`יום ${weekday}`}</p><ul className="mt-1 grid gap-1 text-sm text-slate-700">{items.map((item,index)=>{const shown=item.subjects.slice(0,2),more=item.subjects.length>2?" ועוד":"";return <li key={`${item.startTime}-${item.endTime}-${item.meetingMode}-${index}`}><b>{item.startTime}–{item.endTime}</b> · {item.meetingMode}{shown.length?` · ${shown.join(", ")}${more}`:""}</li>})}</ul></li>)}</ul>
 }
 function Avatar({ initial, large, photoUrl }: { initial: string; large: boolean; photoUrl?: string | null }) {
   if (photoUrl) {

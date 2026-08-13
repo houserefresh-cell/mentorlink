@@ -142,6 +142,7 @@ export default function AdminMentorsClient({ userId }: { userId?: string }) {
 function QueueView({ registrations }: { registrations: Registration[] }) {
   const [tab, setTab] = useState<"new" | "review" | "changes" | "active" | "inactive">("new");
   const [query, setQuery] = useState("");
+  const [showCreate,setShowCreate]=useState(false);
   const groups = {
     new: registrations.filter((mentor) => ["blocked_age", "awaiting_email", "incomplete", "awaiting_parent_request", "awaiting_parent_consent", "ready_for_review"].includes(mentor.stage)),
     review: registrations.filter((mentor) => mentor.stage === "pending_review"),
@@ -156,12 +157,23 @@ function QueueView({ registrations }: { registrations: Registration[] }) {
   const visible = groups[tab].filter((mentor) => !normalized || [mentor.firstName, mentor.lastName, mentor.email, mentor.phone, mentor.school, mentor.city, mentor.stageLabel].some((value) => value?.toLocaleLowerCase("he").includes(normalized)));
   return (
     <div dir="rtl" className="space-y-6">
+      <section className="rounded-3xl border border-violet-200 bg-gradient-to-l from-violet-50 via-white to-cyan-50 p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-black text-violet-700">צירוף מהיר</p><h2 className="mt-1 text-xl font-black">פתיחת חשבון לחונך מוכר</h2><p className="mt-1 text-sm text-slate-600">החשבון יהיה מאומת ופעיל להתחלת מילוי הפרופיל. בכניסה הראשונה החונך יידרש לבחור סיסמה אישית.</p></div><button type="button" onClick={()=>setShowCreate(value=>!value)} className="rounded-xl bg-violet-700 px-5 py-3 font-black text-white">{showCreate?"סגירה":"פתיחת חשבון חדש"}</button></div>
+        {showCreate&&<QuickMentorAccount onCreated={()=>window.location.reload()}/>}
+      </section>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{tabs.map(([key, label]) => <button key={key} onClick={() => setTab(key)} className={`rounded-2xl border p-4 text-right font-extrabold ${tab === key ? "border-blue-700 bg-blue-700 text-white" : "bg-white text-slate-800"}`}><span className="block text-2xl">{groups[key].length}</span>{label}</button>)}</div>
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חיפוש לפי שם, טלפון, דוא״ל, בית ספר או סטטוס" className="w-full rounded-2xl border bg-white px-5 py-4" />
       {!visible.length ? <div className="rounded-2xl border bg-white p-6 text-slate-600">אין חשבונות בקטגוריה זו.</div> : <div className="grid gap-4">{visible.map((mentor) => <RegistrationCard key={mentor.userId} mentor={mentor} />)}</div>}
     </div>
   );
 }
+function QuickMentorAccount({onCreated}:{onCreated:()=>void}){
+  const[firstName,setFirstName]=useState(""),[lastName,setLastName]=useState(""),[email,setEmail]=useState(""),[password,setPassword]=useState(()=>temporaryPassword()),[busy,setBusy]=useState(false),[message,setMessage]=useState("");
+  async function create(){setBusy(true);setMessage("");const response=await fetch("/api/admin/mentors",{method:"POST",headers:{Authorization:`Bearer ${await token()}`,"Content-Type":"application/json"},body:JSON.stringify({firstName,lastName,email,password})});const body=await response.json();if(!response.ok){setMessage(body.error??"לא ניתן ליצור את החשבון.");setBusy(false);return}setMessage(`החשבון נוצר. שם המשתמש: ${email.trim().toLowerCase()} | סיסמה זמנית: ${password}`);setBusy(false);setTimeout(onCreated,8000)}
+  const input="min-h-12 rounded-xl border-2 border-slate-300 bg-white px-4 outline-none focus:border-violet-700";
+  return <div className="mt-5 border-t border-violet-200 pt-5"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label className="grid gap-1 font-bold">שם פרטי<input value={firstName} onChange={e=>setFirstName(e.target.value)} className={input}/></label><label className="grid gap-1 font-bold">שם משפחה<input value={lastName} onChange={e=>setLastName(e.target.value)} className={input}/></label><label className="grid gap-1 font-bold">אימייל<input type="email" dir="ltr" value={email} onChange={e=>setEmail(e.target.value)} className={input+" text-left"}/></label><label className="grid gap-1 font-bold">סיסמה זמנית<input dir="ltr" value={password} onChange={e=>setPassword(e.target.value)} className={input+" text-left"}/></label></div><div className="mt-4 flex flex-wrap gap-3"><button type="button" onClick={create} disabled={busy||!firstName.trim()||!email.trim()||password.length<8} className="rounded-xl bg-blue-700 px-6 py-3 font-black text-white disabled:bg-slate-300">{busy?"יוצר...":"יצירת החשבון"}</button><button type="button" onClick={()=>setPassword(temporaryPassword())} className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-bold">יצירת סיסמה אחרת</button></div>{message&&<p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-bold [overflow-wrap:anywhere]">{message}</p>}</div>
+}
+function temporaryPassword(){const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@";return Array.from({length:12},()=>alphabet[Math.floor(Math.random()*alphabet.length)]).join("")}
 function RegistrationCard({ mentor }: { mentor: Registration }) {
   const canOpen = true;
   const content = <>

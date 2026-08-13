@@ -27,6 +27,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+    if (data.user.user_metadata?.must_change_password) { router.push("/account/change-password"); return; }
     const returnTo = new URLSearchParams(window.location.search).get("returnTo");
     router.push(returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : await getDashboardPath(data.user.id));
   }
