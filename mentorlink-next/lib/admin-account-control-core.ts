@@ -2,7 +2,7 @@ export type MentorAccountAction =
   | { action: "suspend"; reason: string; suspendedUntil: string }
   | { action: "block"; reason: string }
   | { action: "restore"; reason: string }
-  | { action: "permanently_delete"; reason: string; confirmation: string };
+  | { action: "permanently_delete"; reason: string; confirmation: string; force: boolean };
 
 export class MentorAccountControlInputError extends Error {}
 
@@ -27,7 +27,7 @@ export function parseMentorAccountAction(value: unknown): MentorAccountAction {
   if (input.action === "restore") return { action: "restore", reason: reason(input.reason) };
   if (input.action === "permanently_delete") {
     if (input.confirmation !== "מחיקה לצמיתות") throw new MentorAccountControlInputError("יש להקליד „מחיקה לצמיתות” כדי לאשר.");
-    return { action: "permanently_delete", reason: reason(input.reason), confirmation: "מחיקה לצמיתות" };
+    return { action: "permanently_delete", reason: reason(input.reason), confirmation: "מחיקה לצמיתות", force: input.force === true };
   }
   throw new MentorAccountControlInputError("פעולת החשבון אינה נתמכת.");
 }

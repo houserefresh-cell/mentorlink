@@ -32,22 +32,6 @@ export default function LoginPage() {
     router.push(returnTo?.startsWith("/") && !returnTo.startsWith("//") ? returnTo : await getDashboardPath(data.user.id));
   }
 
-  async function continueWithGoogle() {
-    setLoading(true);
-    setMessage("");
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?flow=login&returnTo=${encodeURIComponent(new URLSearchParams(window.location.search).get("returnTo") ?? "")}`,
-      },
-    });
-    if (error) {
-      console.error("Google login failed", error);
-      setMessage(`לא ניתן להתחבר עם Google: ${error.message}`);
-      setLoading(false);
-    }
-  }
-
   return (
     <main dir="rtl" className="flex min-h-screen items-center justify-center bg-gradient-to-b from-blue-50 via-white to-slate-50 p-6">
       <div className="w-full max-w-md rounded-3xl border border-blue-100 bg-white p-8 shadow-xl md:p-10">
@@ -58,8 +42,6 @@ export default function LoginPage() {
           <input type="password" placeholder="סיסמה" required value={password} onChange={(e) => setPassword(e.target.value)} className="mb-6 w-full rounded-xl border border-slate-300 p-3" />
           <button disabled={loading} className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white disabled:bg-slate-400">{loading ? "מתחבר..." : "התחברות עם מייל"}</button>
         </form>
-        <div className="my-6 flex items-center gap-3"><div className="h-px flex-1 bg-slate-200" /><span className="text-sm text-slate-500">או</span><div className="h-px flex-1 bg-slate-200" /></div>
-        <button type="button" onClick={continueWithGoogle} disabled={loading} className="w-full rounded-xl border border-slate-300 py-3 font-bold hover:bg-slate-50">המשך עם Google</button>
         {message && <p className="mt-5 rounded-xl bg-red-50 p-4 text-center text-red-700">{message}</p>}
         <p className="mt-7 text-center text-slate-600">עדיין אין חשבון? <Link href="/register/mentor" className="font-bold text-blue-600">הרשמה כחונך</Link></p>
       </div>

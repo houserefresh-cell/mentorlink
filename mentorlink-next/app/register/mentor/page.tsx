@@ -101,28 +101,6 @@ export default function MentorRegisterPage() {
     setLoading(false);
   }
 
-  async function continueWithGoogle() {
-    setLoading(true);
-    setMessage("");
-    const params = new URLSearchParams({
-      flow: "mentor_register",
-      owner_type: ownerType,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
-    });
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?${params}`,
-      },
-    });
-    if (error) {
-      console.error("Google registration failed", error);
-      setMessage(`שגיאה: ${error.message}`);
-      setLoading(false);
-    }
-  }
-
   if (view === "loading") {
     return (
       <main
@@ -176,8 +154,6 @@ export default function MentorRegisterPage() {
             <button disabled={loading} className="mt-7 w-full rounded-xl bg-gradient-to-l from-violet-700 to-fuchsia-600 py-4 text-lg font-bold text-white shadow-lg disabled:bg-slate-400">{loading ? "ממשיך..." : "הרשמה עם מייל"}</button>
           </form>
 
-          <div className="my-6 flex items-center gap-3"><div className="h-px flex-1 bg-slate-200" /><span className="text-sm text-slate-500">או</span><div className="h-px flex-1 bg-slate-200" /></div>
-          <button type="button" onClick={continueWithGoogle} disabled={loading || !firstName.trim() || !lastName.trim()} className="w-full rounded-xl border border-slate-300 bg-white py-4 font-bold text-slate-800 hover:bg-slate-50 disabled:opacity-50">המשך עם Google</button>
           {message && <p className={`mt-5 rounded-xl p-4 text-center ${message.startsWith("שגיאה") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>{message}</p>}
         </div>
         <div id="registration-help"><RegistrationSupport /></div>

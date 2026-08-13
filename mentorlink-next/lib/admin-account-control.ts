@@ -22,7 +22,7 @@ export async function applyMentorAccountAction(input: {
     if (activityIds.length) {
       const active = await admin.from("mentor_activity_registrations").select("id").in("activity_id", activityIds).in("status", ["registered", "waitlisted"]).limit(1);
       if (active.error) throw new Error("Unable to inspect activity registrations");
-      if (active.data?.length) return { outcome: "active_registrations" as const };
+      if (active.data?.length && !action.force) return { outcome: "active_registrations" as const };
     }
     const event = await admin.from("mentor_account_admin_events").insert({
       target_user_id: userId, target_email: auth.data.user.email ?? null, target_name: targetName,

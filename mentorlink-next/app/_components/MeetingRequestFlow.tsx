@@ -151,6 +151,7 @@ export default function MeetingRequestFlow({
         meetingMode: mode,
         requestedStartAt: slot.startAt,
         durationMinutes: duration,
+        childId: selectedChildId,
         childFirstName: childName,
         childGradeOrAge: grade,
         helpGoal: goal,

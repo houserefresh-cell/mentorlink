@@ -34,6 +34,25 @@ export async function PATCH(
 
     const ownerId = actor === "parent" ? current.parent_user_id : current.mentor_user_id;
     if (ownerId !== user.id) return Response.json({ error: "Not allowed" }, { status: 403 });
+    if (action === "archive" && actor === "parent") {
+      if (!["cancelled", "declined"].includes(current.status)) return Response.json({ error: "אפשר למחוק מההיסטוריה רק בקשה שבוטלה או נדחתה." }, { status: 409 });
+      const archived = await client.from("meeting_requests").update({ archived_by_parent_at: new Date().toISOString() }).eq("id", requestId).select("id").single();
+      if (archived.error) throw archived.error;
+      return Response.json({ archived: true });
+    }
+    if (action === "update_details" && actor === "mentor") {
+      const details = {
+        preparation_notes: clean(payload.preparationNotes, 1000) || null,
+        equipment_notes: clean(payload.equipmentNotes, 1000) || null,
+        meeting_location: clean(payload.meetingLocation, 300) || null,
+        participant_names: Array.isArray(payload.participantNames) ? payload.participantNames.map((item) => clean(item, 60)).filter(Boolean).slice(0, 8) : [],
+        updated_at: new Date().toISOString(),
+      };
+      const updated = await client.from("meeting_requests").update(details).eq("id", requestId).select("id, preparation_notes, equipment_notes, meeting_location, participant_names").single();
+      if (updated.error) throw updated.error;
+      if (payload.saveAsTemplate === true) await client.from("mentor_meeting_preparation_templates").upsert({ mentor_user_id: user.id, subject: current.subject, preparation_notes: details.preparation_notes, equipment_notes: details.equipment_notes, meeting_location: details.meeting_location, updated_at: new Date().toISOString() }, { onConflict: "mentor_user_id,subject" });
+      return Response.json({ request: updated.data });
+    }
     if (!canTransition(actor, current.status, action)) {
       return Response.json({ error: "Invalid state transition" }, { status: 409 });
     }
@@ -55,6 +74,8 @@ export async function PATCH(
         mentor_response: clean(payload.response, 500),
         responded_at: now.toISOString(),
       });
+      const template = await client.from("mentor_meeting_preparation_templates").select("preparation_notes,equipment_notes,meeting_location").eq("mentor_user_id", user.id).eq("subject", current.subject).maybeSingle();
+      if (template.data) Object.assign(update, { preparation_notes: current.preparation_notes ?? template.data.preparation_notes, equipment_notes: current.equipment_notes ?? template.data.equipment_notes, meeting_location: current.meeting_location ?? template.data.meeting_location });
       recipientId = current.parent_user_id;
       kind = "meeting_request_declined";
       title = "בקשת הפגישה נדחתה";
