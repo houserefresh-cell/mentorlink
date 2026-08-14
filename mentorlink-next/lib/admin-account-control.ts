@@ -30,12 +30,14 @@ export async function applyMentorAccountAction(input: {
       metadata: { createdAt: auth.data.user.created_at, activityCount: activityIds.length },
     });
     if (event.error) throw new Error("Unable to record permanent deletion");
-    const photoPaths = [profile.data?.profile_photo_path, ...(activities.data ?? []).map((row) => row.image_path)].filter((path): path is string => typeof path === "string" && path.length > 0);
-    const deleted = await admin.auth.admin.deleteUser(userId);
-    if (deleted.error) throw new Error(`Unable to permanently delete mentor: ${deleted.error.message}`);
-    if (profile.data?.profile_photo_path) await admin.storage.from("mentor-profile-photos").remove([profile.data.profile_photo_path]);
-    const activityImages = photoPaths.filter((path) => path !== profile.data?.profile_photo_path);
-    if (activityImages.length) await admin.storage.from("activity-images").remove(activityImages);
+    const now = new Date().toISOString();
+    const warnings = activityIds.length ? [`${activityIds.length} פעילויות נשמרות בהיסטוריה ולא יופעלו בשחזור`] : [];
+    const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "mentor", email: auth.data.user.email ?? null, display_name: targetName, reason: action.reason, warnings, deleted_at: now, deleted_by: administratorUserId, restored_at: null, restored_by: null });
+    if (recorded.error) throw new Error("Unable to record deleted mentor account");
+    const metadata = { ...(auth.data.user.user_metadata ?? {}), administratively_deleted_at: now };
+    const deleted = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h", user_metadata: metadata });
+    if (deleted.error) throw new Error(`Unable to disable deleted mentor: ${deleted.error.message}`);
+    await admin.from("mentor_publication").update({ status: "paused" }).eq("user_id", userId).in("status", ["approved", "published"]);
     return { outcome: "deleted" as const };
   }
 

@@ -30,13 +30,13 @@ export async function GET(request: Request) {
       if (result.data.users.length < 200) break;
     }
 
-    const parents = users.filter((user) => user.user_metadata?.role === "parent");
+    const parents = users.filter((user) => user.user_metadata?.role === "parent" && !user.user_metadata?.administratively_deleted_at);
     if (!parents.length) return adminApiSuccess({ parents: [] });
     const parentIds = parents.map((parent) => parent.id);
 
     const [profilesResult, childrenResult] = await Promise.all([
       admin.from("parent_profiles").select("user_id,first_name,last_name,phone,city,street,wants_home_mentoring,house_number,entrance,apartment,address_notes,created_at,updated_at").in("user_id", parentIds),
-      admin.from("parent_children").select("id,parent_user_id,first_name,last_name,grade,school_name,created_at").in("parent_user_id", parentIds),
+      admin.from("parent_children").select("id,parent_user_id,first_name,last_name,grade,school_name,created_at").in("parent_user_id", parentIds).is("removed_at", null),
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (childrenResult.error) throw childrenResult.error;
@@ -130,7 +130,17 @@ export async function PATCH(request: Request) {
     const target = await admin.auth.admin.getUserById(userId);
     if (!target.data.user || target.data.user.user_metadata?.role !== "parent") return Response.json({ error: "חשבון ההורה לא נמצא." }, { status: 404 });
     if (action === "delete") {
-      const deleted = await admin.auth.admin.deleteUser(userId);
+      const [profile, registrations, meetings] = await Promise.all([
+        admin.from("parent_profiles").select("first_name,last_name").eq("user_id", userId).maybeSingle(),
+        admin.from("mentor_activity_registrations").select("id", { count: "exact", head: true }).eq("parent_user_id", userId).in("status", ["registered", "waitlisted"]),
+        admin.from("meeting_requests").select("id", { count: "exact", head: true }).eq("parent_user_id", userId).in("status", ["pending", "alternative_proposed", "accepted"]),
+      ]);
+      const warnings = [registrations.count ? `${registrations.count} הרשמות פעילות נשמרות בהיסטוריה` : null, meetings.count ? `${meetings.count} בקשות או פגישות פעילות נשמרות בהיסטוריה` : null].filter((item): item is string => Boolean(item));
+      const now = new Date().toISOString();
+      const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "parent", email: target.data.user.email ?? null, display_name: [profile.data?.first_name, profile.data?.last_name].filter(Boolean).join(" ") || null, warnings, deleted_at: now, deleted_by: administrator.id, restored_at: null, restored_by: null });
+      if (recorded.error) throw recorded.error;
+      const metadata = { ...(target.data.user.user_metadata ?? {}), administratively_deleted_at: now };
+      const deleted = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h", user_metadata: metadata });
       if (deleted.error) throw deleted.error;
       return adminApiSuccess({ deleted: true });
     }

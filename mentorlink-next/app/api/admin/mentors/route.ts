@@ -46,7 +46,10 @@ export async function POST(request: Request) {
       const duplicate = created.error?.message.toLowerCase().includes("already") || created.error?.message.toLowerCase().includes("registered");
       return Response.json({ error: duplicate ? "כבר קיים חשבון עם כתובת המייל הזאת." : `לא ניתן ליצור את החשבון: ${created.error?.message ?? "שגיאה לא ידועה"}` }, { status: duplicate ? 409 : 500 });
     }
-    const ownership = await admin.from("mentor_account_ownership").insert({ user_id: created.data.user.id, owner_type: "mentor" });
+    const ownership = await admin.from("mentor_account_ownership").upsert(
+      { user_id: created.data.user.id, owner_type: "mentor" },
+      { onConflict: "user_id" },
+    );
     if (ownership.error) {
       await admin.auth.admin.deleteUser(created.data.user.id);
       return Response.json({ error: "החשבון לא הושלם ולכן בוטל. אפשר לנסות שוב." }, { status: 500 });

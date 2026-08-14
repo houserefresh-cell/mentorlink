@@ -36,7 +36,7 @@ export async function PATCH(
     if (ownerId !== user.id) return Response.json({ error: "Not allowed" }, { status: 403 });
     if (action === "archive" && actor === "parent") {
       if (!["cancelled", "declined"].includes(current.status)) return Response.json({ error: "אפשר למחוק מההיסטוריה רק בקשה שבוטלה או נדחתה." }, { status: 409 });
-      const archived = await client.from("meeting_requests").update({ archived_by_parent_at: new Date().toISOString() }).eq("id", requestId).select("id").single();
+      const archived = await client.from("meeting_requests").update({ archived_by_parent_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", requestId).eq("parent_user_id", user.id);
       if (archived.error) throw archived.error;
       return Response.json({ archived: true });
     }
@@ -51,6 +51,13 @@ export async function PATCH(
       const updated = await client.from("meeting_requests").update(details).eq("id", requestId).select("id, preparation_notes, equipment_notes, meeting_location, participant_names").single();
       if (updated.error) throw updated.error;
       if (payload.saveAsTemplate === true) await client.from("mentor_meeting_preparation_templates").upsert({ mentor_user_id: user.id, subject: current.subject, preparation_notes: details.preparation_notes, equipment_notes: details.equipment_notes, meeting_location: details.meeting_location, updated_at: new Date().toISOString() }, { onConflict: "mentor_user_id,subject" });
+      await createMeetingNotification(client, {
+        userId: current.parent_user_id,
+        kind: "meeting_details_updated",
+        title: "פרטי המפגש עודכנו",
+        body: "החונך עדכן את ההכנה, הציוד או מיקום המפגש.",
+        href: "/dashboard/parent/requests",
+      });
       return Response.json({ request: updated.data });
     }
     if (!canTransition(actor, current.status, action)) {
@@ -192,8 +199,9 @@ export async function PATCH(
       href,
     });
     return Response.json({ request: result.data });
-  } catch {
-    return Response.json({ error: "Unable to update meeting request" }, { status: 500 });
+  } catch (error) {
+    console.error("Meeting request update failed", error);
+    return Response.json({ error: "לא ניתן לעדכן את בקשת הפגישה כרגע. הנתונים לא שונו." }, { status: 500 });
   }
 }
 
