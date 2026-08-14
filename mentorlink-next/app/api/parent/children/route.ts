@@ -38,6 +38,24 @@ export async function POST(request: Request) {
   if (firstName.length < 1 || firstName.length > 60 || notes.length > 1000) return Response.json({ error: "יש לבדוק את פרטי הילד/ה." }, { status: 400 });
   if (schoolName.length === 1 || schoolName.length > 120) return Response.json({ error: "שם בית הספר אינו תקין." }, { status: 400 });
   const admin = createSupabaseAdmin();
+  const removedMatch = await admin.from("parent_children")
+    .select("id")
+    .eq("parent_user_id", user.id)
+    .ilike("first_name", firstName)
+    .not("removed_at", "is", null)
+    .order("removed_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (removedMatch.error) return Response.json({ error: "לא ניתן לבדוק את היסטוריית הילדים." }, { status: 500 });
+  if (removedMatch.data) {
+    const restored = await admin.from("parent_children").update({ removed_at: null }).eq("id", removedMatch.data.id).eq("parent_user_id", user.id);
+    if (restored.error) return Response.json({ error: "לא ניתן לשחזר את הילד/ה לחשבון." }, { status: 422 });
+    const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: removedMatch.data.id, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
+    if (result.error) return Response.json({ error: "הילד/ה נמצאו בהיסטוריה אך לא ניתן היה לעדכן את הפרטים." }, { status: 422 });
+    await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", removedMatch.data.id);
+    const refreshed = await childrenWithInterests(user.id);
+    return Response.json({ child: refreshed.data?.find((child) => child.id === removedMatch.data?.id), restored: true }, { status: 201 });
+  }
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: null, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
   if (result.error?.code === "23505") return Response.json({ error: "כבר קיים ילד בשם הזה בחשבון." }, { status: 409 });
   if (result.error || !result.data) return Response.json({ error: result.error?.message.includes("INVALID_SUBJECT") ? "אחד מתחומי העניין אינו זמין." : "לא ניתן לשמור את פרטי הילד/ה." }, { status: result.error?.message.includes("INVALID_SUBJECT") ? 400 : 500 });
@@ -84,7 +102,13 @@ export async function DELETE(request: Request) {
     admin.from("meeting_requests").select("id").eq("parent_user_id", user.id).eq("child_id", id).in("status", ["pending", "alternative_proposed", "accepted"]).limit(1),
   ]);
   if (registrations.error || meetings.error) return Response.json({ error: "לא ניתן לבדוק התחייבויות עתידיות." }, { status: 500 });
-  if (registrations.data?.length || meetings.data?.length) return Response.json({ error: "לילד/ה קיימת פעילות או פגישה פעילה. יש לבטל אותה לפני ההסרה." }, { status: 409 });
+  if (registrations.data?.length || meetings.data?.length) return Response.json({
+    error: "לא ניתן להסיר כרגע: לילד/ה קיימת פעילות או פגישה פעילה. יש לבטל אותה תחילה.",
+    blockers: [
+      ...(registrations.data?.length ? [{ label: "מעבר לפעילויות שלי", href: "/dashboard/parent/activities" }] : []),
+      ...(meetings.data?.length ? [{ label: "מעבר לבקשות ולפגישות", href: "/dashboard/parent/requests" }] : []),
+    ],
+  }, { status: 409 });
   const removed = await admin.from("parent_children").update({ removed_at: new Date().toISOString() }).eq("id", id).eq("parent_user_id", user.id).is("removed_at", null).select("id").maybeSingle();
   if (removed.error || !removed.data) return Response.json({ error: "לא ניתן להסיר את הילד/ה." }, { status: 422 });
   return Response.json({ removed: true });

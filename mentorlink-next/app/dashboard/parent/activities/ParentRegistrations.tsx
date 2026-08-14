@@ -74,13 +74,21 @@ export default function ParentRegistrations() {
   const [details, setDetails] = useState<Registration | null>(null);
   const [view, setView] = useState<Tabs>("closest");
   const [selectedChild, setSelectedChild] = useState("all");
+  const [activeChildNames, setActiveChildNames] = useState<string[]>([]);
 
   async function load() {
     setLoading(true);
     const token = (await supabase.auth.getSession()).data.session?.access_token;
-    const response = await fetch("/api/parent/activity-registrations", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+    const [response, childrenResponse] = await Promise.all([
+      fetch("/api/parent/activity-registrations", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
+      fetch("/api/parent/children", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }),
+    ]);
     if (response.ok) setRows((await response.json()).registrations ?? []);
     else setMessage("לא ניתן לטעון את ההרשמות כרגע.");
+    if (childrenResponse.ok) {
+      const children = (await childrenResponse.json()).children ?? [];
+      setActiveChildNames([...new Set(children.map((child: { first_name?: string }) => child.first_name).filter(Boolean))] as string[]);
+    }
     setLoading(false);
   }
 
@@ -121,7 +129,7 @@ export default function ParentRegistrations() {
     return tabbed;
   }, [nextByRow, rows, selectedChild, view]);
 
-  const childNames = useMemo(() => [...new Set(rows.map((row) => row.child_first_name).filter(Boolean))], [rows]);
+  const childNames = useMemo(() => activeChildNames, [activeChildNames]);
 
   async function cancel(id: string) {
     if (!confirm("לבטל את ההרשמה של הילד/ה לפעילות?")) return;

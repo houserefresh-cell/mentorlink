@@ -12,7 +12,7 @@ export function adminApiError(error: unknown) {
   }
   console.error("Administrator review request failed", error);
   return NextResponse.json(
-    { error: "Unable to load administrator review data" },
+    { error: "לא ניתן להשלים את פעולת המנהל כרגע. הנתונים לא שונו; אפשר לרענן ולנסות שוב." },
     { status: 500, headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -82,7 +82,7 @@ export async function getAllMentorRegistrations(
     authUsers.push(...result.data.users);
     if (result.data.users.length < 200) break;
   }
-  const mentors = authUsers.filter((user) => user.id !== administratorUserId && user.user_metadata?.role === "mentor");
+  const mentors = authUsers.filter((user) => user.id !== administratorUserId && user.user_metadata?.role === "mentor" && !user.user_metadata?.administratively_deleted_at);
   if (!mentors.length) return [];
   const ids = mentors.map((user) => user.id);
   const [profilesResult, publicationsResult, consentsResult, subjectsResult, locationsResult, availabilityResult, experienceResult, changesResult, controlsResult] = await Promise.all([
@@ -156,16 +156,21 @@ async function summaries(
     administratorUserId,
   ).filter((publication) => statuses.includes(publication.status));
   if (!publications.length) return [];
+  const deletedResult = await admin.from("admin_deleted_accounts").select("user_id").is("restored_at", null).in("user_id", publications.map((publication) => publication.user_id));
+  check("Unable to exclude deleted mentor accounts", deletedResult.error);
+  const deletedIds = new Set((deletedResult.data ?? []).map((row) => row.user_id));
+  const activePublications = publications.filter((publication) => !deletedIds.has(publication.user_id));
+  if (!activePublications.length) return [];
   const profilesResult = await admin
     .from("mentor_profiles")
     .select("user_id, first_name, last_name, birth_date, city")
-    .in("user_id", publications.map((publication) => publication.user_id));
+    .in("user_id", activePublications.map((publication) => publication.user_id));
   check("Unable to load mentor summaries", profilesResult.error);
   const profiles = new Map(
     ((profilesResult.data ?? []) as Array<Record<string, string | null>>)
       .map((profile) => [profile.user_id, profile]),
   );
-  return publications.map((publication): MentorSummary => {
+  return activePublications.map((publication): MentorSummary => {
     const profile = profiles.get(publication.user_id);
     return {
       userId: publication.user_id,
