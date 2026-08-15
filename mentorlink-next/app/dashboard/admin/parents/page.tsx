@@ -86,15 +86,17 @@ export default function AdminParentsPage() {
 }
 
 function ParentCard({ parent, onChanged }: { parent: ParentAccount; onChanged: () => void }) {
+  const [actionError, setActionError] = useState("");
   const name = [parent.firstName, parent.lastName].filter(Boolean).join(" ") || "הורה ללא פרופיל מלא";
   const address = parent.wantsHomeMentoring
     ? [parent.city, parent.street, parent.houseNumber && `מס׳ ${parent.houseNumber}`, parent.entrance && `כניסה ${parent.entrance}`, parent.apartment && `דירה ${parent.apartment}`].filter(Boolean).join(", ")
     : [parent.city, parent.street].filter(Boolean).join(", ");
   async function accountAction(action: "suspend"|"restore"|"delete") {
     if (action === "delete" && !window.confirm("מחיקת חשבון היא סופית. להמשיך?")) return;
+    setActionError("");
     const session=(await supabase.auth.getSession()).data.session;
     const response=await fetch("/api/admin/parents",{method:"PATCH",headers:{Authorization:`Bearer ${session?.access_token??""}`,"Content-Type":"application/json"},body:JSON.stringify({userId:parent.userId,action})});
-    if(response.ok) onChanged(); else alert((await response.json().catch(()=>({}))).error??"הפעולה נכשלה.");
+    if(response.ok) onChanged(); else setActionError((await response.json().catch(()=>({}))).error??"הפעולה נכשלה.");
   }
   return (
     <details className="rounded-3xl border-2 border-slate-200 bg-white p-5 shadow-sm">
@@ -110,6 +112,7 @@ function ParentCard({ parent, onChanged }: { parent: ParentAccount; onChanged: (
       </div>
       <section className="mt-4"><h3 className="font-black">ילדים בפרופיל</h3><div className="mt-3 grid gap-3 md:grid-cols-2">{parent.children.map((child) => <article key={child.id} className="rounded-2xl border border-slate-200 p-4"><h4 className="font-black">{[child.firstName, child.lastName].filter(Boolean).join(" ")}</h4><p className="mt-1 text-slate-700">{child.grade ? gradeLabels[child.grade] ?? child.grade : "כיתה לא צוינה"}{child.schoolName ? ` · ${child.schoolName}` : ""}</p><p className="mt-2 text-sm font-semibold">תחומי עניין: {child.interests.join(", ") || "לא נבחרו"}</p></article>)}{!parent.children.length && <p className="rounded-2xl bg-slate-50 p-4">לא נוספו ילדים לחשבון.</p>}</div></section>
       <div className="mt-5 flex flex-wrap gap-2 border-t pt-4"><button onClick={()=>void accountAction(parent.accountDisabled?"restore":"suspend")} className="rounded-xl border border-amber-400 px-4 py-2 font-black">{parent.accountDisabled?"הפעלת החשבון":"השבתת החשבון"}</button><button onClick={()=>void accountAction("delete")} className="rounded-xl border border-red-400 px-4 py-2 font-black text-red-700">מחיקת החשבון</button></div>
+      {actionError && <p role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 font-bold text-red-800">{actionError}</p>}
     </details>
   );
 }

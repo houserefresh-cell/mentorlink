@@ -418,4 +418,4 @@ function formatDate(value: string | null) {
 }
 function Loading() { return <p className="rounded-2xl bg-white p-8 text-slate-600">Loading…</p>; }
 function EmptyValue() { return <p className="text-slate-500">No saved information.</p>; }
-function ErrorPanel({ message }: { message: string }) { return <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800"><p className="font-bold">Access denied</p><p className="mt-1">{message}</p></div>; }
+function ErrorPanel({ message }: { message: string }) { return <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800"><p className="font-bold">לא ניתן לטעון את רשימת החונכים</p><p className="mt-1">{message}</p><button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold">ניסיון נוסף</button></div>; }

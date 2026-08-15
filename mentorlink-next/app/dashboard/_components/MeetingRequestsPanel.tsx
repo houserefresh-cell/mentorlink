@@ -231,14 +231,17 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const confirmedDuration = item.confirmed_duration_minutes;
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
   const visual = meetingVisual(item, role);
+  const displayedStart = confirmedStart ?? item.proposed_start_at ?? item.requested_start_at;
+  const displayedDuration = confirmedDuration ?? item.proposed_duration_minutes ?? item.requested_duration_minutes;
   return (
-    <article className={`flex min-h-[22rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${visual.card}`}>
+    <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
         <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
       </div>
+      {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_grade_or_age}</p>}
       <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
-      <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(item.requested_start_at)}</p><p className="mt-1 font-bold">אורך המפגש: {item.requested_duration_minutes} דקות</p></div>
+      <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(displayedStart)}</p><p className="mt-1 font-bold">אורך המפגש: {displayedDuration} דקות</p></div>
       {item.proposed_start_at && item.proposed_duration_minutes ? (
         <p className="mt-2 rounded-xl bg-amber-50 p-3 font-bold text-amber-950">המועד החלופי: {formatDate(item.proposed_start_at)} · {item.proposed_duration_minutes} דקות</p>
       ) : null}
@@ -246,9 +249,15 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         <p className="mt-2 rounded-xl bg-emerald-50 p-3 font-black text-emerald-900">המועד שאושר: {formatDate(confirmedStart)} · {confirmedDuration} דקות</p>
       ) : null}
       {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
-      {role === "mentor" ? <><p className="mt-2 text-slate-700">{item.help_goal}</p>{item.parent_message && <p className="mt-2 text-slate-600">{item.parent_message}</p>}</> : null}
-      {item.mentor_response && <p className="mt-2 rounded-xl bg-slate-50 p-3">{item.mentor_response}</p>}
-      {(item.preparation_notes||item.equipment_notes||item.meeting_location||(item.participant_names??[]).length>0)&&<details className="mt-3 rounded-2xl border bg-white p-3"><summary className="cursor-pointer font-black">פרטי הפגישה</summary>{item.preparation_notes&&<p className="mt-2"><b>הכנה:</b> {item.preparation_notes}</p>}{item.equipment_notes&&<p><b>מה להביא:</b> {item.equipment_notes}</p>}{item.meeting_location&&<p><b>מיקום:</b> {item.meeting_location}</p>}{item.participant_names?.length>0&&<p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}</details>}
+      <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-slate-800">
+        <p><b>מטרת המפגש:</b> {item.help_goal}</p>
+        {item.parent_message && <p><b>הודעת ההורה:</b> {item.parent_message}</p>}
+        {item.mentor_response && <p><b>תשובת החונך:</b> {item.mentor_response}</p>}
+        {item.preparation_notes && <p><b>הכנה למפגש:</b> {item.preparation_notes}</p>}
+        {item.equipment_notes && <p><b>מה להביא:</b> {item.equipment_notes}</p>}
+        {item.meeting_location && <p><b>מיקום או קישור:</b> {item.meeting_location}</p>}
+        {item.participant_names?.length > 0 && <p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}
+      </div>
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
         {role === "parent" && item.status === "alternative_proposed" ? (

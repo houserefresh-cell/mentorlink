@@ -156,11 +156,11 @@ async function summaries(
     administratorUserId,
   ).filter((publication) => statuses.includes(publication.status));
   if (!publications.length) return [];
-  const deletedResult = await admin.from("admin_deleted_accounts").select("user_id").is("restored_at", null).in("user_id", publications.map((publication) => publication.user_id));
-  check("Unable to exclude deleted mentor accounts", deletedResult.error);
-  const deletedIds = new Set((deletedResult.data ?? []).map((row) => row.user_id));
-  const activePublications = publications.filter((publication) => !deletedIds.has(publication.user_id));
-  if (!activePublications.length) return [];
+  // Deleted accounts are excluded from the final response by the auth-user list in
+  // the API route. Keeping this lower-level review query independent of the
+  // deletion archive also prevents an archive/schema-cache problem from taking
+  // the entire mentor administration screen down.
+  const activePublications = publications;
   const profilesResult = await admin
     .from("mentor_profiles")
     .select("user_id, first_name, last_name, birth_date, city")

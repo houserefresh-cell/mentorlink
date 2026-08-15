@@ -48,11 +48,11 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (removedMatch.error) return Response.json({ error: "לא ניתן לבדוק את היסטוריית הילדים." }, { status: 500 });
   if (removedMatch.data) {
+    // A restore must revive the saved profile as-is. Re-running the save RPC
+    // with the mostly empty "new child" form used to erase grade, school,
+    // accommodations and interests from the archived child.
     const restored = await admin.from("parent_children").update({ removed_at: null }).eq("id", removedMatch.data.id).eq("parent_user_id", user.id);
     if (restored.error) return Response.json({ error: "לא ניתן לשחזר את הילד/ה לחשבון." }, { status: 422 });
-    const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: removedMatch.data.id, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
-    if (result.error) return Response.json({ error: "הילד/ה נמצאו בהיסטוריה אך לא ניתן היה לעדכן את הפרטים." }, { status: 422 });
-    await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", removedMatch.data.id);
     const refreshed = await childrenWithInterests(user.id);
     return Response.json({ child: refreshed.data?.find((child) => child.id === removedMatch.data?.id), restored: true }, { status: 201 });
   }
