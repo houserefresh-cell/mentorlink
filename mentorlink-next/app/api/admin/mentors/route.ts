@@ -11,13 +11,19 @@ export async function GET(request: Request) {
       authorizeAdministrator,
       createSupabaseAdmin,
       async (administrator, serviceRoleClient) => {
-        const [mentors, fieldChangeMentors, publicationMentors, registrations] = await Promise.all([
+        const registrations = await getAllMentorRegistrations(administrator.id, serviceRoleClient);
+        const activeIds = new Set(registrations.map((mentor) => mentor.userId));
+        const [mentors, fieldChangeMentors, publicationMentors] = await Promise.all([
           getPendingMentors(administrator.id, serviceRoleClient),
           getPendingFieldChangeMentors(administrator.id, serviceRoleClient),
           getPublicationMentors(administrator.id, serviceRoleClient),
-          getAllMentorRegistrations(administrator.id, serviceRoleClient),
         ]);
-        return { mentors, fieldChangeMentors, publicationMentors, registrations };
+        return {
+          mentors: mentors.filter((mentor) => activeIds.has(mentor.userId)),
+          fieldChangeMentors: fieldChangeMentors.filter((mentor) => activeIds.has(mentor.userId)),
+          publicationMentors: publicationMentors.filter((mentor) => activeIds.has(mentor.userId)),
+          registrations,
+        };
       },
     );
     return adminApiSuccess(result);
