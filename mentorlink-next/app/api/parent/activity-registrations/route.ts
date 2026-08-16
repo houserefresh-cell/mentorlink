@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       ? admin.from("mentor_activity_sessions").select("activity_id, starts_at, ends_at, estimated_overrun").in("activity_id", activityIds).order("starts_at")
       : Promise.resolve({ data: [], error: null }),
     activityIds.length
-      ? admin.from("mentor_activity_registrations").select("activity_id, status").in("activity_id", activityIds).in("status", ["registered", "waitlisted"])
+      ? admin.from("mentor_activity_registrations").select("activity_id, status, child_id, child_first_name").in("activity_id", activityIds).in("status", ["registered", "waitlisted"])
       : Promise.resolve({ data: [], error: null }),
     activityIds.length
       ? admin.from("mentor_activity_contact_approvals").select("activity_id").in("activity_id", activityIds).eq("parent_user_id", user.id)
@@ -62,6 +62,10 @@ export async function GET(request: Request) {
   if (profiles.error) return Response.json({ error: "לא ניתן להשלים את טעינת החונכים." }, { status: 500 });
 
   const profileMap = new Map((profiles.data ?? []).map((row) => [row.user_id, row]));
+  const registeredChildIds = [...new Set((counts.data ?? []).filter((row) => row.status === "registered").map((row) => row.child_id).filter(Boolean))];
+  const registeredChildren = registeredChildIds.length ? await admin.from("parent_children").select("id, first_name, last_name").in("id", registeredChildIds) : { data: [], error: null };
+  if (registeredChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת המשתתפים." }, { status: 500 });
+  const childById = new Map((registeredChildren.data ?? []).map((child) => [child.id, child]));
   const approvedActivityIds = new Set((approvals.data ?? []).map((row) => row.activity_id));
   const feedbackRegistrationIds = new Set((feedback.data ?? []).map((row) => row.registration_id));
   const countsByActivity = new Map<string, { registered: number; waitlisted: number }>();
@@ -97,6 +101,12 @@ export async function GET(request: Request) {
               registeredCount: countsForActivity.registered,
               waitlistedCount: countsForActivity.waitlisted,
               availablePlaces: Math.max(0, Number(activity.max_participants ?? 0) - countsForActivity.registered),
+              registeredNames: (counts.data ?? []).filter((row) => row.activity_id === registration.activity_id && row.status === "registered").map((row) => {
+                const child = childById.get(row.child_id);
+                const firstName = child?.first_name ?? row.child_first_name ?? "ילד/ה";
+                const initial = child?.last_name?.trim()?.charAt(0);
+                return initial ? `${firstName} ${initial}׳` : firstName;
+              }),
             }
           : null,
         sessions: (sessions.data ?? []).filter((session) => session.activity_id === registration.activity_id),

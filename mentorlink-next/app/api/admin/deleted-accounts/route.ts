@@ -40,7 +40,7 @@ export async function PATCH(request: Request) {
     if (user.error || !user.data.user) return Response.json({ error: "חשבון ההתחברות המקורי לא נמצא ולכן לא ניתן לשחזר אותו." }, { status: 409 });
     const accountType = user.data.user.user_metadata?.role;
     if (!user.data.user.user_metadata?.administratively_deleted_at || !["parent", "mentor"].includes(accountType)) return Response.json({ error: "החשבון אינו מסומן כמחוק." }, { status: 409 });
-    const { administratively_deleted_at: _deletedAt, administrative_deletion: _deletion, ...metadata } = user.data.user.user_metadata ?? {};
+    const metadata = { ...(user.data.user.user_metadata ?? {}), administratively_deleted_at: null, administrative_deletion: null };
     const auth = await admin.auth.admin.updateUserById(userId, { ban_duration: "none", user_metadata: metadata });
     if (auth.error) throw auth.error;
     const restored = await admin.from("admin_deleted_accounts").update({ restored_at: new Date().toISOString(), restored_by: administrator.id }).eq("user_id", userId).is("restored_at", null);
@@ -49,6 +49,8 @@ export async function PATCH(request: Request) {
       const control = await admin.from("mentor_account_controls").upsert({ user_id: userId, status: "active", reason: null, suspended_until: null, acted_by: administrator.id, acted_at: new Date().toISOString(), updated_at: new Date().toISOString() });
       if (control.error) throw control.error;
     }
+    const verified = await admin.auth.admin.getUserById(userId);
+    if (verified.error || verified.data.user?.user_metadata?.administratively_deleted_at) return Response.json({ error: "החשבון נפתח לכניסה, אך לא הוסר מרשימת המחוקים. יש לנסות שוב." }, { status: 409 });
     return adminApiSuccess({ restored: true });
   } catch (error) { return adminApiError(error); }
 }
