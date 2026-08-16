@@ -115,7 +115,7 @@ export async function GET(request: Request) {
     const client = createSupabaseAdmin();
     const column = user.role === "parent" ? "parent_user_id" : "mentor_user_id";
     let query = client.from("meeting_requests")
-      .select("id, mentor_user_id, child_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at, preparation_notes, equipment_notes, meeting_location, participant_names, archived_by_parent_at")
+      .select("id, mentor_user_id, parent_user_id, child_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at, preparation_notes, equipment_notes, meeting_location, participant_names, archived_by_parent_at")
       .eq(column, user.id)
       .order("created_at", { ascending: false });
     if (user.role === "parent") query = query.is("archived_by_parent_at", null);
@@ -123,14 +123,22 @@ export async function GET(request: Request) {
     if (error) throw new Error("query failed");
     const rows = [...(data ?? [])].sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
     const names = new Map<string, string>();
+    const phones = new Map<string, string>();
     if (user.role === "parent") {
       const ids = [...new Set(rows.map((row) => row.mentor_user_id))];
       if (ids.length) {
-        const profiles = await client.from("mentor_profiles").select("user_id, first_name, last_name").in("user_id", ids);
+        const profiles = await client.from("mentor_profiles").select("user_id, first_name, last_name, phone").in("user_id", ids);
         for (const profile of profiles.data ?? []) {
           const initial = Array.from(profile.last_name?.trim() ?? "")[0];
           names.set(profile.user_id, `${profile.first_name ?? "חונך/ת"}${initial ? ` ${initial}׳` : ""}`);
+          if (profile.phone) phones.set(profile.user_id, profile.phone);
         }
+      }
+    } else {
+      const ids = [...new Set(rows.map((row) => row.parent_user_id))];
+      if (ids.length) {
+        const profiles = await client.from("parent_profiles").select("user_id, phone").in("user_id", ids);
+        for (const profile of profiles.data ?? []) if (profile.phone) phones.set(profile.user_id, profile.phone);
       }
     }
     let schedulingMentorBookingId: string | null = null;
@@ -140,9 +148,10 @@ export async function GET(request: Request) {
     }
     return Response.json({
       schedulingMentorBookingId,
-      requests: rows.map(({ mentor_user_id, ...row }) => ({
+      requests: rows.map(({ mentor_user_id, parent_user_id, ...row }) => ({
         ...row,
         ...(user.role === "parent" ? { mentor_display_name: names.get(mentor_user_id) ?? "חונך/ת" } : {}),
+        contact_phone: phones.get(user.role === "parent" ? mentor_user_id : parent_user_id) ?? null,
       })),
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {

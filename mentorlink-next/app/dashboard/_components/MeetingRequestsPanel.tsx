@@ -30,6 +30,7 @@ type Meeting = {
   equipment_notes: string | null;
   meeting_location: string | null;
   participant_names: string[];
+  contact_phone: string | null;
 };
 
 type MentorMeetingView = "mentor-action" | "waiting-parent" | "upcoming-approved" | "history";
@@ -260,6 +261,10 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       </div>
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
+        {item.contact_phone && <>
+          <a href={`tel:${item.contact_phone}`} className="min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 font-bold text-blue-800">התקשרות</a>
+          <a href={`https://wa.me/972${item.contact_phone.replace(/\D/g, "").replace(/^0/, "")}`} target="_blank" rel="noreferrer" className="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white">WhatsApp</a>
+        </>}
         {role === "parent" && item.status === "alternative_proposed" ? (
           <>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept_alternative", "לאשר את המועד החלופי?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור המועד החלופי</button>

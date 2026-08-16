@@ -32,14 +32,15 @@ export async function applyMentorAccountAction(input: {
     if (event.error) throw new Error("Unable to record permanent deletion");
     const now = new Date().toISOString();
     const warnings = activityIds.length ? [`${activityIds.length} פעילויות נשמרות בהיסטוריה ולא יופעלו בשחזור`] : [];
-    const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "mentor", email: auth.data.user.email ?? null, display_name: targetName, reason: action.reason, warnings, deleted_at: now, deleted_by: administratorUserId, restored_at: null, restored_by: null }, { onConflict: "user_id" });
-    if (recorded.error) throw new Error("Unable to record deleted mentor account");
-    const metadata = { ...(auth.data.user.user_metadata ?? {}), administratively_deleted_at: now };
+    const metadata = {
+      ...(auth.data.user.user_metadata ?? {}),
+      administratively_deleted_at: now,
+      administrative_deletion: { accountType: "mentor", displayName: targetName, reason: action.reason, warnings, deletedBy: administratorUserId },
+    };
     const deleted = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h", user_metadata: metadata });
-    if (deleted.error) {
-      await admin.from("admin_deleted_accounts").delete().eq("user_id", userId).eq("deleted_at", now);
-      throw new Error(`Unable to disable deleted mentor: ${deleted.error.message}`);
-    }
+    if (deleted.error) throw new Error(`Unable to disable deleted mentor: ${deleted.error.message}`);
+    const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "mentor", email: auth.data.user.email ?? null, display_name: targetName, reason: action.reason, warnings, deleted_at: now, deleted_by: administratorUserId, restored_at: null, restored_by: null }, { onConflict: "user_id" });
+    if (recorded.error) console.error("Unable to mirror deleted mentor in archive", recorded.error);
     await admin.from("mentor_publication").update({ status: "paused" }).eq("user_id", userId).in("status", ["approved", "published"]);
     return { outcome: "deleted" as const };
   }
