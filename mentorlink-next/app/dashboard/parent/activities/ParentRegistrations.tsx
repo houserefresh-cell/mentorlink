@@ -36,6 +36,7 @@ type Registration = {
     pickup_details: string | null;
     accessibility_options: string[] | null;
     accessibility_other: string | null;
+    registeredNames: string[];
   } | null;
   sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
 };
@@ -178,9 +179,12 @@ export default function ParentRegistrations() {
                   </div>
 
                   <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                    <Info label="מקומות פנויים" value={String(row.activity?.availablePlaces ?? 0)} />
-                    <Info label="מעמד" value={`${row.activity?.registeredCount ?? 0} רשומים · ${row.activity?.availablePlaces ?? 0} פנויים מתוך ${row.activity?.max_participants ?? 0}`} />
+                    <Info label="כמות משתתפים" value={`${row.activity?.registeredCount ?? 0} ${row.activity?.registeredCount === 1 ? "רשום" : "רשומים"} · הפעילות מיועדת ל־${row.activity?.min_participants ?? 0}–${row.activity?.max_participants ?? 0} משתתפים`} />
+                    <Info label="פרטי הפעילות" value={`${[row.activity?.mentor_first_name, row.activity?.mentor_last_name].filter(Boolean).join(" ") || "חונך טרם נקבע"} · ${[row.activity?.venue_name, row.activity?.location_details].filter(Boolean).join(" · ") || locationLabels[row.activity?.location_type ?? "other"] || "מיקום טרם נקבע"}`} />
                   </div>
+                  {(row.activity?.registeredNames?.length ?? 0) > 0 && <p className="mt-3 rounded-xl bg-violet-50 p-3 text-sm text-violet-950"><b>הילדים הרשומים:</b> {row.activity?.registeredNames.join(" · ")}</p>}
+                  <p className={`mt-3 rounded-xl p-3 text-sm font-black ${(row.activity?.registeredCount ?? 0) >= (row.activity?.min_participants ?? 0) ? "bg-blue-50 text-blue-900" : "bg-amber-50 text-amber-950"}`}>{(row.activity?.registeredCount ?? 0) >= (row.activity?.min_participants ?? 0) ? "יש מספיק משתתפים לקיום הפעילות" : `הפעילות עדיין מותנית בהרשמת ${(row.activity?.min_participants ?? 0) - (row.activity?.registeredCount ?? 0)} משתתפים נוספים`}</p>
+                  <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-2">{row.activity?.is_free ? "ללא עלות" : `${row.activity?.price ?? 0} ₪`}</span>{(row.activity?.pickup_options?.length ?? 0) > 0 && <span className="rounded-full bg-cyan-50 px-3 py-2 text-cyan-900">כולל אפשרות איסוף</span>}</div>
 
                   {next && (
                     <div className="mt-5 rounded-2xl bg-blue-700 p-4 text-white">

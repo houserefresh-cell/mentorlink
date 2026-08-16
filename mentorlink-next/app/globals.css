@@ -6,6 +6,18 @@
   --foreground: #171717;
 }
 
+/* The authenticated home control always uses the real brand mark. Keeping the
+   image in CSS also prevents the temporary triangle/M fallback during hydration. */
+a[aria-label^="MentorLink – עמוד הבית"] {
+  width: 5.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  background: url("/mentorlink-logo.png") center / contain no-repeat;
+}
+a[aria-label^="MentorLink – עמוד הבית"] > span {
+  display: none;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

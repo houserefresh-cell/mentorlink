@@ -43,6 +43,22 @@ test("account deletion remains effective when the optional archive mirror fails"
   }
 });
 
+test("account restoration clears the merged deletion markers and verifies the result", () => {
+  const route = read("app/api/admin/deleted-accounts/route.ts");
+  assert.match(route, /administratively_deleted_at: null/);
+  assert.match(route, /administrative_deletion: null/);
+  assert.match(route, /const verified = await admin\.auth\.admin\.getUserById/);
+});
+
+test("parent activity cards expose participant names and useful summary details", () => {
+  const api = read("app/api/parent/activity-registrations/route.ts");
+  const page = read("app/dashboard/parent/activities/ParentRegistrations.tsx");
+  assert.match(api, /registeredNames:/);
+  assert.match(page, /הילדים הרשומים:/);
+  assert.match(page, /כמות משתתפים/);
+  assert.match(page, /כולל אפשרות איסוף/);
+});
+
 test("account action failures are rendered next to the parent account controls", () => {
   const page = read("app/dashboard/admin/parents/page.tsx");
   assert.match(page, /setActionError/);
