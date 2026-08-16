@@ -22,11 +22,25 @@ test("restoring a removed child preserves the archived profile and preferences",
 
 test("meeting cards expose the child and full meeting context to both roles", () => {
   const panel = read("app/dashboard/_components/MeetingRequestsPanel.tsx");
+  const route = read("app/api/meeting-requests/route.ts");
   for (const label of ["עבור", "מטרת המפגש:", "הודעת ההורה:", "תשובת החונך:", "הכנה למפגש:", "מה להביא:", "מיקום או קישור:", "משתתפים נוספים:"]) {
     assert.match(panel, new RegExp(label));
   }
   assert.match(panel, /displayedStart/);
   assert.match(panel, /בקשת פגישה — עדיין לא אושרה/);
+  assert.match(panel, /href=\{`tel:/);
+  assert.match(panel, /https:\/\/wa\.me/);
+  assert.match(route, /contact_phone:/);
+});
+
+test("account deletion remains effective when the optional archive mirror fails", () => {
+  const parents = read("app/api/admin/parents/route.ts");
+  const mentors = read("lib/admin-account-control.ts");
+  for (const source of [parents, mentors]) {
+    assert.ok(source.indexOf("updateUserById") < source.indexOf('from("admin_deleted_accounts").upsert'));
+    assert.match(source, /administrative_deletion/);
+    assert.match(source, /console\.error\("Unable to mirror deleted/);
+  }
 });
 
 test("account action failures are rendered next to the parent account controls", () => {

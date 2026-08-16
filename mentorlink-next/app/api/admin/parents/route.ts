@@ -139,14 +139,19 @@ export async function PATCH(request: Request) {
       if (inspectionError) throw inspectionError;
       const warnings = [registrations.count ? `${registrations.count} הרשמות פעילות נשמרות בהיסטוריה` : null, meetings.count ? `${meetings.count} בקשות או פגישות פעילות נשמרות בהיסטוריה` : null].filter((item): item is string => Boolean(item));
       const now = new Date().toISOString();
-      const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "parent", email: target.data.user.email ?? null, display_name: [profile.data?.first_name, profile.data?.last_name].filter(Boolean).join(" ") || null, warnings, deleted_at: now, deleted_by: administrator.id, restored_at: null, restored_by: null }, { onConflict: "user_id" });
-      if (recorded.error) throw recorded.error;
-      const metadata = { ...(target.data.user.user_metadata ?? {}), administratively_deleted_at: now };
+      const displayName = [profile.data?.first_name, profile.data?.last_name].filter(Boolean).join(" ") || null;
+      const metadata = {
+        ...(target.data.user.user_metadata ?? {}),
+        administratively_deleted_at: now,
+        administrative_deletion: { accountType: "parent", displayName, warnings, deletedBy: administrator.id },
+      };
       const deleted = await admin.auth.admin.updateUserById(userId, { ban_duration: "876000h", user_metadata: metadata });
-      if (deleted.error) {
-        await admin.from("admin_deleted_accounts").delete().eq("user_id", userId).eq("deleted_at", now);
-        throw deleted.error;
-      }
+      if (deleted.error) throw deleted.error;
+      // The authentication metadata is the source of truth. The archive table
+      // enriches the administrator history, but a transient PostgREST/schema
+      // problem must never prevent an administrator from disabling an account.
+      const recorded = await admin.from("admin_deleted_accounts").upsert({ user_id: userId, account_type: "parent", email: target.data.user.email ?? null, display_name: displayName, warnings, deleted_at: now, deleted_by: administrator.id, restored_at: null, restored_by: null }, { onConflict: "user_id" });
+      if (recorded.error) console.error("Unable to mirror deleted parent in archive", recorded.error);
       return adminApiSuccess({ deleted: true });
     }
     const updated = await admin.auth.admin.updateUserById(userId, { ban_duration: action === "restore" ? "none" : "876000h" });
