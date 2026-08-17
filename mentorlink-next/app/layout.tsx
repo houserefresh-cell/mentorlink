@@ -8,7 +8,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "MentorLink | צומחים יחד",
   manifest: "/manifest.webmanifest",
-  icons: { apple: "/favicon.ico" },
+  icons: { icon: "/mentorlink-icon-192-v2.png", apple: "/mentorlink-icon-192-v2.png" },
   description: "MentorLink מחברת בין ילדים ומשפחות לבין חונכים צעירים בקהילה.",
 };
 

@@ -17,12 +17,26 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin();
   const profile = await admin.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
   if (!profile.data?.phone) return Response.json({ error: "לפני הרשמה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
+  const [activity, activeRegistrations] = await Promise.all([
+    admin.from("mentor_activities").select("max_participants").eq("id", activityId).maybeSingle(),
+    admin.from("mentor_activity_registrations").select("child_id,status").eq("activity_id", activityId).in("status", ["registered", "waitlisted"]),
+  ]);
+  if (activity.error || activeRegistrations.error || !activity.data) return Response.json({ error: "לא ניתן לבדוק את מצב הפעילות כרגע." }, { status: 500 });
+  const registeredCount = (activeRegistrations.data ?? []).filter((row) => row.status === "registered").length;
+  const waitlistedCount = (activeRegistrations.data ?? []).filter((row) => row.status === "waitlisted").length;
+  const availablePlaces = Math.max(0, Number(activity.data.max_participants ?? 0) - registeredCount);
+  const requestCapacity = availablePlaces + (waitlistedCount === 0 ? 1 : 0);
+  if (childIds.length > requestCapacity) return Response.json({ error: waitlistedCount > 0 && availablePlaces === 0 ? "רשימת ההמתנה לפעילות כבר מלאה." : "ניתן לצרף רק ילד אחד לרשימת ההמתנה." }, { status: 409 });
   const existing = await admin.from("mentor_activity_registrations").select("child_id,status").eq("activity_id", activityId).in("child_id", childIds).in("status", ["registered", "waitlisted"]);
   if (existing.error) return Response.json({ error: "לא ניתן לבדוק הרשמות קיימות כרגע." }, { status: 500 });
-  if (existing.data?.length) return Response.json({ error: "אחד הילדים כבר רשום לפעילות או נמצא ברשימת ההמתנה." }, { status: 409 });
+  if (existing.data?.length) {
+    const waiting = existing.data.some((row) => row.status === "waitlisted");
+    return Response.json({ error: waiting ? "הילד כבר רשום ברשימת ההמתנה לפעילות." : "הילד כבר רשום לפעילות." }, { status: 409 });
+  }
   const result = await admin.rpc("register_children_for_activity", { p_activity_id: activityId, p_parent_user_id: user.id, p_child_ids: childIds, p_idempotency_keys: keys });
   const message = result.error?.message ?? "";
   if (message.includes("CHILD_ALREADY_REGISTERED")) return Response.json({ error: "אחד הילדים כבר רשום לפעילות." }, { status: 409 });
+  if (message.includes("ACTIVITY_WAITLIST_FULL")) return Response.json({ error: "רשימת ההמתנה לפעילות כבר מלאה." }, { status: 409 });
   if (message.includes("REGISTRATION_CLOSED") || message.includes("ACTIVITY_NOT_AVAILABLE") || message.includes("ACTIVITY_ALREADY_STARTED")) return Response.json({ error: "ההרשמה לפעילות אינה זמינה עוד." }, { status: 422 });
   if (message.includes("CHILD_NOT_OWNED")) return Response.json({ error: "לא ניתן לרשום ילד שאינו שייך לחשבון." }, { status: 403 });
   if (result.error) return Response.json({ error: "לא ניתן להשלים את ההרשמה כרגע." }, { status: 500 });
