@@ -21,6 +21,7 @@ type Registration = Summary & {
   stage: "blocked_age" | "awaiting_email" | "incomplete" | "awaiting_parent_request" | "awaiting_parent_consent" | "ready_for_review" | "pending_review" | "active" | "inactive";
   stageLabel: string; lastCompletedStep: string; hasPendingSensitiveChanges: boolean;
   accountControlStatus: "active" | "suspended" | "blocked";
+  createdByAdministrator: boolean;
 };
 type Detail = {
   userId: string;
@@ -144,10 +145,10 @@ function QueueView({ registrations }: { registrations: Registration[] }) {
   const [query, setQuery] = useState("");
   const [showCreate,setShowCreate]=useState(false);
   const groups = {
-    new: registrations.filter((mentor) => ["blocked_age", "awaiting_email", "incomplete", "awaiting_parent_request", "awaiting_parent_consent", "ready_for_review"].includes(mentor.stage)),
+    new: registrations.filter((mentor) => !mentor.createdByAdministrator && ["blocked_age", "awaiting_email", "incomplete", "awaiting_parent_request", "awaiting_parent_consent", "ready_for_review"].includes(mentor.stage)),
     review: registrations.filter((mentor) => mentor.stage === "pending_review"),
     changes: registrations.filter((mentor) => mentor.hasPendingSensitiveChanges),
-    active: registrations.filter((mentor) => mentor.stage === "active" && !mentor.hasPendingSensitiveChanges && mentor.accountControlStatus === "active"),
+    active: registrations.filter((mentor) => (mentor.stage === "active" || mentor.createdByAdministrator) && !mentor.hasPendingSensitiveChanges && mentor.accountControlStatus === "active"),
     inactive: registrations.filter((mentor) => mentor.stage === "inactive" || mentor.accountControlStatus !== "active"),
   };
   const tabs = [

@@ -65,6 +65,13 @@ export async function PATCH(
     }
 
     const now = new Date();
+    if (actor === "parent" && action === "cancel" && current.status === "accepted") {
+      const startAt = current.confirmed_start_at ?? current.requested_start_at;
+      const hoursUntilMeeting = (new Date(startAt).getTime() - now.getTime()) / 3_600_000;
+      if (!Number.isFinite(hoursUntilMeeting) || hoursUntilMeeting < 24) {
+        return Response.json({ error: "לא ניתן לבטל פגישה פחות מ־24 שעות מראש. יש ליצור קשר ישירות עם החונך." }, { status: 422 });
+      }
+    }
     const update: Record<string, unknown> = { updated_at: now.toISOString() };
     let recipientId: string;
     let kind: string;
@@ -74,7 +81,7 @@ export async function PATCH(
       Object.assign(update, { status: "cancelled", cancelled_at: now.toISOString() });
       recipientId = current.mentor_user_id;
       kind = "meeting_request_cancelled";
-      title = "בקשת הפגישה בוטלה";
+      title = current.status === "accepted" ? "הפגישה בוטלה על ידי ההורה" : "בקשת הפגישה בוטלה";
     } else if (action === "decline") {
       Object.assign(update, {
         status: "declined",

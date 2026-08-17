@@ -92,10 +92,12 @@ export function Field({
   label,
   htmlFor,
   children,
+  required = false,
 }: {
   label: string;
   htmlFor?: string;
   children: ReactNode;
+  required?: boolean;
 }) {
   return (
     <div>
@@ -103,7 +105,7 @@ export function Field({
         htmlFor={htmlFor}
         className="mb-2 block font-bold text-slate-800"
       >
-        {label}
+        {label}{required ? <span className="mr-1 text-red-600" aria-hidden="true">*</span> : null}
       </label>
       {children}
     </div>

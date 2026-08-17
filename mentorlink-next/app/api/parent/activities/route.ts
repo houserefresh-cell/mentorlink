@@ -21,6 +21,11 @@ export async function GET(request: Request) {
     admin.from("parent_children").select("id, first_name").eq("parent_user_id", user.id),
   ]);
   if (sessions.error || registrations.error || profiles.error || subjects.error || publications.error || parentConsents.error || parentChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת הפעילויות." }, { status: 500 });
+  const participantIds = [...new Set((registrations.data ?? []).map((row) => row.child_id).filter(Boolean))];
+  const participantChildren = participantIds.length ? await admin.from("parent_children").select("id, first_name, last_name").in("id", participantIds) : { data: [], error: null };
+  if (participantChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת המשתתפים." }, { status: 500 });
+  const participantById = new Map((participantChildren.data ?? []).map((child) => [child.id, child]));
+  const displayName = (childId: string) => { const child = participantById.get(childId); const firstName = child?.first_name ?? "ילד/ה"; const initial = child?.last_name?.trim()?.charAt(0); return initial ? `${firstName} ${initial}׳` : firstName; };
   const publicActivities = (activities.data ?? []).flatMap((activity) => {
     const upcoming = (sessions.data ?? []).filter((session) => session.activity_id === activity.id);
     if (!upcoming.length) return [];
@@ -55,6 +60,8 @@ export async function GET(request: Request) {
       registrationUnavailableReason: allChildrenRegistered ? "הילדים כבר רשומים" : null,
       sessions: upcoming, registeredCount: registered,
       waitlistedCount: counts.filter((row) => row.status === "waitlisted").length,
+      registeredNames: counts.filter((row) => row.status === "registered").map((row) => displayName(row.child_id)),
+      waitlistedNames: counts.filter((row) => row.status === "waitlisted").map((row) => displayName(row.child_id)),
       availablePlaces: Math.max(0, Number(activity.max_participants ?? 0) - registered),
     }];
   });
