@@ -13,9 +13,13 @@ export async function POST(request: Request) {
   const childIds = Array.isArray(payload.childIds) ? payload.childIds.filter((value): value is string => typeof value === "string" && uuid.test(value)) : [];
   const keys = Array.isArray(payload.idempotencyKeys) ? payload.idempotencyKeys.filter((value): value is string => typeof value === "string" && uuid.test(value)) : [];
   if (!uuid.test(activityId) || !childIds.length || childIds.length !== keys.length || childIds.length > 10) return Response.json({ error: "יש לבחור לפחות ילד אחד." }, { status: 400 });
+  if (new Set(childIds).size !== childIds.length) return Response.json({ error: "לא ניתן לצרף את אותו הילד יותר מפעם אחת." }, { status: 409 });
   const admin = createSupabaseAdmin();
   const profile = await admin.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
   if (!profile.data?.phone) return Response.json({ error: "לפני הרשמה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
+  const existing = await admin.from("mentor_activity_registrations").select("child_id,status").eq("activity_id", activityId).in("child_id", childIds).in("status", ["registered", "waitlisted"]);
+  if (existing.error) return Response.json({ error: "לא ניתן לבדוק הרשמות קיימות כרגע." }, { status: 500 });
+  if (existing.data?.length) return Response.json({ error: "אחד הילדים כבר רשום לפעילות או נמצא ברשימת ההמתנה." }, { status: 409 });
   const result = await admin.rpc("register_children_for_activity", { p_activity_id: activityId, p_parent_user_id: user.id, p_child_ids: childIds, p_idempotency_keys: keys });
   const message = result.error?.message ?? "";
   if (message.includes("CHILD_ALREADY_REGISTERED")) return Response.json({ error: "אחד הילדים כבר רשום לפעילות." }, { status: 409 });

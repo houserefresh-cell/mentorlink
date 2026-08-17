@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   const notes = typeof payload.accommodationNotes === "string" ? payload.accommodationNotes.trim() : "";
   const schoolName = typeof payload.schoolName === "string" ? payload.schoolName.trim() : "";
   const interestIds = Array.isArray(payload.interestSubjectIds) ? [...new Set(payload.interestSubjectIds.map(Number).filter((value) => Number.isInteger(value) && value > 0))] : [];
-  if (firstName.length < 1 || firstName.length > 60 || notes.length > 1000) return Response.json({ error: "יש לבדוק את פרטי הילד/ה." }, { status: 400 });
+  if (firstName.length < 1 || firstName.length > 60 || !grade || !birthDate || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
   if (schoolName.length === 1 || schoolName.length > 120) return Response.json({ error: "שם בית הספר אינו תקין." }, { status: 400 });
   const admin = createSupabaseAdmin();
   const removedMatch = await admin.from("parent_children")
@@ -78,7 +78,7 @@ export async function PATCH(request: Request) {
   const notes = typeof payload.accommodationNotes === "string" ? payload.accommodationNotes.trim() : "";
   const schoolName = typeof payload.schoolName === "string" ? payload.schoolName.trim() : "";
   const interestIds = Array.isArray(payload.interestSubjectIds) ? [...new Set(payload.interestSubjectIds.map(Number).filter((value) => Number.isInteger(value) && value > 0))] : [];
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !firstName || firstName.length > 60 || notes.length > 1000) return Response.json({ error: "יש לבדוק את פרטי הילד/ה." }, { status: 400 });
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !firstName || firstName.length > 60 || !grade || !birthDate || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
   if (schoolName.length === 1 || schoolName.length > 120) return Response.json({ error: "שם בית הספר אינו תקין." }, { status: 400 });
   const admin = createSupabaseAdmin();
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: id, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });

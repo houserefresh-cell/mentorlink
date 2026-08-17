@@ -137,8 +137,12 @@ export async function GET(request: Request) {
     } else {
       const ids = [...new Set(rows.map((row) => row.parent_user_id))];
       if (ids.length) {
-        const profiles = await client.from("parent_profiles").select("user_id, phone").in("user_id", ids);
-        for (const profile of profiles.data ?? []) if (profile.phone) phones.set(profile.user_id, profile.phone);
+        const profiles = await client.from("parent_profiles").select("user_id, first_name, last_name, phone").in("user_id", ids);
+        for (const profile of profiles.data ?? []) {
+          const initial = Array.from(profile.last_name?.trim() ?? "")[0];
+          names.set(profile.user_id, `${profile.first_name ?? "הורה"}${initial ? ` ${initial}׳` : ""}`);
+          if (profile.phone) phones.set(profile.user_id, profile.phone);
+        }
       }
     }
     let schedulingMentorBookingId: string | null = null;
@@ -151,6 +155,7 @@ export async function GET(request: Request) {
       requests: rows.map(({ mentor_user_id, parent_user_id, ...row }) => ({
         ...row,
         ...(user.role === "parent" ? { mentor_display_name: names.get(mentor_user_id) ?? "חונך/ת" } : {}),
+        ...(user.role === "mentor" ? { parent_display_name: names.get(parent_user_id) ?? "הורה" } : {}),
         contact_phone: phones.get(user.role === "parent" ? mentor_user_id : parent_user_id) ?? null,
       })),
     }, { headers: { "Cache-Control": "no-store" } });

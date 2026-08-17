@@ -22,6 +22,9 @@ test("multi-child registration is atomic, capacity locked and ownership checked"
   assert.match(migration, /v_registered_count < v_activity\.max_participants/);
   assert.match(migration, /then 'registered' else 'waitlisted'/);
   assert.match(migration, /DUPLICATE_CHILD_SELECTION/);
+  assert.match(registrationApi, /new Set\(childIds\)\.size !== childIds\.length/);
+  assert.match(registrationApi, /\.in\("status", \["registered", "waitlisted"\]\)/);
+  assert.match(registrationApi, /כבר רשום לפעילות או נמצא ברשימת ההמתנה/);
 });
 
 test("parent APIs enforce role and avoid exposing exact home addresses", () => {
@@ -79,8 +82,10 @@ test("family registration state does not falsely close an open activity", () => 
   assert.match(activityApi, /registeredChildNames/);
   assert.match(activityApi, /allChildrenRegistered,/);
   assert.match(discovery, /registeredChildrenLabel\(activity\.registeredChildNames\)/);
-  assert.match(discovery, /activity\.registrationOpen&&!activity\.allChildrenRegistered/);
-  assert.match(discovery, /הילדים כבר רשומים/);
+  assert.match(discovery, /function activityAction/);
+  assert.match(discovery, /availableChildren\.length/);
+  assert.match(discovery, /כל הילדים כבר רשומים או ממתינים/);
+  assert.match(discovery, /צירוף ילד נוסף לרשימת ההמתנה/);
 });
 
 test("mentor cards provide direct access to their activities and registration cards", () => {
