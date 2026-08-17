@@ -29,6 +29,7 @@ export type AvailabilityWindow = {
   effective_start_date: string | null;
   effective_end_date: string | null;
   timezone: string;
+  meeting_price?: number;
   subjects?: string[];
 };
 
@@ -38,6 +39,7 @@ export type BookableSlot = {
   meetingMode: string;
   durations: number[];
   subjects: string[];
+  meetingPrice: number;
 };
 
 function addDays(date: string, days: number) {
@@ -103,6 +105,7 @@ export function generateBookableSlots(input: {
             meetingMode: window.meeting_mode,
             durations,
             subjects: window.subjects ?? [],
+            meetingPrice: window.meeting_price ?? 0,
           });
         }
       }

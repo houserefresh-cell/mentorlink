@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Slot = { startAt: string; meetingMode: string; durations: number[]; subjects: string[] };
+type Slot = { startAt: string; meetingMode: string; meetingPrice: number; durations: number[]; subjects: string[] };
 type ParentChild = { id: string; first_name: string; grade: string | null; default_mentor_message: string | null; auto_include_mentor_message: boolean };
 type Config = {
   mentor: {
@@ -210,7 +210,7 @@ export default function MeetingRequestFlow({
                 </div>{children.length > 0 && <p className="mt-2 text-sm font-bold text-slate-600">בחירת ילד ממלאת אוטומטית את השם והכיתה. עדיין אפשר לעדכן ידנית לפני השליחה.</p>}</fieldset>
                 <Field label="ו. במה נדרשת עזרה"><textarea value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={500} rows={3} /></Field>
                 <Field label="ז. הודעה קצרה לחונך (לא חובה)"><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={500} rows={2} /></Field>
-                {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>{childName} · {grade}</p></div>}
+                {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>עלות הפגישה: {slot.meetingPrice ? `${slot.meetingPrice} ₪` : "ללא עלות"}</p><p>{childName} · {grade}</p></div>}
                 {hasSelectableSlots && !slot && mode && <p role="status" className="rounded-xl bg-amber-50 p-3 font-bold text-amber-900">יש לבחור מועד לפגישה.</p>}
                 {!complete && <div role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black">כדי לשלוח את הבקשה:</p><ul className="mt-2 list-inside list-disc text-sm text-slate-700">{missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></div>}
                 <button type="button" disabled={!complete || busy || submitted} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-400">{submitted ? "הבקשה נשלחה" : busy ? "שולח..." : "שליחת בקשת פגישה"}</button>

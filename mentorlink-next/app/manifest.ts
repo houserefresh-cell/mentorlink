@@ -12,6 +12,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#1d4ed8",
     dir: "rtl",
     lang: "he",
-    icons: [{ src: "/mentorlink-logo.png", sizes: "512x512", type: "image/png", purpose: "maskable" }],
+    icons: [
+      { src: "/mentorlink-icon-192-v2.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/mentorlink-icon-512-v2.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ],
   };
 }

@@ -7,14 +7,6 @@ function availabilityDiagnostic(stage: string, ok: boolean, code: string) {
   console.info("Mentor availability", { stage, ok, code });
 }
 
-async function requirePublishedMentor(userId: string) {
-  const publication = await createSupabaseAdmin().from("mentor_publication").select("status").eq("user_id", userId).maybeSingle();
-  if (publication.error || publication.data?.status !== "published") {
-    return Response.json({ error: "ניתן לפרסם זמינות רק לאחר השלמת ההרשמה, אישור המנהל ופרסום החונך.", code: "MENTOR_NOT_PUBLISHED" }, { status: 403 });
-  }
-  return null;
-}
-
 export async function GET(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
@@ -50,8 +42,6 @@ export async function POST(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
-  const publicationError = await requirePublishedMentor(user.id);
-  if (publicationError) return publicationError;
   let payload: Record<string, unknown>;
   try { payload = await request.json(); }
   catch { return Response.json({ error: "בקשה לא תקינה.", code: "INVALID_REQUEST" }, { status: 400 }); }
@@ -103,8 +93,6 @@ export async function PATCH(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
-  const publicationError = await requirePublishedMentor(user.id);
-  if (publicationError) return publicationError;
   let payload: Record<string, unknown>;
   try { payload = await request.json(); } catch { return Response.json({ error: "בקשה לא תקינה.", code: "INVALID_REQUEST" }, { status: 400 }); }
   const id = clean(payload.id, 36);
@@ -152,8 +140,6 @@ export async function DELETE(request: Request) {
   const user = await authenticateMeetingUser(request.headers.get("authorization"));
   if (!user) return Response.json({ error: "Authentication required", code: "AUTH_REQUIRED" }, { status: 401 });
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
-  const publicationError = await requirePublishedMentor(user.id);
-  if (publicationError) return publicationError;
   const url = new URL(request.url); const id = url.searchParams.get("id") ?? ""; const type = url.searchParams.get("type");
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "Invalid id", code: "INVALID_ID" }, { status: 400 });
   try {
@@ -172,8 +158,9 @@ export async function DELETE(request: Request) {
 function validateWindow(payload: Record<string, unknown>) {
   const weekday = Number(payload.weekday); const startTime = clean(payload.startTime, 8); const endTime = clean(payload.endTime, 8); const meetingMode = clean(payload.meetingMode, 20);
   const durations = Array.isArray(payload.durations) ? payload.durations.map(Number).filter(isMeetingDuration) : [];
-  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime || !MEETING_MODES.includes(meetingMode as never) || !durations.length) return null;
-  return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
+  const meetingPrice = Number(payload.meetingPrice ?? 0);
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime || !MEETING_MODES.includes(meetingMode as never) || !durations.length || ![0, 10, 20, 30].includes(meetingPrice)) return null;
+  return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, meeting_price: meetingPrice, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
 }
 function clean(value: unknown, maximum: number) { return typeof value === "string" && value.trim().length <= maximum ? value.trim() : ""; }
 

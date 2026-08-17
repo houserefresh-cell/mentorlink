@@ -15,6 +15,7 @@ type Meeting = {
   child_grade_or_age: string;
   help_goal: string;
   meeting_mode: string;
+  meeting_price: number;
   requested_start_at: string;
   requested_duration_minutes: number;
   parent_message: string | null;
@@ -229,6 +230,7 @@ function RequestList({ requests, empty, ...props }: ListProps & { empty: string 
 }
 
 function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext, updateDetails }: Omit<ListProps, "requests"> & { item: Meeting }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const confirmedStart = item.confirmed_start_at;
   const confirmedDuration = item.confirmed_duration_minutes;
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
@@ -244,6 +246,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_grade_or_age}</p>}
       {role === "mentor" && <p className="mt-2 font-black text-slate-900">הורה: {item.parent_display_name ?? "הורה"}</p>}
       <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
+      <div className="mt-2 grid gap-2 rounded-xl bg-white/80 p-3 text-sm sm:grid-cols-2"><p><b>מיקום:</b> {item.meeting_location || (item.meeting_mode === "אונליין" ? "קישור יימסר לאחר האישור" : "טרם נקבע")}</p><p><b>עלות:</b> {item.meeting_price ? `${item.meeting_price} ₪` : "ללא עלות"}</p></div>
       <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(displayedStart)}</p><p className="mt-1 font-bold">אורך המפגש: {displayedDuration} דקות</p></div>
       {item.proposed_start_at && item.proposed_duration_minutes ? (
         <p className="mt-2 rounded-xl bg-amber-50 p-3 font-bold text-amber-950">המועד החלופי: {formatDate(item.proposed_start_at)} · {item.proposed_duration_minutes} דקות</p>
@@ -252,7 +255,8 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         <p className="mt-2 rounded-xl bg-emerald-50 p-3 font-black text-emerald-900">המועד שאושר: {formatDate(confirmedStart)} · {confirmedDuration} דקות</p>
       ) : null}
       {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
-      <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-slate-800">
+      <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((value) => !value)} className="mt-3 min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 font-black text-blue-800">{detailsOpen ? "סגירת פרטי המפגש" : "פרטי המפגש המלאים"}</button>
+      {detailsOpen && <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-slate-800">
         <p><b>מטרת המפגש:</b> {item.help_goal}</p>
         <p><b>הבקשה נשלחה:</b> {formatDate(item.created_at)}</p>
         {item.parent_message && <p><b>הודעת ההורה:</b> {item.parent_message}</p>}
@@ -261,7 +265,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         {item.equipment_notes && <p><b>מה להביא:</b> {item.equipment_notes}</p>}
         {item.meeting_location && <p><b>מיקום או קישור:</b> {item.meeting_location}</p>}
         {item.participant_names?.length > 0 && <p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}
-      </div>
+      </div>}
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
         {item.contact_phone && <>

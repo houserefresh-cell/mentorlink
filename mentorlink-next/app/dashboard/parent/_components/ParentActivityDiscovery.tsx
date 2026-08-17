@@ -80,6 +80,7 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
   const recommendedMentors = useMemo(() => { const child = children.find((item) => item.id === selectedChild); if (!child?.grade) return mentors; const label = gradeLabels[child.grade]; return [...mentors].sort((left, right) => Number(right.ageGroups.some((value) => value.includes(label))) - Number(left.ageGroups.some((value) => value.includes(label)))); }, [children, mentors, selectedChild]);
   const mentorActivities = useMemo(() => activities.reduce<Record<string, {id:string;title:string;subjectName:string;nextStartAt:string|null;registrationOpen:boolean}[]>>((groups, activity) => { if (!activity.mentorBookingId) return groups; (groups[activity.mentorBookingId] ??= []).push({ id: activity.id, title: activity.title, subjectName: activity.subjectName, nextStartAt: activity.sessions[0]?.starts_at ?? null, registrationOpen: activity.registrationOpen }); return groups; }, {}), [activities]);
   const activityChildStatus = (activityId: string, childId: string) => registrationState.get(activityId)?.get(childId) ?? null;
+  const registrationCapacity = (activity: Activity) => Math.max(0, activity.availablePlaces) + (activity.waitlistedCount === 0 ? 1 : 0);
 
   async function register() {
     if (!registering || !selectedIds.length) return setMessage("יש לבחור לפחות ילד אחד.");
@@ -105,11 +106,13 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
       const status = activityChildStatus(registering.id, child.id);
       const locked = status === "registered" || status === "waitlisted";
       const disableReason = status === "registered" ? "כבר רשום/ה" : status === "waitlisted" ? "כבר ברשימת ההמתנה" : null;
-      return <label key={child.id} className={`flex items-center gap-3 rounded-xl border p-4 ${locked ? "bg-slate-100 opacity-70" : "cursor-pointer"}`}>
-        <input type="checkbox" disabled={locked} checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} />
+      const selectionLimitReached = !selectedIds.includes(child.id) && selectedIds.length >= registrationCapacity(registering);
+      return <label key={child.id} className={`flex items-center gap-3 rounded-xl border p-4 ${locked || selectionLimitReached ? "bg-slate-100 opacity-70" : "cursor-pointer"}`}>
+        <input type="checkbox" disabled={locked || selectionLimitReached} checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} />
         <span className="font-black">{child.first_name}</span>
         <span className="text-sm text-slate-500">{child.grade ? `כיתה ${gradeLabels[child.grade]}` : "ללא כיתה"}</span>
         {disableReason && <span className="text-sm font-black text-slate-700">{disableReason}</span>}
+        {!disableReason && selectionLimitReached && <span className="text-sm font-black text-slate-700">אין מקום נוסף בהרשמה או ברשימת ההמתנה</span>}
       </label>;
     })}</div> : <p className="rounded-xl bg-amber-50 p-4">לפני ההרשמה יש להוסיף ילד/ה לחשבון.</p>}<button onClick={() => setShowAddChild(true)} className="mt-4 font-bold text-blue-700 underline">+ הוספת ילד/ה</button>{(() => {
       const selectableIds = selectedIds.filter((id) => {
@@ -148,5 +151,6 @@ function activityAction(activity: Activity, children: Child[], registrationState
   if (!availableChildren.length) return { label: "כל הילדים כבר רשומים או ממתינים", enabled: false };
   const additional = alreadyRegistered.length > 0;
   if (activity.availablePlaces > 0) return { label: additional ? "צירוף ילד נוסף לפעילות" : "הצטרף לפעילות", enabled: true };
+  if (activity.waitlistedCount > 0) return { label: "רשימת ההמתנה מלאה", enabled: false };
   return { label: additional ? "צירוף ילד נוסף לרשימת ההמתנה" : "הרשמת ילד לרשימת ההמתנה", enabled: true };
 }
