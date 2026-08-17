@@ -145,6 +145,15 @@ export default function MentorOnboardingPage() {
     return Math.round((requirements.filter(Boolean).length / requirements.length) * 100);
   }, [consentStatus, emailConfirmed, isMinor, requiredProfileChecks]);
 
+  function continueAfterPhoto() {
+    setMessage(null);
+    if (isMinor === true && consentStatus !== "approved") {
+      router.push("/dashboard/mentor/parent-consent");
+      return;
+    }
+    setActiveStep(6);
+  }
+
   function getConsentStatusLabel(status: string, minor: boolean | null) {
     if (minor === false) return "לא נדרש";
     switch (status) {
@@ -625,7 +634,7 @@ export default function MentorOnboardingPage() {
     setPhotoPreviewUrl(data?.signedUrl ?? "");
     setMessage({ type: "success", text: "תמונת הפרופיל נשמרה בהצלחה." });
     setPhotoBusy(false);
-    setActiveStep(6);
+    continueAfterPhoto();
   }
 
   async function removePhoto() {
@@ -733,28 +742,29 @@ export default function MentorOnboardingPage() {
         {activeStep === 0 && (
           <form onSubmit={saveProfile} className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
-              <Field label="שם פרטי" htmlFor="firstName"><input id="firstName" required value={firstName} onChange={(event) => setFirstName(event.target.value)} className={inputClassName} /></Field>
-              <Field label="שם משפחה" htmlFor="lastName"><input id="lastName" required value={lastName} onChange={(event) => setLastName(event.target.value)} className={inputClassName} /></Field>
+              <Field label="שם פרטי" htmlFor="firstName" required><input id="firstName" required value={firstName} onChange={(event) => setFirstName(event.target.value)} className={inputClassName} /></Field>
+              <Field label="שם משפחה" htmlFor="lastName" required><input id="lastName" required value={lastName} onChange={(event) => setLastName(event.target.value)} className={inputClassName} /></Field>
             </div>
             <div className="grid gap-5 md:grid-cols-2">
-              <Field label="תאריך לידה" htmlFor="birthDate"><input id="birthDate" type="date" required value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className={inputClassName} /></Field>
+              <Field label="תאריך לידה" htmlFor="birthDate" required><input id="birthDate" type="date" required value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className={inputClassName} /></Field>
               <Field label="כיתה / מסגרת" htmlFor="grade"><input id="grade" value={grade} onChange={(event) => setGrade(event.target.value)} className={inputClassName} /></Field>
             </div>
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="בית ספר" htmlFor="school"><input id="school" value={school} onChange={(event) => setSchool(event.target.value)} className={inputClassName} /></Field>
-              <Field label="עיר" htmlFor="city"><input id="city" value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
+              <Field label="עיר" htmlFor="city" required><input id="city" required value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
             </div>
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="טלפון" htmlFor="phone"><input id="phone" type="tel" dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} className={`${inputClassName} text-left`} /></Field>
-              <Field label="שפות" htmlFor="languages"><input id="languages" required value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="למשל: עברית, אנגלית" className={inputClassName} /></Field>
+              <Field label="שפות" htmlFor="languages" required><input id="languages" required value={languages} onChange={(event) => setLanguages(event.target.value)} placeholder="למשל: עברית, אנגלית" className={inputClassName} /></Field>
             </div>
-            <Field label="קצת עליי" htmlFor="bio"><textarea id="bio" rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
+            <Field label="קצת עליי" htmlFor="bio" required><textarea id="bio" required rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
             <SavePanel saving={saving} message={message} label="שמירה והמשך" />
           </form>
         )}
 
         {activeStep === 1 && (
           <form onSubmit={saveSubjects} className="space-y-6">
+            <p className="font-bold text-slate-800">בחרו לפחות תחום אחד <span className="text-red-600" aria-hidden="true">*</span></p>
             <div className="grid gap-5 lg:grid-cols-2">
               {subjects.map((subject) => {
                 const isSelected = selectedSubjects[subject.id] !== undefined;
@@ -773,8 +783,8 @@ export default function MentorOnboardingPage() {
                     </label>
                     {isSelected && (
                       <div className="mt-5 border-t border-slate-100 pt-5">
-                        {subject.name === "אחר" && <Field label="מהו התחום?" htmlFor="customSubject"><input id="customSubject" value={customSubject} onChange={(event) => setCustomSubject(event.target.value)} required className={inputClassName} /></Field>}
-                        <p className="mb-3 font-bold">שכבות גיל</p>
+                        {subject.name === "אחר" && <Field label="מהו התחום?" htmlFor="customSubject" required><input id="customSubject" value={customSubject} onChange={(event) => setCustomSubject(event.target.value)} required className={inputClassName} /></Field>}
+                        <p className="mb-3 font-bold">שכבות גיל <span className="text-red-600" aria-hidden="true">*</span></p>
                         <ChoicePills options={[...AGE_GROUPS]} selected={selectedSubjects[subject.id] ?? []} onToggle={(value) => setSelectedSubjects((current) => ({ ...current, [subject.id]: toggleValue(current[subject.id] ?? [], value) }))} />
                       </div>
                     )}
@@ -789,16 +799,16 @@ export default function MentorOnboardingPage() {
         {activeStep === 2 && (
           <form onSubmit={saveLocations} className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
-              <Field label="עיר" htmlFor="locationCity"><input id="locationCity" required value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
+              <Field label="עיר" htmlFor="locationCity" required><input id="locationCity" required value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
               <Field label="שכונות או אזורים" htmlFor="activityAreas"><input id="activityAreas" value={activityAreas} onChange={(event) => setActivityAreas(event.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
             </div>
             <div>
-              <h3 className="mb-3 font-bold">בתי ספר מועדפים</h3>
+              <h3 className="mb-3 font-bold">בתי ספר מועדפים <span className="text-red-600" aria-hidden="true">*</span></h3>
               <ChoicePills options={[...SCHOOLS]} selected={locationsSchools} onToggle={(value) => setLocationsSchools(toggleValue(locationsSchools, value))} />
             </div>
-            {locationsSchools.includes("בית ספר אחר") && <Field label="שם בית הספר האחר" htmlFor="customSchool"><input id="customSchool" required value={customSchool} onChange={(event) => setCustomSchool(event.target.value)} className={inputClassName} /></Field>}
+            {locationsSchools.includes("בית ספר אחר") && <Field label="שם בית הספר האחר" htmlFor="customSchool" required><input id="customSchool" required value={customSchool} onChange={(event) => setCustomSchool(event.target.value)} className={inputClassName} /></Field>}
             <div>
-              <h3 className="mb-3 font-bold">מקומות מפגש</h3>
+              <h3 className="mb-3 font-bold">מקומות מפגש <span className="text-red-600" aria-hidden="true">*</span></h3>
               <ChoicePills options={[...PLACES]} selected={meetingPlaces} onToggle={(value) => setMeetingPlaces(toggleValue(meetingPlaces, value))} />
             </div>
             <SavePanel saving={saving} message={message} label="שמירה והמשך" />
@@ -807,6 +817,7 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 3 && (
           <form onSubmit={saveAvailability} className="space-y-6">
+            <p className="font-bold text-slate-800">יש לבחור לפחות טווח זמינות אחד או זמינות גמישה <span className="text-red-600" aria-hidden="true">*</span></p>
             <div className="space-y-4">
               {DAYS.map((day) => {
                 const ranges = schedule[day];
@@ -853,25 +864,25 @@ export default function MentorOnboardingPage() {
               <input type="checkbox" checked={hasPrevious} onChange={(event) => setHasPrevious(event.target.checked)} className="h-5 w-5 accent-blue-600" />
               יש לי ניסיון קודם בחונכות
             </label>
-            {hasPrevious && <Field label="פירוט ניסיון קודם" htmlFor="details"><textarea id="details" rows={4} value={details} onChange={(event) => setDetails(event.target.value)} className={inputClassName} /></Field>}
-            <Field label="תיאור קצר עליי" htmlFor="bio"><textarea id="bio" rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
+            {hasPrevious && <Field label="פירוט ניסיון קודם" htmlFor="details" required><textarea id="details" required rows={4} value={details} onChange={(event) => setDetails(event.target.value)} className={inputClassName} /></Field>}
+            <Field label="תיאור קצר עליי" htmlFor="bio" required><textarea id="bio" required rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
             <div>
               <h3 className="mb-3 font-bold">תחומי ניסיון נוספים</h3>
               <ChoicePills options={[...EXPERIENCES]} selected={experienceTypes} onToggle={(value) => setExperienceTypes(toggleValue(experienceTypes, value))} />
             </div>
             <Field label="קורסים / תעודות" htmlFor="courses"><textarea id="courses" rows={3} value={courses} onChange={(event) => setCourses(event.target.value)} className={inputClassName} /></Field>
             <Field label="תחומי חוזקה" htmlFor="strengths"><input id="strengths" value={strengths} onChange={(event) => setStrengths(event.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
-            <Field label="מה חשוב לי בקשר עם החניך" htmlFor="values"><textarea id="values" rows={4} value={values} onChange={(event) => setValues(event.target.value)} className={inputClassName} /></Field>
-            <Field label="מדוע אני רוצה להיות חונך/ת" htmlFor="motivation"><textarea id="motivation" rows={4} value={motivation} onChange={(event) => setMotivation(event.target.value)} className={inputClassName} /></Field>
+            <Field label="מה חשוב לי בקשר עם החניך" htmlFor="values" required><textarea id="values" required rows={4} value={values} onChange={(event) => setValues(event.target.value)} className={inputClassName} /></Field>
+            <Field label="מדוע אני רוצה להיות חונך/ת" htmlFor="motivation" required><textarea id="motivation" required rows={4} value={motivation} onChange={(event) => setMotivation(event.target.value)} className={inputClassName} /></Field>
             <div>
-              <h3 className="mb-3 font-bold">סוגי חונכות</h3>
+              <h3 className="mb-3 font-bold">סוגי חונכות <span className="text-red-600" aria-hidden="true">*</span></h3>
               <ChoicePills options={[...MENTORING_TYPES]} selected={mentoringTypes} onToggle={(value) => setMentoringTypes(toggleValue(mentoringTypes, value))} />
             </div>
             <div>
               <h3 className="mb-3 font-bold">העדפות התאמה</h3>
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-3 font-bold">שכבות גיל</h4>
+                  <h4 className="mb-3 font-bold">שכבות גיל <span className="text-red-600" aria-hidden="true">*</span></h4>
                   <ChoicePills options={[...AGES]} selected={preferredAges} onToggle={(value) => setPreferredAges(toggleValue(preferredAges, value))} />
                 </div>
                 <Field label="מגדר מועדף" htmlFor="preferredGender"><select id="preferredGender" value={preferredGender} onChange={(event) => setPreferredGender(event.target.value)} className={inputClassName}><option>אין העדפה</option><option>בן</option><option>בת</option></select></Field>
@@ -882,11 +893,11 @@ export default function MentorOnboardingPage() {
               </div>
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-3 font-bold">אופן המפגש</h4>
+                  <h4 className="mb-3 font-bold">אופן המפגש <span className="text-red-600" aria-hidden="true">*</span></h4>
                   <ChoicePills options={[...MODES]} selected={meetingModes} onToggle={(value) => setMeetingModes(toggleValue(meetingModes, value))} />
                 </div>
                 <div>
-                  <h4 className="mb-3 font-bold">מבנה המפגש</h4>
+                  <h4 className="mb-3 font-bold">מבנה המפגש <span className="text-red-600" aria-hidden="true">*</span></h4>
                   <ChoicePills options={[...FORMATS]} selected={sessionFormats} onToggle={(value) => setSessionFormats(toggleValue(sessionFormats, value))} />
                 </div>
               </div>
@@ -902,6 +913,7 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 5 && (
           <div className="space-y-6">
+            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700"><b>תמונת פרופיל אינה חובה.</b> אפשר להעלות תמונה עכשיו או להמשיך בלעדיה ולעדכן אותה בהמשך.</p>
             <div className="rounded-3xl border border-blue-100 bg-blue-50 p-6 text-center">
               <div className="mx-auto mb-6 flex h-40 w-40 items-center justify-center overflow-hidden rounded-full border-4 border-blue-200 bg-white">
                 {photoPreviewUrl ? <Image src={photoPreviewUrl} alt="תצוגה מקדימה של תמונת הפרופיל" width={160} height={160} unoptimized className="h-full w-full object-cover" /> : <span className="text-center text-sm font-bold text-slate-500">טרם הועלתה תמונה</span>}
@@ -912,7 +924,9 @@ export default function MentorOnboardingPage() {
               </label>
               {storedPhotoPath && <button type="button" onClick={removePhoto} disabled={photoBusy} className="ml-3 rounded-xl border border-red-200 px-6 py-3 font-bold text-red-700">הסרת תמונה</button>}
             </div>
-            <SavePanel saving={photoBusy} message={message} label="שמירה והמשך" />
+            <div className="mt-8 rounded-3xl border border-blue-100 bg-white p-6 shadow-lg">
+              <button type="button" disabled={photoBusy} onClick={continueAfterPhoto} className="w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-400">{storedPhotoPath ? "שמירה והמשך" : "המשך ללא תמונה"}</button>
+            </div>
           </div>
         )}
 

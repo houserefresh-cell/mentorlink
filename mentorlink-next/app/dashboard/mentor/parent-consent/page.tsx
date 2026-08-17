@@ -342,7 +342,7 @@ export default function ParentConsentPage() {
       >
         <fieldset disabled={locked || saving} className="space-y-6">
           <div className="grid gap-5 md:grid-cols-2">
-            <Field label="שם מלא של ההורה" htmlFor="parentName">
+            <Field label="שם מלא של ההורה" htmlFor="parentName" required>
               <input
                 id="parentName"
                 required
@@ -352,7 +352,7 @@ export default function ParentConsentPage() {
               />
             </Field>
 
-            <Field label="קרבה לחונך" htmlFor="relationship">
+            <Field label="קרבה לחונך" htmlFor="relationship" required>
               <select
                 id="relationship"
                 value={relationship}
@@ -366,7 +366,7 @@ export default function ParentConsentPage() {
               </select>
             </Field>
 
-            <Field label="מספר טלפון" htmlFor="parentPhone">
+            <Field label="מספר טלפון" htmlFor="parentPhone" required>
               <input
                 id="parentPhone"
                 type="tel"
@@ -378,7 +378,7 @@ export default function ParentConsentPage() {
               />
             </Field>
 
-            <Field label="כתובת אימייל" htmlFor="parentEmail">
+            <Field label="כתובת אימייל" htmlFor="parentEmail" required>
               <input
                 id="parentEmail"
                 type="email"
@@ -481,7 +481,7 @@ export default function ParentConsentPage() {
         </div>
         <button
           type="button"
-          onClick={() => router.push("/register/mentor?step=summary")}
+          onClick={() => router.push("/dashboard/mentor/onboarding?step=summary")}
           className="mt-5 rounded-xl border border-blue-300 bg-white px-6 py-3 font-extrabold text-blue-800 transition hover:border-blue-500 hover:bg-blue-50"
         >
           חזרה לסיכום ההרשמה

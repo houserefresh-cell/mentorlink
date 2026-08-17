@@ -142,7 +142,7 @@ export function canTransition(
   action: string,
 ) {
   if (actor === "parent") {
-    if (status === "pending") return action === "cancel";
+    if (["pending", "accepted"].includes(status)) return action === "cancel";
     if (status === "alternative_proposed") {
       return ["accept_alternative", "decline_alternative"].includes(action);
     }

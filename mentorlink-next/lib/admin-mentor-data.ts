@@ -36,6 +36,7 @@ export type MentorRegistrationSummary = MentorSummary & {
   lastCompletedStep: string;
   hasPendingSensitiveChanges: boolean;
   accountControlStatus: "active" | "suspended" | "blocked";
+  createdByAdministrator: boolean;
 };
 export type AdminMentorDetail = {
   userId: string;
@@ -131,6 +132,7 @@ export async function getAllMentorRegistrations(
       lastCompletedStep: completed.at(-1) ?? "יצירת חשבון",
       hasPendingSensitiveChanges: sensitiveIds.has(user.id),
       accountControlStatus: (controls.get(user.id)?.status as "active" | "suspended" | "blocked" | undefined) ?? "active",
+      createdByAdministrator: user.user_metadata?.created_by_administrator === true,
     };
   }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }

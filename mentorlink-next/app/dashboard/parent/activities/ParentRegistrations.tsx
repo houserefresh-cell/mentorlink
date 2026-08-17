@@ -37,6 +37,7 @@ type Registration = {
     accessibility_options: string[] | null;
     accessibility_other: string | null;
     registeredNames: string[];
+    waitlistedNames: string[];
   } | null;
   sessions: { starts_at: string; ends_at: string; estimated_overrun: string | null }[];
 };
@@ -183,6 +184,7 @@ export default function ParentRegistrations() {
                     <Info label="פרטי הפעילות" value={`${[row.activity?.mentor_first_name, row.activity?.mentor_last_name].filter(Boolean).join(" ") || "חונך טרם נקבע"} · ${[row.activity?.venue_name, row.activity?.location_details].filter(Boolean).join(" · ") || locationLabels[row.activity?.location_type ?? "other"] || "מיקום טרם נקבע"}`} />
                   </div>
                   {(row.activity?.registeredNames?.length ?? 0) > 0 && <p className="mt-3 rounded-xl bg-violet-50 p-3 text-sm text-violet-950"><b>הילדים הרשומים:</b> {row.activity?.registeredNames.join(" · ")}</p>}
+                  {(row.activity?.waitlistedNames?.length ?? 0) > 0 && <p className="mt-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-950"><b>ברשימת ההמתנה:</b> {row.activity?.waitlistedNames.join(" · ")}</p>}
                   <p className={`mt-3 rounded-xl p-3 text-sm font-black ${(row.activity?.registeredCount ?? 0) >= (row.activity?.min_participants ?? 0) ? "bg-blue-50 text-blue-900" : "bg-amber-50 text-amber-950"}`}>{(row.activity?.registeredCount ?? 0) >= (row.activity?.min_participants ?? 0) ? "יש מספיק משתתפים לקיום הפעילות" : `הפעילות עדיין מותנית בהרשמת ${(row.activity?.min_participants ?? 0) - (row.activity?.registeredCount ?? 0)} משתתפים נוספים`}</p>
                   <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-700"><span className="rounded-full bg-slate-100 px-3 py-2">{row.activity?.is_free ? "ללא עלות" : `${row.activity?.price ?? 0} ₪`}</span>{(row.activity?.pickup_options?.length ?? 0) > 0 && <span className="rounded-full bg-cyan-50 px-3 py-2 text-cyan-900">כולל אפשרות איסוף</span>}</div>
 
@@ -236,6 +238,8 @@ export default function ParentRegistrations() {
               <Detail title="כמות" value={`${details.activity?.min_participants ?? 0}–${details.activity?.max_participants ?? 0}`} />
               <Detail title="סטטוס" value={details.activity?.status === "published" ? "פורסם" : details.activity?.status ?? "לא ידוע"} />
               <Detail title="רשומים" value={`${details.activity?.registeredCount ?? 0}`} />
+              <Detail title="שמות המשתתפים" value={details.activity?.registeredNames?.join(" · ") || "אין עדיין משתתפים רשומים"} />
+              <Detail title="רשימת המתנה" value={details.activity?.waitlistedNames?.join(" · ") || "אין ממתינים"} />
               <Detail title="מקומות פנויים" value={`${details.activity?.availablePlaces ?? 0}`} />
               <Detail title="טלפון לחונך" value={details.activity?.mentor_phone || "מספר הטלפון מוסתר על פי מדיניות הפעילות"} wide />
               {details.activity?.mentor_phone && <div className="sm:col-span-2"><ContactButtons phone={details.activity.mentor_phone} /></div>}
