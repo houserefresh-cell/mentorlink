@@ -9,6 +9,7 @@ type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
   id: string;
   mentor_display_name?: string;
+  parent_display_name?: string;
   subject: string;
   child_first_name: string;
   child_grade_or_age: string;
@@ -241,6 +242,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
       </div>
       {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_grade_or_age}</p>}
+      {role === "mentor" && <p className="mt-2 font-black text-slate-900">הורה: {item.parent_display_name ?? "הורה"}</p>}
       <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
       <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(displayedStart)}</p><p className="mt-1 font-bold">אורך המפגש: {displayedDuration} דקות</p></div>
       {item.proposed_start_at && item.proposed_duration_minutes ? (
@@ -252,6 +254,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
       <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-slate-800">
         <p><b>מטרת המפגש:</b> {item.help_goal}</p>
+        <p><b>הבקשה נשלחה:</b> {formatDate(item.created_at)}</p>
         {item.parent_message && <p><b>הודעת ההורה:</b> {item.parent_message}</p>}
         {item.mentor_response && <p><b>תשובת החונך:</b> {item.mentor_response}</p>}
         {item.preparation_notes && <p><b>הכנה למפגש:</b> {item.preparation_notes}</p>}

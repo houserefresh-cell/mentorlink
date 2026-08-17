@@ -6,17 +6,6 @@
   --foreground: #171717;
 }
 
-/* The authenticated home control always uses the real brand mark. Keeping the
-   image in CSS also prevents the temporary triangle/M fallback during hydration. */
-a[aria-label^="MentorLink – עמוד הבית"] {
-  width: 5.5rem;
-  height: 3.5rem;
-  flex: 0 0 auto;
-  background: url("/mentorlink-logo.png") center / contain no-repeat;
-}
-a[aria-label^="MentorLink – עמוד הבית"] > span {
-  display: none;
-}
 
 @theme inline {
   --color-background: var(--background);
@@ -84,18 +73,4 @@ body {
   color: #475569;
   -webkit-text-fill-color: #475569;
   opacity: 1;
-}
-
-/* Keep the full MentorLink mark visible and consistently sized in both dashboards. */
-header a[aria-label="MentorLink – עמוד הבית להורים"],
-header a[aria-label="MentorLink – עמוד הבית לחונכים"] {
-  width: 7.25rem;
-  height: 4rem;
-  flex-shrink: 0;
-  background: url("/mentorlink-logo.png") center / contain no-repeat;
-}
-
-header a[aria-label="MentorLink – עמוד הבית להורים"] > span,
-header a[aria-label="MentorLink – עמוד הבית לחונכים"] > span {
-  display: none;
 }
