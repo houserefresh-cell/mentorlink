@@ -39,7 +39,7 @@ const FORMATS = ["מפגש אישי", "קבוצה קטנה"] as const;
 
 type StepKey = "profile" | "subjects" | "locations" | "availability" | "experience" | "photo" | "summary";
 
-type SubjectOption = { id: number; name: string };
+type SubjectOption = { id: number; name: string; category: string };
 type MentorSubject = { subject_id: number; age_groups: string[]; custom_subject: string | null };
 
 type TimeRange = { start: string; end: string };
@@ -48,10 +48,10 @@ type Schedule = Record<string, TimeRange[]>;
 const STEP_META: Array<{ key: StepKey; title: string; description: string }> = [
   { key: "profile", title: "פרטים אישיים", description: "שם, תאריך לידה, בית ספר, שפות ותיאור קצר." },
   { key: "subjects", title: "תחומי חונכות", description: "בחרו את התחומים ושכבות הגיל המתאימות." },
-  { key: "locations", title: "בתי ספר ואזור פעילות", description: "הגדירו את האזורים, בתי הספר והמקומות המועדפים." },
-  { key: "availability", title: "זמינות", description: "קבעו את הימים, השעות והסוגים של הפגישות." },
-  { key: "experience", title: "ניסיון והצגה עצמית", description: "ספרו על הרקע, החוזקות והסגנון שלכם." },
-  { key: "photo", title: "תמונת פרופיל", description: "העלו תמונה ברורה ואמינה למשפחות." },
+  { key: "experience", title: "ניסיון ויכולת", description: "שלושה פרטים קצרים שיעזרו לנו להכיר אתכם." },
+  { key: "availability", title: "זמינות · לא חובה", description: "אפשר לדלג ולפרסם זמינות בהמשך." },
+  { key: "locations", title: "בתי ספר ואזור פעילות · לא חובה", description: "אפשר לדלג ולחזור להגדרת האזורים בהמשך." },
+  { key: "photo", title: "תמונת פרופיל · לא חובה", description: "אפשר להעלות תמונה ברורה ואמינה למשפחות, או להמשיך בלעדיה." },
   { key: "summary", title: "סיכום ואישור", description: "בדקו את הפרטים והשלימו את דרישות האישור לפני שליחה לבדיקת מנהל." },
 ];
 
@@ -66,6 +66,7 @@ export default function MentorOnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [message, setMessage] = useState<FormMessage>(null);
   const [isMinor, setIsMinor] = useState<boolean | null>(null);
   const [consentStatus, setConsentStatus] = useState("missing");
@@ -120,6 +121,10 @@ export default function MentorOnboardingPage() {
   const [storedPhotoPath, setStoredPhotoPath] = useState("");
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
+  const subjectGroups = useMemo(() => subjects.reduce<Record<string, SubjectOption[]>>((groups, subject) => {
+    (groups[subject.category] ??= []).push(subject);
+    return groups;
+  }, {}), [subjects]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("step") === "summary") {
@@ -130,10 +135,8 @@ export default function MentorOnboardingPage() {
   const requiredProfileChecks = useMemo(() => [
       Boolean(firstName.trim() && lastName.trim() && birthDate),
       Object.keys(selectedSubjects).length > 0,
-      Boolean(city.trim() && locationsSchools.length > 0 && meetingPlaces.length > 0),
-      Boolean(Object.keys(schedule).length || flexible),
-      Boolean(bio.trim() && motivation.trim() && mentoringTypes.length > 0),
-    ], [birthDate, bio, city, firstName, flexible, lastName, locationsSchools.length, meetingPlaces.length, motivation, mentoringTypes.length, schedule, selectedSubjects]);
+      Boolean(values.trim() && motivation.trim() && mentoringTypes.length > 0),
+    ], [birthDate, firstName, lastName, motivation, mentoringTypes.length, selectedSubjects, values]);
 
   const profileDetailsComplete = requiredProfileChecks.every(Boolean);
   const parentConsentComplete = isMinor !== true || consentStatus === "approved";
@@ -188,7 +191,7 @@ export default function MentorOnboardingPage() {
           .select("first_name, last_name, birth_date, grade, school, city, phone, languages, bio, profile_photo_path")
           .eq("user_id", auth.user.id)
           .maybeSingle(),
-        supabase.from("subjects").select("id, name").order("id"),
+        supabase.from("subjects").select("id, name, category").order("category").order("name"),
         supabase.from("mentor_subjects").select("subject_id, age_groups, custom_subject").eq("user_id", auth.user.id),
         supabase.from("mentor_availability").select("*").eq("user_id", auth.user.id).maybeSingle(),
         supabase.from("mentor_locations").select("*").eq("user_id", auth.user.id).maybeSingle(),
@@ -446,16 +449,6 @@ export default function MentorOnboardingPage() {
     event.preventDefault();
     setMessage(null);
 
-    if (!city.trim()) {
-      setMessage({ type: "error", text: "יש להזין עיר." });
-      return;
-    }
-
-    if (locationsSchools.length === 0 || meetingPlaces.length === 0) {
-      setMessage({ type: "error", text: "יש לבחור לפחות בית ספר אחד ומקום מפגש אחד." });
-      return;
-    }
-
     if (locationsSchools.includes("בית ספר אחר") && !customSchool.trim()) {
       setMessage({ type: "error", text: "יש לפרט את שם בית הספר האחר." });
       return;
@@ -480,7 +473,7 @@ export default function MentorOnboardingPage() {
 
     setMessage({ type: "success", text: "אזורי הפעילות נשמרו בהצלחה." });
     setSaving(false);
-    setActiveStep(3);
+    setActiveStep(5);
   }
 
   async function saveAvailability(event: FormEvent) {
@@ -490,11 +483,6 @@ export default function MentorOnboardingPage() {
     const invalid = Object.values(schedule).flat().some((range) => range.end <= range.start);
     if (invalid) {
       setMessage({ type: "error", text: "שעת הסיום חייבת להיות מאוחרת משעת ההתחלה." });
-      return;
-    }
-
-    if (!Object.keys(schedule).length && !flexible) {
-      setMessage({ type: "error", text: "יש לבחור לפחות יום אחד או לסמן זמינות גמישה." });
       return;
     }
 
@@ -525,16 +513,6 @@ export default function MentorOnboardingPage() {
     event.preventDefault();
     setMessage(null);
 
-    if (!bio.trim()) {
-      setMessage({ type: "error", text: "יש להזין תיאור קצר על עצמכם." });
-      return;
-    }
-
-    if (hasPrevious && !details.trim()) {
-      setMessage({ type: "error", text: "יש לפרט את ניסיונכם הקודם בחונכות." });
-      return;
-    }
-
     if (!mentoringTypes.length) {
       setMessage({ type: "error", text: "יש לבחור לפחות סוג חונכות אחד." });
       return;
@@ -542,11 +520,6 @@ export default function MentorOnboardingPage() {
 
     if (!motivation.trim() || !values.trim()) {
       setMessage({ type: "error", text: "יש למלא את הסיבה להיות חונך/ת ואת הערכים בעבודה עם החניך/ה." });
-      return;
-    }
-
-    if (!preferredAges.length || !meetingModes.length || !sessionFormats.length) {
-      setMessage({ type: "error", text: "יש לבחור שכבת גיל, אופן מפגש ומבנה מפגש מועדפים." });
       return;
     }
 
@@ -588,7 +561,7 @@ export default function MentorOnboardingPage() {
 
     setMessage({ type: "success", text: "הניסיון וההצגה העצמית נשמרו בהצלחה." });
     setSaving(false);
-    setActiveStep(5);
+    setActiveStep(3);
   }
 
   async function uploadPhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -658,8 +631,8 @@ export default function MentorOnboardingPage() {
     setPhotoBusy(false);
   }
 
-  async function submitForReview(event: FormEvent) {
-    event.preventDefault();
+  async function submitForReview(event?: FormEvent) {
+    event?.preventDefault();
     setMessage(null);
 
     if (!emailConfirmed) {
@@ -692,8 +665,16 @@ export default function MentorOnboardingPage() {
     }
 
     setMessage({ type: "success", text: "הפרופיל נשלח לאישור בהצלחה." });
+    setAutoSubmitted(true);
     setSubmitting(false);
   }
+
+  useEffect(() => {
+    if (activeStep === 6 && readyForReview && !autoSubmitted && !submitting) {
+      setAutoSubmitted(true);
+      void submitForReview();
+    }
+  }, [activeStep, autoSubmitted, readyForReview, submitting]);
 
   if (loading) {
     return <LoadingPage text="מכין את מסע ההרשמה..." />;
@@ -764,12 +745,14 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 1 && (
           <form onSubmit={saveSubjects} className="space-y-6">
-            <p className="font-bold text-slate-800">בחרו לפחות תחום אחד <span className="text-red-600" aria-hidden="true">*</span></p>
-            <div className="grid gap-5 lg:grid-cols-2">
-              {subjects.map((subject) => {
+            <p className="font-bold text-slate-800">בחרו לפחות תחום אחד <span className="text-red-600" aria-hidden="true">*</span>. אפשר לבחור יותר מתשובה אחת.</p>
+            <div className="space-y-6">
+              {Object.entries(subjectGroups).map(([category, categorySubjects]) => <section key={category} className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+                <h3 className="mb-4 text-xl font-black text-blue-900">{category}</h3>
+                <div className="grid gap-4 lg:grid-cols-2">{categorySubjects.map((subject) => {
                 const isSelected = selectedSubjects[subject.id] !== undefined;
                 return (
-                  <fieldset key={subject.id} className={`rounded-3xl border p-6 ${isSelected ? "border-blue-400 ring-4 ring-blue-50" : "border-slate-200"}`}>
+                  <fieldset key={subject.id} className={`rounded-2xl border bg-white p-5 ${isSelected ? "border-blue-400 ring-4 ring-blue-50" : "border-slate-200"}`}>
                     <label className="flex cursor-pointer items-center gap-3">
                       <input type="checkbox" checked={isSelected} onChange={() => setSelectedSubjects((current) => {
                         if (current[subject.id]) {
@@ -790,25 +773,25 @@ export default function MentorOnboardingPage() {
                     )}
                   </fieldset>
                 );
-              })}
+              })}</div></section>)}
             </div>
             <SavePanel saving={saving} message={message} label="שמירה והמשך" />
           </form>
         )}
 
-        {activeStep === 2 && (
+        {activeStep === 4 && (
           <form onSubmit={saveLocations} className="space-y-6">
             <div className="grid gap-5 md:grid-cols-2">
-              <Field label="עיר" htmlFor="locationCity" required><input id="locationCity" required value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
+              <Field label="עיר" htmlFor="locationCity"><input id="locationCity" value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
               <Field label="שכונות או אזורים" htmlFor="activityAreas"><input id="activityAreas" value={activityAreas} onChange={(event) => setActivityAreas(event.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
             </div>
             <div>
-              <h3 className="mb-3 font-bold">בתי ספר מועדפים <span className="text-red-600" aria-hidden="true">*</span></h3>
+              <h3 className="mb-3 font-bold">בתי ספר מועדפים <span className="font-normal text-slate-500">(לא חובה; אפשר לבחור יותר מתשובה אחת)</span></h3>
               <ChoicePills options={[...SCHOOLS]} selected={locationsSchools} onToggle={(value) => setLocationsSchools(toggleValue(locationsSchools, value))} />
             </div>
             {locationsSchools.includes("בית ספר אחר") && <Field label="שם בית הספר האחר" htmlFor="customSchool" required><input id="customSchool" required value={customSchool} onChange={(event) => setCustomSchool(event.target.value)} className={inputClassName} /></Field>}
             <div>
-              <h3 className="mb-3 font-bold">מקומות מפגש <span className="text-red-600" aria-hidden="true">*</span></h3>
+              <h3 className="mb-3 font-bold">מקומות מפגש <span className="font-normal text-slate-500">(לא חובה; אפשר לבחור יותר מתשובה אחת)</span></h3>
               <ChoicePills options={[...PLACES]} selected={meetingPlaces} onToggle={(value) => setMeetingPlaces(toggleValue(meetingPlaces, value))} />
             </div>
             <SavePanel saving={saving} message={message} label="שמירה והמשך" />
@@ -817,7 +800,7 @@ export default function MentorOnboardingPage() {
 
         {activeStep === 3 && (
           <form onSubmit={saveAvailability} className="space-y-6">
-            <p className="font-bold text-slate-800">יש לבחור לפחות טווח זמינות אחד או זמינות גמישה <span className="text-red-600" aria-hidden="true">*</span></p>
+            <p className="font-bold text-slate-800">שלב זה אינו חובה. אפשר להוסיף זמינות עכשיו או בהמשך.</p>
             <div className="space-y-4">
               {DAYS.map((day) => {
                 const ranges = schedule[day];
@@ -831,8 +814,8 @@ export default function MentorOnboardingPage() {
                       <div className="mt-4 space-y-3">
                         {ranges.map((range, index) => (
                           <div key={`${day}-${index}`} className="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                            <Field label="התחלה"><input type="time" value={range.start} onChange={(event) => updateRange(day, index, "start", event.target.value)} required className={inputClassName} /></Field>
-                            <Field label="סיום"><input type="time" value={range.end} onChange={(event) => updateRange(day, index, "end", event.target.value)} required className={inputClassName} /></Field>
+                            <Field label="התחלה" required><input type="time" value={range.start} onChange={(event) => updateRange(day, index, "start", event.target.value)} required className={inputClassName} /></Field>
+                            <Field label="סיום" required><input type="time" value={range.end} onChange={(event) => updateRange(day, index, "end", event.target.value)} required className={inputClassName} /></Field>
                             <button type="button" onClick={() => setSchedule((current) => ({ ...current, [day]: current[day].filter((_, itemIndex) => itemIndex !== index) }))} className="rounded-xl border border-red-200 px-4 py-3 font-bold text-red-700">מחיקה</button>
                           </div>
                         ))}
@@ -858,31 +841,37 @@ export default function MentorOnboardingPage() {
           </form>
         )}
 
-        {activeStep === 4 && (
+        {activeStep === 2 && (
           <form onSubmit={saveExperience} className="space-y-6">
-            <label className="flex items-center gap-3 rounded-xl bg-slate-50 p-4 font-bold">
+            <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer font-black">ניסיון ופרטים נוספים <span className="font-normal text-slate-500">(לא חובה)</span></summary>
+              <div className="mt-5 space-y-5">
+            <label className="flex items-center gap-3 rounded-xl bg-white p-4 font-bold">
               <input type="checkbox" checked={hasPrevious} onChange={(event) => setHasPrevious(event.target.checked)} className="h-5 w-5 accent-blue-600" />
               יש לי ניסיון קודם בחונכות
             </label>
-            {hasPrevious && <Field label="פירוט ניסיון קודם" htmlFor="details" required><textarea id="details" required rows={4} value={details} onChange={(event) => setDetails(event.target.value)} className={inputClassName} /></Field>}
-            <Field label="תיאור קצר עליי" htmlFor="bio" required><textarea id="bio" required rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
+            {hasPrevious && <Field label="פירוט ניסיון קודם" htmlFor="details"><textarea id="details" rows={4} value={details} onChange={(event) => setDetails(event.target.value)} className={inputClassName} /></Field>}
+            <Field label="תיאור קצר עליי" htmlFor="bio"><textarea id="bio" rows={4} value={bio} onChange={(event) => setBio(event.target.value)} className={inputClassName} /></Field>
             <div>
               <h3 className="mb-3 font-bold">תחומי ניסיון נוספים</h3>
               <ChoicePills options={[...EXPERIENCES]} selected={experienceTypes} onToggle={(value) => setExperienceTypes(toggleValue(experienceTypes, value))} />
             </div>
             <Field label="קורסים / תעודות" htmlFor="courses"><textarea id="courses" rows={3} value={courses} onChange={(event) => setCourses(event.target.value)} className={inputClassName} /></Field>
             <Field label="תחומי חוזקה" htmlFor="strengths"><input id="strengths" value={strengths} onChange={(event) => setStrengths(event.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
+              </div>
+            </details>
             <Field label="מה חשוב לי בקשר עם החניך" htmlFor="values" required><textarea id="values" required rows={4} value={values} onChange={(event) => setValues(event.target.value)} className={inputClassName} /></Field>
             <Field label="מדוע אני רוצה להיות חונך/ת" htmlFor="motivation" required><textarea id="motivation" required rows={4} value={motivation} onChange={(event) => setMotivation(event.target.value)} className={inputClassName} /></Field>
             <div>
-              <h3 className="mb-3 font-bold">סוגי חונכות <span className="text-red-600" aria-hidden="true">*</span></h3>
+              <h3 className="mb-3 font-bold">סוגי חונכות <span className="text-red-600" aria-hidden="true">*</span> <span className="font-normal text-slate-500">(אפשר לבחור יותר מתשובה אחת)</span></h3>
               <ChoicePills options={[...MENTORING_TYPES]} selected={mentoringTypes} onToggle={(value) => setMentoringTypes(toggleValue(mentoringTypes, value))} />
             </div>
-            <div>
-              <h3 className="mb-3 font-bold">העדפות התאמה</h3>
+            <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer font-black">העדפות התאמה <span className="font-normal text-slate-500">(לא חובה)</span></summary>
+              <div className="mt-5">
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-3 font-bold">שכבות גיל <span className="text-red-600" aria-hidden="true">*</span></h4>
+                  <h4 className="mb-3 font-bold">שכבות גיל <span className="font-normal text-slate-500">(לא חובה; אפשר לבחור יותר מתשובה אחת)</span></h4>
                   <ChoicePills options={[...AGES]} selected={preferredAges} onToggle={(value) => setPreferredAges(toggleValue(preferredAges, value))} />
                 </div>
                 <Field label="מגדר מועדף" htmlFor="preferredGender"><select id="preferredGender" value={preferredGender} onChange={(event) => setPreferredGender(event.target.value)} className={inputClassName}><option>אין העדפה</option><option>בן</option><option>בת</option></select></Field>
@@ -893,11 +882,11 @@ export default function MentorOnboardingPage() {
               </div>
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <div>
-                  <h4 className="mb-3 font-bold">אופן המפגש <span className="text-red-600" aria-hidden="true">*</span></h4>
+                  <h4 className="mb-3 font-bold">אופן המפגש <span className="font-normal text-slate-500">(לא חובה; אפשר לבחור יותר מתשובה אחת)</span></h4>
                   <ChoicePills options={[...MODES]} selected={meetingModes} onToggle={(value) => setMeetingModes(toggleValue(meetingModes, value))} />
                 </div>
                 <div>
-                  <h4 className="mb-3 font-bold">מבנה המפגש <span className="text-red-600" aria-hidden="true">*</span></h4>
+                  <h4 className="mb-3 font-bold">מבנה המפגש <span className="font-normal text-slate-500">(לא חובה; אפשר לבחור יותר מתשובה אחת)</span></h4>
                   <ChoicePills options={[...FORMATS]} selected={sessionFormats} onToggle={(value) => setSessionFormats(toggleValue(sessionFormats, value))} />
                 </div>
               </div>
@@ -906,7 +895,8 @@ export default function MentorOnboardingPage() {
                 <label className="flex items-center gap-3 rounded-xl bg-white p-4 font-bold"><input type="checkbox" checked={specialNeeds} onChange={(event) => setSpecialNeeds(event.target.checked)} className="h-5 w-5 accent-blue-600" />מוכן לחונכות עם צרכים מיוחדים</label>
               </div>
               <Field label="מידע נוסף להתאמה" htmlFor="matchingInfo"><textarea id="matchingInfo" rows={3} value={matchingInfo} onChange={(event) => setMatchingInfo(event.target.value)} className={inputClassName} /></Field>
-            </div>
+              </div>
+            </details>
             <SavePanel saving={saving} message={message} label="שמירה והמשך" />
           </form>
         )}
@@ -951,7 +941,7 @@ export default function MentorOnboardingPage() {
                 </h3>
                 <p className="mt-2 text-slate-700">
                   {consentStatus === "approved"
-                    ? "אפשר לשלוח את הפרופיל לבדיקת מנהל."
+                    ? "אישור ההורה התקבל והפרופיל נשלח אוטומטית לאישור מנהל."
                     : consentStatus === "sent"
                       ? "הבקשה נשלחה. אפשר לבדוק את הסטטוס או לשלוח בקשה חדשה מעמוד אישור ההורה."
                       : "כדי להשלים את ההרשמה יש להזין את פרטי ההורה ולשלוח אליו בקשת אישור."}
@@ -970,7 +960,7 @@ export default function MentorOnboardingPage() {
               </div>
             )}
 
-            <SavePanel saving={submitting} message={message} label="שליחת הפרופיל לבדיקת מנהל" disabled={!readyForReview} />
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 font-bold text-blue-900">{readyForReview ? "כל דרישות החובה הושלמו. הפרופיל נשלח אוטומטית לאישור מנהל." : "לאחר השלמת דרישות החובה ואישור ההורה, הפרופיל יישלח אוטומטית לאישור מנהל."}</div>
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
               <p className="text-sm font-bold text-slate-500">אופציונלי — לא נדרש להשלמת ההרשמה</p>

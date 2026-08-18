@@ -8,11 +8,14 @@ import { isUpcomingApprovedMeeting, newestFirst, requiresMentorAction, waitsForP
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
   id: string;
+  child_id: string;
   mentor_display_name?: string;
   parent_display_name?: string;
   subject: string;
   child_first_name: string;
   child_grade_or_age: string;
+  child_gender: "boy" | "girl" | null;
+  child_display_color: string;
   help_goal: string;
   meeting_mode: string;
   meeting_price: number;
@@ -36,7 +39,7 @@ type Meeting = {
 };
 
 type MentorMeetingView = "mentor-action" | "waiting-parent" | "upcoming-approved" | "history";
-type ParentMeetingView = "requests" | "meetings" | "history";
+type ParentMeetingView = "requests" | "meetings" | "completed" | "cancelled";
 type MeetingDetailsValues = { preparationNotes: string; equipmentNotes: string; meetingLocation: string; participantNames: string; saveAsTemplate: boolean };
 
 export default function MeetingRequestsPanel({ role, view = "mentor-action" }: { role: "parent" | "mentor"; view?: MentorMeetingView }) {
@@ -49,6 +52,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
   const [loadState, setLoadState] = useState<"loading" | "loaded" | "error">("loading");
   const [parentView, setParentView] = useState<ParentMeetingView>("meetings");
+  const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
 
   const load = useCallback(async (accessToken: string) => {
@@ -148,6 +152,8 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   }
 
   const groups = useMemo(() => groupParentRequests(requests), [requests]);
+  const childOptions = useMemo(() => [...new Map(requests.map((item) => [item.child_id, { id: item.child_id, name: item.child_first_name, color: item.child_display_color }])).values()], [requests]);
+  const filteredGroups = useMemo(() => Object.fromEntries(Object.entries(groups).map(([key, items]) => [key, (items as Meeting[]).filter((item) => selectedChildren.length === 0 || selectedChildren.includes(item.child_id))])) as typeof groups, [groups, selectedChildren]);
   const mentorGroups = useMemo(() => groupMentorRequests(requests), [requests]);
 
   if (loadState === "loading") return <p role="status" className="mt-8 rounded-2xl bg-white p-5 font-bold text-slate-600">טוען פגישות...</p>;
@@ -157,29 +163,25 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
     <section dir="rtl" className="mt-8" aria-labelledby="meeting-requests-title">
       {role === "parent" ? (
         <>
-          {groups.actionRequired.length > 0 && <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm" aria-labelledby="parent-action-title">
-            <h2 id="parent-action-title" className="text-2xl font-black text-amber-950">בקשות שממתינות לתשובתך</h2>
-            <p className="mt-2 text-sm text-amber-900">מועדים חלופיים שהחונך הציע וממתינים לאישור או לדחייה שלך.</p>
-            <h3 className="mt-4 text-lg font-black text-amber-950">דורשות פעולה ממני</h3>
-            <RequestList requests={groups.actionRequired} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} empty="אין כרגע בקשות שממתינות לתשובתך." />
-          </section>}
-
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-            <h2 id="meeting-requests-title" className="text-2xl font-black">הבקשות והפגישות שלי</h2>
+            <h2 id="meeting-requests-title" className="text-2xl font-black">הפגישות שלי</h2>
             <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
             </div>
             <Link href="/dashboard/parent#mentor-search" className="rounded-xl bg-blue-700 px-5 py-3 font-black text-white">בקשת פגישה חדשה</Link>
           </div>
-          <nav className="mt-5 grid gap-2 rounded-2xl bg-blue-700 p-2 text-white sm:grid-cols-3" aria-label="סינון בקשות ופגישות">
-            <ParentTab label="פגישות קרובות" count={groups.upcoming.length} selected={parentView === "meetings"} onClick={() => setParentView("meetings")} />
-            <ParentTab label="בקשות פתוחות" count={groups.waitingForMentor.length + groups.actionRequired.length} selected={parentView === "requests"} onClick={() => setParentView("requests")} />
-            <ParentTab label="היסטוריה" count={groups.completed.length + groups.closed.length + groups.history.length} selected={parentView === "history"} onClick={() => setParentView("history")} />
+          <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border bg-white p-3"><button type="button" onClick={()=>setSelectedChildren([])} className={childFilterClass(selectedChildren.length===0,"green")}>כל הילדים</button>{childOptions.map(child=><button type="button" key={child.id} onClick={()=>setSelectedChildren(current=>current.includes(child.id)?current.filter(id=>id!==child.id):[...current,child.id])} className={childFilterClass(selectedChildren.includes(child.id),child.color)}>{child.name}</button>)}</div>
+          <nav className="mt-5 grid gap-2 rounded-2xl bg-blue-700 p-2 text-white sm:grid-cols-4" aria-label="סינון פגישות">
+            <ParentTab label="פגישות קרובות" count={filteredGroups.upcoming.length} selected={parentView === "meetings"} onClick={() => setParentView("meetings")} />
+            <ParentTab label="פגישות שממתינות לאישור החונך" count={filteredGroups.waitingForMentor.length + filteredGroups.actionRequired.length} selected={parentView === "requests"} onClick={() => setParentView("requests")} />
+            <ParentTab label="פגישות שהסתיימו" count={filteredGroups.completed.length} selected={parentView === "completed"} onClick={() => setParentView("completed")} />
+            <ParentTab label="פגישות שבוטלו" count={filteredGroups.closed.length + filteredGroups.history.length} selected={parentView === "cancelled"} onClick={() => setParentView("cancelled")} />
           </nav>
           <div className="mt-6 space-y-7">
-            {parentView === "requests" && <RequestGroup title="ממתינות לתשובת החונך" requests={groups.waitingForMentor} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
-            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={groups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
-            {parentView === "history" && <><RequestGroup title="פגישות שהתקיימו" requests={groups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /><RequestGroup title="נדחו או בוטלו" requests={groups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /><RequestGroup title="היסטוריה נוספת" requests={groups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /></>}
+            {parentView === "requests" && <RequestGroup title="ממתינות לאישור" requests={[...filteredGroups.waitingForMentor,...filteredGroups.actionRequired]} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
+            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={filteredGroups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
+            {parentView === "completed" && <RequestGroup title="פגישות שהתקיימו" requests={filteredGroups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
+            {parentView === "cancelled" && <><RequestGroup title="פגישות שבוטלו או נדחו" requests={filteredGroups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /><RequestGroup title="היסטוריה נוספת" requests={filteredGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /></>}
           </div>
         </>
       ) : (
@@ -226,6 +228,9 @@ function ParentTab({ label, count, selected, onClick }: { label: string; count: 
   return <button type="button" onClick={onClick} aria-pressed={selected} className={`min-h-12 rounded-xl px-4 py-3 font-black transition ${selected ? "bg-white text-blue-800 shadow" : "bg-blue-600 text-white hover:bg-blue-500"}`}>{label} <span aria-label={`${count} פריטים`}>({count})</span></button>;
 }
 
+function childCardClass(color: string) { return ({green:"border-emerald-300 bg-emerald-50/70",blue:"border-blue-300 bg-blue-50/70",turquoise:"border-cyan-300 bg-cyan-50/70",peach:"border-orange-300 bg-orange-50/70",pink:"border-pink-300 bg-pink-50/70",red:"border-rose-300 bg-rose-50/70",violet:"border-violet-300 bg-violet-50/70",amber:"border-amber-300 bg-amber-50/70"} as Record<string,string>)[color]??"border-slate-300 bg-white"; }
+function childFilterClass(selected: boolean, color: string) { return `rounded-xl border px-4 py-2 font-black ${selected ? childCardClass(color) + " ring-2 ring-blue-600" : "border-slate-300 bg-white"}`; }
+
 type ListProps = {
   requests: Meeting[];
   role: "parent" | "mentor";
@@ -261,12 +266,13 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const displayedStart = confirmedStart ?? item.proposed_start_at ?? item.requested_start_at;
   const displayedDuration = confirmedDuration ?? item.proposed_duration_minutes ?? item.requested_duration_minutes;
   return (
-    <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${visual.card}`}>
+    <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${role === "parent" ? childCardClass(item.child_display_color) : visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
         <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
       </div>
-      {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_grade_or_age}</p>}
+      {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_gender === "girl" ? "בת" : "בן"} · {item.child_grade_or_age}</p>}
+      {role === "mentor" && <p className="mt-2 font-black text-slate-900">{item.child_gender === "girl" ? "בת" : "בן"} · {item.child_grade_or_age}</p>}
       {role === "mentor" && <p className="mt-2 font-black text-slate-900">הורה: {item.parent_display_name ?? "הורה"}</p>}
       <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
       <div className="mt-2 grid gap-2 rounded-xl bg-white/80 p-3 text-sm sm:grid-cols-2"><p><b>מיקום:</b> {item.meeting_location || (item.meeting_mode === "אונליין" ? "קישור יימסר לאחר האישור" : "טרם נקבע")}</p><p><b>עלות:</b> {item.meeting_price ? `${item.meeting_price} ₪` : "ללא עלות"}</p></div>

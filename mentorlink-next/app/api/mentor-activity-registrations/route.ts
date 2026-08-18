@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const childIds = [...new Set(rows.map((row) => row.child_id).filter(Boolean))];
   const [profiles, children, interests, sessions] = await Promise.all([
     parentIds.length ? admin.from("parent_profiles").select("user_id, first_name, last_name, phone, city, street, wants_home_mentoring, house_number, entrance, apartment, address_notes").in("user_id", parentIds) : Promise.resolve({ data: [], error: null }),
-    childIds.length ? admin.from("parent_children").select("id, first_name, last_name, grade, school_name").in("id", childIds) : Promise.resolve({ data: [], error: null }),
+    childIds.length ? admin.from("parent_children").select("id, first_name, last_name, grade, school_name, gender, display_color").in("id", childIds) : Promise.resolve({ data: [], error: null }),
     childIds.length ? admin.from("parent_child_subject_interests").select("child_id, subjects(name)").in("child_id", childIds) : Promise.resolve({ data: [], error: null }),
     admin.from("mentor_activity_sessions").select("activity_id, starts_at, ends_at").in("activity_id", activityIds).order("starts_at"),
   ]);
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
       registeredAt: row.created_at,
       nextSession: (sessions.data ?? []).find((session) => session.activity_id === row.activity_id && new Date(session.ends_at).getTime() >= Date.now())
         ?? (sessions.data ?? []).filter((session) => session.activity_id === row.activity_id).at(-1) ?? null,
-      child: child ?? { first_name: row.child_first_name, last_name: null, grade: null, school_name: null },
+      child: child ?? { first_name: row.child_first_name, last_name: null, grade: null, school_name: null, gender: null, display_color: "green" },
       interests: (interests.data ?? []).filter((item) => item.child_id === row.child_id).map((item) => subjectName(item.subjects)).filter(Boolean),
       parent: profile ? { ...profile, email: auth?.email ?? null, phone: profile.phone || auth?.phone || null } : { first_name: "הורה", last_name: "רשום", email: auth?.email ?? null, phone: auth?.phone ?? null },
     };

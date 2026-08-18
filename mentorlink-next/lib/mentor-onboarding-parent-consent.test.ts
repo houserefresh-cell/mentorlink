@@ -26,14 +26,15 @@ test("minor mentor onboarding makes parent consent an explicit required action",
   assert.match(onboarding, /אישור ההורה התקבל/);
 });
 
-test("review submission stays disabled until every registration requirement is complete", () => {
+test("review submission happens automatically only after every registration requirement is complete", () => {
   assert.match(onboarding, /const readyForReview = profileDetailsComplete && emailConfirmed && parentConsentComplete/);
-  assert.match(onboarding, /disabled=\{!readyForReview\}/);
-  assert.match(shell, /disabled=\{saving \|\| disabled\}/);
+  assert.match(onboarding, /activeStep === 6 && readyForReview && !autoSubmitted && !submitting/);
+  assert.match(onboarding, /void submitForReview\(\)/);
+  assert.doesNotMatch(onboarding, /שליחת הפרופיל לבדיקת מנהל/);
 });
 
-test("optional notifications follow the required registration controls", () => {
-  const submit = onboarding.indexOf("שליחת הפרופיל לבדיקת מנהל");
+test("optional notifications follow the automatic review status", () => {
+  const submit = onboarding.indexOf("הפרופיל נשלח אוטומטית לאישור מנהל");
   const optional = onboarding.indexOf("אופציונלי — לא נדרש להשלמת ההרשמה");
   assert.ok(submit >= 0 && optional > submit);
 });
@@ -47,8 +48,9 @@ test("registration progress includes email and parent consent requirements", () 
 test("incomplete minor mentors can reach parent consent and return directly to summary", () => {
   assert.match(dashboardShell, /pathname==="\/dashboard\/mentor\/parent-consent"/);
   assert.match(dashboardShell, /user_metadata\?\.role==="mentor"/);
-  assert.match(consentPage, /\/register\/mentor\?step=summary/);
+  assert.match(consentPage, /\/dashboard\/mentor\/onboarding\?step=summary/);
   assert.match(consentPage, /חזרה לסיכום ההרשמה/);
   assert.match(onboarding, /URLSearchParams\(window\.location\.search\)\.get\("step"\) === "summary"/);
   assert.match(onboarding, /setActiveStep\(6\)/);
+  assert.match(onboarding, /אישור ההורה התקבל והפרופיל נשלח אוטומטית לאישור מנהל/);
 });

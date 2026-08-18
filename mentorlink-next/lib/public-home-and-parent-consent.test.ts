@@ -14,10 +14,10 @@ test("public home leads with community and separate parent and mentor actions", 
   assert.match(home, /homeBodyFont\.className/);
   assert.doesNotMatch(home, /homeHeadingFont|Secular_One/);
   assert.doesNotMatch(home, /group rounded-3xl p-5 transition hover:-translate-y-1/);
-  assert.match(home, /אנשים קרובים/);
-  assert.match(home, /חיבורים שמקדמים/);
-  assert.match(home, /אני הורה — מתחילים כאן/);
-  assert.match(home, /יש לי מה לתת — הרשמה כחונך/);
+  assert.match(home, /חיבורים טובים מתחילים כאן/);
+  assert.match(home, /מכירים, לומדים וצומחים יחד/);
+  assert.match(home, /הרשמה וחיפוש חונך או פעילות/);
+  assert.match(home, /הרשמה ופתיחת פרופיל חונך/);
   assert.doesNotMatch(home, /בתהליך ברור ובטוח/);
 });
 
@@ -25,15 +25,15 @@ test("new minor registration requires parent consent immediately after saving th
   const onboarding = read("app/dashboard/mentor/onboarding/page.tsx");
   assert.match(onboarding, /const minor = age < 18;[\s\S]*setIsMinor\(minor\);/);
   assert.match(onboarding, /setConsentStatusLabel\(getConsentStatusLabel\(consentStatus, minor\)\)/);
-  assert.match(onboarding, /isMinor && consentStatus !== "approved"/);
+  assert.match(onboarding, /isMinor === true && consentStatus !== "approved"/);
   assert.match(onboarding, /לחונך שטרם מלאו לו 18 נדרש אישור הורה מאומת/);
   assert.doesNotMatch(onboarding, /שגיאה בשליחה: \$\{error\.message\}/);
 });
 
 test("platform role is explained naturally rather than presented as a blanket waiver", () => {
   assert.match(home, /הפלטפורמה מחברת/);
-  assert.match(home, /אינה מחליפה היכרות אישית/);
-  assert.match(home, /ההחלטה על מפגש, מיקומו ותנאיו מתקבלת בין החונך לבין ההורה/);
+  assert.match(home, /הבחירה בחונך ובאופן קיום המפגש נשארת בידי ההורה/);
+  assert.match(home, /לוודא מראש את מקום המפגש, אופיו ותנאיו/);
 });
 
 test("parent approval requires platform-role acknowledgement and keeps photo consent optional", () => {
