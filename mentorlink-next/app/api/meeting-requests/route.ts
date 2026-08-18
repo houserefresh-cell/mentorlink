@@ -126,6 +126,12 @@ export async function GET(request: Request) {
     const rows = [...(data ?? [])].sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
     const names = new Map<string, string>();
     const phones = new Map<string, string>();
+    const childDetails = new Map<string, { gender: string | null; display_color: string | null }>();
+    const childIds = [...new Set(rows.map((row) => row.child_id).filter(Boolean))];
+    if (childIds.length) {
+      const children = await client.from("parent_children").select("id, gender, display_color").in("id", childIds);
+      for (const child of children.data ?? []) childDetails.set(child.id, { gender: child.gender, display_color: child.display_color });
+    }
     if (user.role === "parent") {
       const ids = [...new Set(rows.map((row) => row.mentor_user_id))];
       if (ids.length) {
@@ -152,10 +158,18 @@ export async function GET(request: Request) {
       const publication = await client.from("mentor_publication").select("public_booking_id").eq("user_id", user.id).maybeSingle();
       schedulingMentorBookingId = publication.data?.public_booking_id ?? null;
     }
+    const attentionKinds = user.role === "parent" ? ["meeting_details_updated", "meeting_alternative_proposed"] : ["meeting_request_created", "meeting_request_cancelled"];
+    const unread = await client.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null).in("kind", attentionKinds);
     return Response.json({
       schedulingMentorBookingId,
+      attentionCount: Math.max(
+        unread.count ?? 0,
+        rows.filter((row) => user.role === "parent" && row.status === "alternative_proposed").length,
+      ),
       requests: rows.map(({ mentor_user_id, parent_user_id, ...row }) => ({
         ...row,
+        child_gender: childDetails.get(row.child_id)?.gender ?? null,
+        child_display_color: childDetails.get(row.child_id)?.display_color ?? "green",
         ...(user.role === "parent" ? { mentor_display_name: names.get(mentor_user_id) ?? "חונך/ת" } : {}),
         ...(user.role === "mentor" ? { parent_display_name: names.get(parent_user_id) ?? "הורה" } : {}),
         contact_phone: phones.get(user.role === "parent" ? mentor_user_id : parent_user_id) ?? null,

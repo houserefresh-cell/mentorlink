@@ -105,8 +105,9 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     {details && <Modal title={details.title} onClose={() => setDetails(null)}><ActivityDetails activity={details} />{details.registeredChildNames.length>0&&<p className="mt-5 rounded-xl bg-green-50 p-4 font-black text-green-900">{registeredChildrenLabel(details.registeredChildNames)}</p>}{(() => { const action = activityAction(details, children, registrationState); return <button disabled={!action.enabled} onClick={() => { setDetails(null); setRegistering(details); }} className="mt-6 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:bg-slate-300">{action.label}</button>; })()}</Modal>}
     {registering && <Modal title="את מי תרצו לרשום?" onClose={() => setRegistering(null)}><p className="mb-4 text-slate-600">כל ילד תופס מקום נפרד. ניתן לבחור ילד אחד או כמה ילדים.</p>{children.length ? <div className="grid gap-3">{children.map((child) => {
       const status = activityChildStatus(registering.id, child.id);
-      const locked = status === "registered" || status === "waitlisted";
-      const disableReason = status === "registered" ? "כבר רשום/ה" : status === "waitlisted" ? "כבר ברשימת ההמתנה" : null;
+      const gradeAllowed = childGradeAllowed(child, registering);
+      const locked = status === "registered" || status === "waitlisted" || !gradeAllowed;
+      const disableReason = status === "registered" ? "✓ כבר רשום/ה" : status === "waitlisted" ? "✓ כבר ברשימת ההמתנה" : !gradeAllowed ? `לא מתאים לכיתה ${child.grade ? gradeLabels[child.grade] : "שלא צוינה"}` : null;
       const selectionLimitReached = !selectedIds.includes(child.id) && selectedIds.length >= registrationCapacity(registering);
       return <label key={child.id} className={`flex items-center gap-3 rounded-xl border p-4 ${locked || selectionLimitReached ? "bg-slate-100 opacity-70" : "cursor-pointer"}`}>
         <input type="checkbox" disabled={locked || selectionLimitReached} checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} />
@@ -118,7 +119,8 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     })}</div> : <p className="rounded-xl bg-amber-50 p-4">לפני ההרשמה יש להוסיף ילד/ה לחשבון.</p>}<button onClick={() => setShowAddChild(true)} className="mt-4 font-bold text-blue-700 underline">+ הוספת ילד/ה</button>{(() => {
       const selectableIds = selectedIds.filter((id) => {
         const status = activityChildStatus(registering.id, id);
-        return status !== "registered" && status !== "waitlisted";
+        const child = children.find((item) => item.id === id);
+        return Boolean(child && childGradeAllowed(child, registering) && status !== "registered" && status !== "waitlisted");
       });
       const canSubmit = selectableIds.length > 0;
       return <>
@@ -142,13 +144,16 @@ function dateLabel(value: string) { return new Intl.DateTimeFormat("he-IL", { we
 function timeLabel(value: string) { return new Intl.DateTimeFormat("he-IL", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value)); }
 function selector(active: boolean) { return `rounded-xl px-4 py-2 font-black transition ${active ? "bg-white text-blue-800 shadow" : "bg-white/10 text-white hover:bg-white/20"}`; }
 function registeredChildrenLabel(names: string[]) { if(names.length===1)return `${names[0]} כבר רשום/ה לפעילות`; return `${names.slice(0,-1).join(", ")} ו${names.at(-1)} כבר רשומים לפעילות`; }
+function childGradeAllowed(child: Child, activity: Activity) { return !activity.suitableGrades?.length || Boolean(child.grade && activity.suitableGrades.includes(child.grade)); }
 function activityAction(activity: Activity, children: Child[], registrationState: Map<string, Map<string, string>>) {
   if (!activity.registrationOpen) return { label: "ההרשמה לפעילות נסגרה", enabled: false };
   if (!children.length) return { label: "יש להוסיף ילד/ה לפני ההרשמה", enabled: false };
   const activityStatuses = registrationState.get(activity.id) ?? new Map<string, string>();
   const activeStatuses = new Set(["registered", "waitlisted"]);
   const alreadyRegistered = children.filter((child) => activeStatuses.has(activityStatuses.get(child.id) ?? ""));
-  const availableChildren = children.filter((child) => !activeStatuses.has(activityStatuses.get(child.id) ?? ""));
+  const gradeEligibleChildren = children.filter((child) => childGradeAllowed(child, activity));
+  const availableChildren = gradeEligibleChildren.filter((child) => !activeStatuses.has(activityStatuses.get(child.id) ?? ""));
+  if (!gradeEligibleChildren.length) return { label: "אין ילד/ה בכיתה המתאימה לפעילות", enabled: false };
   if (!availableChildren.length) return { label: "כל הילדים כבר רשומים או ממתינים", enabled: false };
   const additional = alreadyRegistered.length > 0;
   if (activity.availablePlaces > 0) return { label: additional ? "צירוף ילד נוסף לפעילות" : "הצטרף לפעילות", enabled: true };

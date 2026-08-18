@@ -37,7 +37,7 @@ export async function GET(request: Request, context: { params: Promise<{ activit
   const parentIds = [...new Set((registrations.data ?? []).map((row) => row.parent_user_id))];
   const profiles = parentIds.length ? await admin.from("parent_profiles").select("user_id, first_name, last_name, phone, city, street, wants_home_mentoring, house_number, entrance, apartment, address_notes").in("user_id", parentIds) : { data: [], error: null };
   const childIds = [...new Set((registrations.data ?? []).map((row) => row.child_id).filter(Boolean))];
-  const children = childIds.length ? await admin.from("parent_children").select("id, first_name, last_name, grade, school_name").in("id", childIds) : { data: [], error: null };
+  const children = childIds.length ? await admin.from("parent_children").select("id, first_name, last_name, grade, school_name, gender, display_color").in("id", childIds) : { data: [], error: null };
   const interests = childIds.length ? await admin.from("parent_child_subject_interests").select("child_id, subjects(name)").in("child_id", childIds) : { data: [], error: null };
   const parents = new Map<string, { name: string; phone: string | null; email: string | null }>();
   await Promise.all(parentIds.map(async (parentId) => {

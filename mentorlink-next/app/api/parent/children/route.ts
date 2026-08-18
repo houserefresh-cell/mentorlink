@@ -6,7 +6,7 @@ const clean = (value: unknown, maximum: number) => typeof value === "string" && 
 
 async function childrenWithInterests(parentUserId: string) {
   const admin = createSupabaseAdmin();
-  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, accommodation_notes, default_mentor_message, auto_include_mentor_message, created_at").eq("parent_user_id", parentUserId).is("removed_at", null).order("created_at");
+  const children = await admin.from("parent_children").select("id, first_name, last_name, grade, birth_date, school_name, gender, display_color, accommodation_notes, default_mentor_message, auto_include_mentor_message, created_at").eq("parent_user_id", parentUserId).is("removed_at", null).order("created_at");
   if (children.error) return { data: null, error: children.error };
   const ids = (children.data ?? []).map((child) => child.id);
   const interests = ids.length ? await admin.from("parent_child_subject_interests").select("child_id, subject_id, subjects(name, category)").in("child_id", ids) : { data: [], error: null };
@@ -32,10 +32,11 @@ export async function POST(request: Request) {
   const lastName = typeof payload.lastName === "string" ? payload.lastName.trim() : "";
   const grade = typeof payload.grade === "string" && grades.has(payload.grade) ? payload.grade : null;
   const birthDate = typeof payload.birthDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.birthDate) ? payload.birthDate : null;
+  const gender = payload.gender === "boy" || payload.gender === "girl" ? payload.gender : null;
   const notes = typeof payload.accommodationNotes === "string" ? payload.accommodationNotes.trim() : "";
   const schoolName = typeof payload.schoolName === "string" ? payload.schoolName.trim() : "";
   const interestIds = Array.isArray(payload.interestSubjectIds) ? [...new Set(payload.interestSubjectIds.map(Number).filter((value) => Number.isInteger(value) && value > 0))] : [];
-  if (firstName.length < 1 || firstName.length > 60 || !grade || !birthDate || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
+  if (firstName.length < 1 || firstName.length > 60 || !grade || !birthDate || !gender || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה, מין ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
   if (schoolName.length === 1 || schoolName.length > 120) return Response.json({ error: "שם בית הספר אינו תקין." }, { status: 400 });
   const admin = createSupabaseAdmin();
   const removedMatch = await admin.from("parent_children")
@@ -56,10 +57,14 @@ export async function POST(request: Request) {
     const refreshed = await childrenWithInterests(user.id);
     return Response.json({ child: refreshed.data?.find((child) => child.id === removedMatch.data?.id), restored: true }, { status: 201 });
   }
+  const siblingResult = await admin.from("parent_children").select("id").eq("parent_user_id", user.id).eq("gender", gender);
+  if (siblingResult.error) return Response.json({ error: "לא ניתן לבחור צבע לילד/ה." }, { status: 500 });
+  const palette = gender === "girl" ? ["peach", "pink", "red", "violet", "amber"] : ["green", "blue", "turquoise", "violet", "amber"];
+  const displayColor = palette[(siblingResult.data?.length ?? 0) % palette.length];
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: null, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
   if (result.error?.code === "23505") return Response.json({ error: "כבר קיים ילד בשם הזה בחשבון." }, { status: 409 });
   if (result.error || !result.data) return Response.json({ error: result.error?.message.includes("INVALID_SUBJECT") ? "אחד מתחומי העניין אינו זמין." : "לא ניתן לשמור את פרטי הילד/ה." }, { status: result.error?.message.includes("INVALID_SUBJECT") ? 400 : 500 });
-  await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", result.data).eq("parent_user_id", user.id);
+  await admin.from("parent_children").update({ last_name: lastName || null, gender, display_color: displayColor, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", result.data).eq("parent_user_id", user.id);
   const refreshed = await childrenWithInterests(user.id);
   return Response.json({ child: refreshed.data?.find((child) => child.id === result.data) }, { status: 201 });
 }
@@ -75,15 +80,16 @@ export async function PATCH(request: Request) {
   const lastName = typeof payload.lastName === "string" ? payload.lastName.trim() : "";
   const grade = typeof payload.grade === "string" && grades.has(payload.grade) ? payload.grade : null;
   const birthDate = typeof payload.birthDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.birthDate) ? payload.birthDate : null;
+  const gender = payload.gender === "boy" || payload.gender === "girl" ? payload.gender : null;
   const notes = typeof payload.accommodationNotes === "string" ? payload.accommodationNotes.trim() : "";
   const schoolName = typeof payload.schoolName === "string" ? payload.schoolName.trim() : "";
   const interestIds = Array.isArray(payload.interestSubjectIds) ? [...new Set(payload.interestSubjectIds.map(Number).filter((value) => Number.isInteger(value) && value > 0))] : [];
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !firstName || firstName.length > 60 || !grade || !birthDate || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
+  if (!/^[0-9a-f-]{36}$/i.test(id) || !firstName || firstName.length > 60 || !grade || !birthDate || !gender || notes.length > 1000) return Response.json({ error: "שם פרטי, כיתה, מין ותאריך לידה מלא הם שדות חובה." }, { status: 400 });
   if (schoolName.length === 1 || schoolName.length > 120) return Response.json({ error: "שם בית הספר אינו תקין." }, { status: 400 });
   const admin = createSupabaseAdmin();
   const result = await admin.rpc("save_parent_child_preferences", { p_parent_user_id: user.id, p_child_id: id, p_first_name: firstName, p_grade: grade, p_birth_date: birthDate, p_school_name: schoolName || null, p_accommodation_notes: notes || null, p_interest_subject_ids: interestIds });
   if (result.error || !result.data) return Response.json({ error: result.error?.message.includes("INVALID_SUBJECT") ? "אחד מתחומי העניין אינו זמין." : "לא ניתן לעדכן את פרטי הילד/ה." }, { status: result.error?.message.includes("INVALID_SUBJECT") ? 400 : 422 });
-  await admin.from("parent_children").update({ last_name: lastName || null, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", id).eq("parent_user_id", user.id);
+  await admin.from("parent_children").update({ last_name: lastName || null, gender, default_mentor_message: clean(payload.defaultMentorMessage, 1000) || null, auto_include_mentor_message: payload.autoIncludeMentorMessage === true }).eq("id", id).eq("parent_user_id", user.id);
   const refreshed = await childrenWithInterests(user.id);
   return Response.json({ child: refreshed.data?.find((child) => child.id === id) });
 }
