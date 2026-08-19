@@ -68,9 +68,6 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
       setRequests(body.requests ?? []);
       setUnreadCount(body.attentionCount ?? 0);
       setUnreadMeetingIds(body.unreadMeetingIds ?? []);
-      if (role === "parent" && typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent("mentorlink:meeting-attention", { detail: { count: body.attentionCount ?? 0 } }));
-      }
       const bookingId = body.schedulingMentorBookingId ?? "";
       if (role === "mentor" && bookingId) {
         const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${bookingId}`);

@@ -15,8 +15,11 @@ const meetingFlow = read("app/_components/MeetingRequestFlow.tsx");
 const activityForm = read("app/dashboard/mentor/activities/_components/MentorActivityForm.tsx");
 const authRouting = read("lib/auth-routing.ts");
 const notificationApi = read("app/api/notifications/route.ts");
+const parentMeetingUpdates = read("app/dashboard/parent/requests/ParentMeetingUpdates.tsx");
+const parentMeetingUpdatesApi = read("app/api/parent/meeting-updates/route.ts");
 const migration = read("supabase/migrations/202608180042_child_gender_colors_and_auto_review.sql");
 const meetingAttentionMigration = read("supabase/migrations/202608190043_meeting_attention_and_cancellation.sql");
+const parentMeetingUpdatesMigration = read("supabase/migrations/202608190044_parent_meeting_updates.sql");
 
 test("mentor onboarding keeps only the approved essentials required and submits automatically", () => {
   assert.match(onboarding, /בחרו לפחות תחום אחד/);
@@ -63,6 +66,11 @@ test("parent meeting area has child filters, four clear views and notification b
   assert.match(notificationApi, /meetingRequestId/);
   assert.match(notificationApi, /meeting_request_created/);
   assert.match(meetingAttentionMigration, /cancellation_reason/);
+  assert.match(parentMeetingUpdates, /עדכונים מהחונכים/);
+  assert.match(parentMeetingUpdates, /התראה חשובה — ביטול פגישה/);
+  assert.match(parentMeetingUpdates, /קראתי — העברה להיסטוריה/);
+  assert.match(parentMeetingUpdatesApi, /meeting_request_updates/);
+  assert.match(parentMeetingUpdatesMigration, /record_parent_meeting_update/);
 });
 
 test("activity and meeting creation use the approved shortcuts", () => {
