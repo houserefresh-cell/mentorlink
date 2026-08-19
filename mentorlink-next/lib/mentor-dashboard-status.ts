@@ -1,6 +1,7 @@
 export type MentorMeetingSummary = {
   status: string;
   confirmed_start_at?: string | null;
+  proposed_start_at?: string | null;
   created_at?: string;
 };
 
@@ -11,7 +12,8 @@ export function requiresMentorAction(meeting: MentorMeetingSummary) {
 }
 
 export function waitsForParentAction(meeting: MentorMeetingSummary) {
-  return meeting.status === "alternative_proposed";
+  return meeting.status === "alternative_proposed" ||
+    (meeting.status === "accepted" && Boolean(meeting.proposed_start_at));
 }
 
 export function isUpcomingApprovedMeeting(

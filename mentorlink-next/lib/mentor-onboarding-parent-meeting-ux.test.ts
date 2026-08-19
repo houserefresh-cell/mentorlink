@@ -11,7 +11,12 @@ const meetings = read("app/dashboard/_components/MeetingRequestsPanel.tsx");
 const meetingApi = read("app/api/meeting-requests/route.ts");
 const meetingMutationApi = read("app/api/meeting-requests/[requestId]/route.ts");
 const parentShell = read("app/dashboard/parent/_components/ParentDashboardShell.tsx");
+const meetingFlow = read("app/_components/MeetingRequestFlow.tsx");
+const activityForm = read("app/dashboard/mentor/activities/_components/MentorActivityForm.tsx");
+const authRouting = read("lib/auth-routing.ts");
+const notificationApi = read("app/api/notifications/route.ts");
 const migration = read("supabase/migrations/202608180042_child_gender_colors_and_auto_review.sql");
+const meetingAttentionMigration = read("supabase/migrations/202608190043_meeting_attention_and_cancellation.sql");
 
 test("mentor onboarding keeps only the approved essentials required and submits automatically", () => {
   assert.match(onboarding, /בחרו לפחות תחום אחד/);
@@ -53,6 +58,23 @@ test("parent meeting area has child filters, four clear views and notification b
   assert.match(meetingApi, /meeting_details_updated/);
   assert.match(meetingApi, /meeting_request_cancelled/);
   assert.match(meetingMutationApi, /kind = "meeting_request_cancelled"/);
+  assert.match(meetings, /פחות מ־12 שעות נותרו לפגישה/);
+  assert.match(meetings, /markMeetingRead/);
+  assert.match(notificationApi, /meetingRequestId/);
+  assert.match(notificationApi, /meeting_request_created/);
+  assert.match(meetingAttentionMigration, /cancellation_reason/);
+});
+
+test("activity and meeting creation use the approved shortcuts", () => {
+  assert.match(meetingFlow, /durations\.length === 1/);
+  assert.match(meetingFlow, /chooseSlot/);
+  assert.match(activityForm, /תמונה טובה מבליטה את הפעילות/);
+  assert.match(activityForm, /\/image/);
+});
+
+test("ordinary sign in can securely resolve the configured administrator dashboard", () => {
+  assert.match(authRouting, /\/api\/account\/dashboard-role/);
+  assert.match(authRouting, /\/dashboard\/admin\/mentors/);
 });
 
 test("parent navigation separates meetings and mentor inquiries in the requested order", () => {

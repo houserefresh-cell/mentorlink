@@ -85,7 +85,7 @@ export async function POST(request: Request) {
       kind: "meeting_request_created",
       title: "בקשת פגישה חדשה",
       body: "התקבלה בקשת פגישה חדשה במנטורלינק",
-      href: "/dashboard/mentor/meeting-requests",
+      href: `/dashboard/mentor/meeting-requests?meeting=${data.id}`,
     });
     const mentorAuth = await client.auth.admin.getUserById(mentor.mentorUserId);
     await sendMeetingEmail({
@@ -93,13 +93,13 @@ export async function POST(request: Request) {
       subject: "בקשת פגישה חדשה במנטורלינק",
       heading: "בקשת פגישה חדשה",
       body: "בקשה חדשה ממתינה לבדיקה באזור האישי.",
-      href: "/dashboard/mentor/meeting-requests",
+      href: `/dashboard/mentor/meeting-requests?meeting=${data.id}`,
     });
     await sendPushToUser(client, mentor.mentorUserId, {
       type: "meeting_request_created",
       title: "בקשת פגישה חדשה במנטורלינק",
       body: "התקבלה בקשת פגישה חדשה לאישורך.",
-      href: "/dashboard/mentor/meeting-requests",
+      href: `/dashboard/mentor/meeting-requests?meeting=${data.id}`,
     });
     return Response.json({ request: data }, { status: 201 });
   } catch {
@@ -117,7 +117,7 @@ export async function GET(request: Request) {
     const client = createSupabaseAdmin();
     const column = user.role === "parent" ? "parent_user_id" : "mentor_user_id";
     let query = client.from("meeting_requests")
-      .select("id, mentor_user_id, parent_user_id, child_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, meeting_price, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, created_at, updated_at, preparation_notes, equipment_notes, meeting_location, participant_names, archived_by_parent_at")
+      .select("id, mentor_user_id, parent_user_id, child_id, subject, child_first_name, child_grade_or_age, help_goal, meeting_mode, meeting_price, requested_start_at, requested_duration_minutes, parent_message, status, mentor_response, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_end_at, confirmed_duration_minutes, responded_at, cancelled_at, cancellation_reason, created_at, updated_at, preparation_notes, equipment_notes, meeting_location, participant_names, archived_by_parent_at")
       .eq(column, user.id)
       .order("created_at", { ascending: false });
     if (user.role === "parent") query = query.is("archived_by_parent_at", null);
@@ -158,14 +158,16 @@ export async function GET(request: Request) {
       const publication = await client.from("mentor_publication").select("public_booking_id").eq("user_id", user.id).maybeSingle();
       schedulingMentorBookingId = publication.data?.public_booking_id ?? null;
     }
-    const attentionKinds = user.role === "parent" ? ["meeting_details_updated", "meeting_alternative_proposed"] : ["meeting_request_created", "meeting_request_cancelled"];
-    const unread = await client.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null).in("kind", attentionKinds);
+    const attentionKinds = user.role === "parent" ? ["meeting_details_updated", "meeting_alternative_proposed", "meeting_request_cancelled"] : ["meeting_request_created", "meeting_request_cancelled"];
+    const unread = await client.from("notifications").select("id, href").eq("user_id", user.id).is("read_at", null).in("kind", attentionKinds);
+    const unreadMeetingIds = [...new Set((unread.data ?? []).flatMap((notification) => {
+      const match = notification.href?.match(/[?&]meeting=([0-9a-f-]{36})/i);
+      return match?.[1] ? [match[1]] : [];
+    }))];
     return Response.json({
       schedulingMentorBookingId,
-      attentionCount: Math.max(
-        unread.count ?? 0,
-        rows.filter((row) => user.role === "parent" && row.status === "alternative_proposed").length,
-      ),
+      attentionCount: unread.data?.length ?? 0,
+      unreadMeetingIds,
       requests: rows.map(({ mentor_user_id, parent_user_id, ...row }) => ({
         ...row,
         child_gender: childDetails.get(row.child_id)?.gender ?? null,

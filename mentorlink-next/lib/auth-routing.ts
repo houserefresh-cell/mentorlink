@@ -4,6 +4,18 @@ import { resolveDashboardPath } from "./dashboard-route";
 export { resolveDashboardPath } from "./dashboard-route";
 
 export async function getDashboardPath(userId: string) {
+  const session = await supabase.auth.getSession();
+  const accessToken = session.data.session?.access_token;
+  if (accessToken) {
+    const response = await fetch("/api/account/dashboard-role", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    }).catch(() => null);
+    if (response?.ok && (await response.json()).administrator === true) {
+      return "/dashboard/admin/mentors";
+    }
+  }
+
   const [authUser, mentorProfile] = await Promise.all([
     supabase.auth.getUser(),
     supabase
@@ -29,7 +41,7 @@ export async function getDashboardPath(userId: string) {
   } | null;
 
   return resolveDashboardPath({
-    role: user?.user_metadata?.role,
+    role: user?.app_metadata?.role ?? user?.user_metadata?.role,
     hasCompletedMentorProfile: Boolean(
       profile?.first_name && profile?.birth_date && profile?.bio,
     ),

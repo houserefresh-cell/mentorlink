@@ -5,6 +5,10 @@ export function resolveDashboardPath({
   role: unknown;
   hasCompletedMentorProfile: boolean;
 }) {
+  if (role === "admin") {
+    return "/dashboard/admin/mentors";
+  }
+
   if (role === "mentor") {
     return hasCompletedMentorProfile
       ? "/dashboard/mentor"

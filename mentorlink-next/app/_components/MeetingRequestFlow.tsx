@@ -118,6 +118,11 @@ export default function MeetingRequestFlow({
   ].filter((value): value is string => Boolean(value));
   const complete = hasSelectableSlots && missingRequirements.length === 0;
 
+  function chooseSlot(nextSlot: Slot | null) {
+    setSlot(nextSlot);
+    setDuration(nextSlot?.durations.length === 1 ? nextSlot.durations[0] : 0);
+  }
+
   async function loadLaterDates() {
     if (loadingLater) return;
     setLoadingLater(true);
@@ -199,9 +204,9 @@ export default function MeetingRequestFlow({
                 <Choice title="א. נושא הפגישה" values={config.mentor.subjects} selected={subject} onSelect={(value) => { setSubject(value); setMode(""); setSlot(null); setDuration(0); }} />
                 {subject && <Choice title="ב. אופן הפגישה" values={availableModes} selected={mode} onSelect={(value) => { setMode(value); setSlot(null); setDuration(0); }} />}
                 {subject && !availableModes.length && <p role="status" className="rounded-xl bg-amber-50 p-4 font-bold text-amber-900">אין כרגע חלון זמינות שמוגדר למקצוע הזה.</p>}
-                {mode && <Choice title="ג. בחירת יום" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = subjectSlots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); setSlot(first ?? null); setDuration(0); }} />}
-                {selectedDate && <Choice title="שעה" values={dateSlots.map((item) => item.startAt)} selected={slot?.startAt ?? ""} format={formatTime} onSelect={(value) => { setSlot(dateSlots.find((item) => item.startAt === value) ?? null); setDuration(0); }} />}
-                {slot && <Choice title="ד. משך הפגישה" values={slot.durations.map(String)} selected={String(duration || "")} format={(value) => `${value} דקות`} onSelect={(value) => setDuration(Number(value))} />}
+                {mode && <Choice title="ג. בחירת יום" values={dates} selected={selectedDate} format={formatDate} onSelect={(value) => { const first = subjectSlots.find((item) => item.meetingMode === mode && dateKey(item.startAt) === value); chooseSlot(first ?? null); }} />}
+                {selectedDate && <Choice title="שעה" values={dateSlots.map((item) => item.startAt)} selected={slot?.startAt ?? ""} format={formatTime} onSelect={(value) => chooseSlot(dateSlots.find((item) => item.startAt === value) ?? null)} />}
+                {slot && (slot.durations.length === 1 ? <fieldset><legend className="mb-2 font-black">ד. משך הפגישה</legend><span className="inline-flex min-h-11 items-center rounded-xl border border-blue-700 bg-blue-700 px-4 py-2 font-bold text-white">{slot.durations[0]} דקות</span></fieldset> : <Choice title="ד. משך הפגישה" values={slot.durations.map(String)} selected={String(duration || "")} format={(value) => `${value} דקות`} onSelect={(value) => setDuration(Number(value))} />)}
                 <fieldset><legend className="mb-2 font-black">ה. עבור מי הפגישה?</legend>
                   {children.length > 0 && <div className="mb-4 flex flex-wrap gap-2">{children.map((child) => <button key={child.id} type="button" aria-pressed={selectedChildId === child.id} onClick={() => { setSelectedChildId(child.id); setChildName(child.first_name); setGrade(gradeLabel(child.grade)); setMessage(child.auto_include_mentor_message ? child.default_mentor_message ?? "" : ""); }} className={`min-h-11 rounded-full border px-4 py-2 font-black ${selectedChildId === child.id ? "border-violet-700 bg-violet-700 text-white" : "border-violet-200 bg-violet-50 text-violet-950"}`}>{child.first_name}{child.grade ? ` · ${gradeLabel(child.grade)}` : ""}</button>)}</div>}
                   <div className="grid gap-4 sm:grid-cols-2">
