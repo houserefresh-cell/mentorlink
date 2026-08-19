@@ -72,7 +72,9 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
   const registrationState = useMemo(() => {
     return registrations.reduce<Map<string, Map<string, string>>>((map, row) => {
       const activityMap = map.get(row.activity_id) ?? new Map<string, string>();
-      activityMap.set(row.child_id, row.status);
+      // The API returns newest registrations first. Keep the newest state instead
+      // of letting an older cancelled registration overwrite a later active one.
+      if (!activityMap.has(row.child_id)) activityMap.set(row.child_id, row.status);
       map.set(row.activity_id, activityMap);
       return map;
     }, new Map());
@@ -88,7 +90,16 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     setBusy(true); setMessage(""); const accessToken = await token();
     const response = await fetch("/api/parent/activity-registrations", { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ activityId: registering.id, childIds: selectedIds, idempotencyKeys: selectedIds.map(() => crypto.randomUUID()) }) });
     const body = await response.json(); setBusy(false);
-    if (!response.ok) return setMessage(body.error ?? "לא ניתן להשלים את ההרשמה.");
+    if (!response.ok) {
+      const duplicate = response.status === 409 && /כבר רשומ|רשימת ההמתנה/.test(body.error ?? "");
+      setMessage(body.error ?? "לא ניתן להשלים את ההרשמה.");
+      if (duplicate) {
+        setRegistering(null);
+        setSelectedIds([]);
+        await load();
+      }
+      return;
+    }
     const waiting = (body.registrations ?? []).filter((item: { status: string }) => item.status === "waitlisted").length;
     setMessage(waiting ? `ההרשמה הושלמה. ${waiting} מהילדים נוספו לרשימת ההמתנה.` : "ההרשמה הושלמה בהצלחה!");
     setRegistering(null); setSelectedIds([]); await load();
@@ -106,8 +117,9 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
     {registering && <Modal title="את מי תרצו לרשום?" onClose={() => setRegistering(null)}><p className="mb-4 text-slate-600">כל ילד תופס מקום נפרד. ניתן לבחור ילד אחד או כמה ילדים.</p>{children.length ? <div className="grid gap-3">{children.map((child) => {
       const status = activityChildStatus(registering.id, child.id);
       const gradeAllowed = childGradeAllowed(child, registering);
-      const locked = status === "registered" || status === "waitlisted" || !gradeAllowed;
-      const disableReason = status === "registered" ? "✓ כבר רשום/ה" : status === "waitlisted" ? "✓ כבר ברשימת ההמתנה" : !gradeAllowed ? `לא מתאים לכיתה ${child.grade ? gradeLabels[child.grade] : "שלא צוינה"}` : null;
+      const registeredByActivity = registering.registeredChildNames.includes(child.first_name);
+      const locked = status === "registered" || status === "waitlisted" || registeredByActivity || !gradeAllowed;
+      const disableReason = status === "waitlisted" ? "✓ כבר ברשימת ההמתנה" : status === "registered" || registeredByActivity ? "✓ כבר רשום/ה" : !gradeAllowed ? `לא מתאים לכיתה ${child.grade ? gradeLabels[child.grade] : "שלא צוינה"}` : null;
       const selectionLimitReached = !selectedIds.includes(child.id) && selectedIds.length >= registrationCapacity(registering);
       return <label key={child.id} className={`flex items-center gap-3 rounded-xl border p-4 ${locked || selectionLimitReached ? "bg-slate-100 opacity-70" : "cursor-pointer"}`}>
         <input type="checkbox" disabled={locked || selectionLimitReached} checked={selectedIds.includes(child.id)} onChange={() => setSelectedIds((current) => current.includes(child.id) ? current.filter((id) => id !== child.id) : [...current, child.id])} />
@@ -120,7 +132,7 @@ export default function ParentActivityDiscovery({ mentors }: { mentors: PublicMe
       const selectableIds = selectedIds.filter((id) => {
         const status = activityChildStatus(registering.id, id);
         const child = children.find((item) => item.id === id);
-        return Boolean(child && childGradeAllowed(child, registering) && status !== "registered" && status !== "waitlisted");
+        return Boolean(child && childGradeAllowed(child, registering) && status !== "registered" && status !== "waitlisted" && !registering.registeredChildNames.includes(child.first_name));
       });
       const canSubmit = selectableIds.length > 0;
       return <>
@@ -150,9 +162,10 @@ function activityAction(activity: Activity, children: Child[], registrationState
   if (!children.length) return { label: "יש להוסיף ילד/ה לפני ההרשמה", enabled: false };
   const activityStatuses = registrationState.get(activity.id) ?? new Map<string, string>();
   const activeStatuses = new Set(["registered", "waitlisted"]);
-  const alreadyRegistered = children.filter((child) => activeStatuses.has(activityStatuses.get(child.id) ?? ""));
+  const registeredNames = new Set(activity.registeredChildNames ?? []);
+  const alreadyRegistered = children.filter((child) => activeStatuses.has(activityStatuses.get(child.id) ?? "") || registeredNames.has(child.first_name));
   const gradeEligibleChildren = children.filter((child) => childGradeAllowed(child, activity));
-  const availableChildren = gradeEligibleChildren.filter((child) => !activeStatuses.has(activityStatuses.get(child.id) ?? ""));
+  const availableChildren = gradeEligibleChildren.filter((child) => !activeStatuses.has(activityStatuses.get(child.id) ?? "") && !registeredNames.has(child.first_name));
   if (!gradeEligibleChildren.length) return { label: "אין ילד/ה בכיתה המתאימה לפעילות", enabled: false };
   if (!availableChildren.length) return { label: "כל הילדים כבר רשומים או ממתינים", enabled: false };
   const additional = alreadyRegistered.length > 0;

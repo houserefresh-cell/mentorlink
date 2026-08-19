@@ -29,6 +29,7 @@ type Meeting = {
   confirmed_start_at: string | null;
   confirmed_end_at: string | null;
   confirmed_duration_minutes: number | null;
+  cancellation_reason: string | null;
   created_at: string;
   updated_at: string;
   preparation_notes: string | null;
@@ -47,6 +48,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   const [requests, setRequests] = useState<Meeting[]>([]);
   const [message, setMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMeetingIds, setUnreadMeetingIds] = useState<string[]>([]);
   const [busyId, setBusyId] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [alternatives, setAlternatives] = useState<Record<string, string>>({});
@@ -64,18 +66,16 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error("MEETINGS_LOAD_FAILED");
       setRequests(body.requests ?? []);
+      setUnreadCount(body.attentionCount ?? 0);
+      setUnreadMeetingIds(body.unreadMeetingIds ?? []);
+      if (role === "parent" && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("mentorlink:meeting-attention", { detail: { count: body.attentionCount ?? 0 } }));
+      }
       const bookingId = body.schedulingMentorBookingId ?? "";
       if (role === "mentor" && bookingId) {
         const slotsResponse = await fetch(`/api/meeting-requests/available-slots?mentor=${bookingId}`);
         const slotsBody = await slotsResponse.json().catch(() => ({}));
         if (slotsResponse.ok) setSlots(slotsBody.slots ?? []);
-      }
-      const notificationResponse = await fetch("/api/notifications", {
-        headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store",
-      });
-      if (notificationResponse.ok) {
-        const notificationBody = await notificationResponse.json().catch(() => ({}));
-        setUnreadCount(notificationBody.unreadCount ?? 0);
       }
       setLoadState("loaded");
     } catch {
@@ -143,6 +143,26 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
     }
   }
 
+  async function cancelMeeting(item: Meeting) {
+    const reason = window.prompt("מה הסיבה לביטול הפגישה? הסיבה תישלח להורה.", "");
+    if (reason === null) return;
+    if (reason.trim().length < 3) { setMessage("יש לציין סיבה קצרה לביטול הפגישה."); return; }
+    if (!window.confirm("לבטל את הפגישה? ההורה יקבל הודעה.")) return;
+    setBusyId(item.id); setMessage("");
+    try {
+      const response = await fetch(`/api/meeting-requests/${item.id}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel", reason: reason.trim() }) });
+      const body = await response.json().catch(() => ({}));
+      setMessage(response.ok ? "הפגישה בוטלה וההורה קיבל עדכון." : body.error ?? "לא ניתן לבטל את הפגישה.");
+      if (response.ok) await load(token);
+    } finally { setBusyId(""); }
+  }
+
+  async function markMeetingRead(meetingId: string) {
+    if (!unreadMeetingIds.includes(meetingId)) return;
+    const response = await fetch("/api/notifications", { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ meetingRequestId: meetingId }) });
+    if (response.ok) await load(token);
+  }
+
   async function updateDetails(item: Meeting, values: MeetingDetailsValues) {
     setBusyId(item.id);
     const response=await fetch(`/api/meeting-requests/${item.id}`,{method:"PATCH",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({action:"update_details",...values,participantNames:values.participantNames.split(",").map(v=>v.trim()).filter(Boolean)})});
@@ -166,7 +186,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
             <h2 id="meeting-requests-title" className="text-2xl font-black">הפגישות שלי</h2>
-            <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
+            <NotificationBadge count={unreadCount} />
             </div>
             <Link href="/dashboard/parent#mentor-search" className="rounded-xl bg-blue-700 px-5 py-3 font-black text-white">בקשת פגישה חדשה</Link>
           </div>
@@ -178,21 +198,21 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
             <ParentTab label="פגישות שבוטלו" count={filteredGroups.closed.length + filteredGroups.history.length} selected={parentView === "cancelled"} onClick={() => setParentView("cancelled")} />
           </nav>
           <div className="mt-6 space-y-7">
-            {parentView === "requests" && <RequestGroup title="ממתינות לאישור" requests={[...filteredGroups.waitingForMentor,...filteredGroups.actionRequired]} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
-            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={filteredGroups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
-            {parentView === "completed" && <RequestGroup title="פגישות שהתקיימו" requests={filteredGroups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />}
-            {parentView === "cancelled" && <><RequestGroup title="פגישות שבוטלו או נדחו" requests={filteredGroups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /><RequestGroup title="היסטוריה נוספת" requests={filteredGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} /></>}
+            {parentView === "requests" && <RequestGroup title="ממתינות לאישור" requests={[...filteredGroups.waitingForMentor,...filteredGroups.actionRequired]} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
+            {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={filteredGroups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
+            {parentView === "completed" && <RequestGroup title="פגישות שהתקיימו" requests={filteredGroups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
+            {parentView === "cancelled" && <><RequestGroup title="פגישות שבוטלו או נדחו" requests={filteredGroups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} /><RequestGroup title="היסטוריה נוספת" requests={filteredGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} /></>}
           </div>
         </>
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="font-bold text-blue-700">בקשות ופגישות</p><h1 id="meeting-requests-title" className="mt-1 text-3xl font-black">{MENTOR_VIEWS[view].title}</h1></div>
-            <NotificationBadge count={unreadCount} token={token} clear={() => setUnreadCount(0)} />
+            <NotificationBadge count={unreadCount} />
           </div>
           <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? item.active : item.inactive}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
           <div className="mt-5">
-            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} updateDetails={setEditingMeeting} />
+            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />
           </div>        </>
       )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
@@ -240,6 +260,9 @@ type ListProps = {
   setAlternatives: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   act: (id: string, action: string, confirmation: string) => Promise<void>;
   proposeNext: (item: Meeting) => Promise<void>;
+  cancelMeeting: (item: Meeting) => Promise<void>;
+  markMeetingRead: (meetingId: string) => Promise<void>;
+  unreadMeetingIds: string[];
   updateDetails: (item: Meeting) => void;
 };
 
@@ -257,7 +280,7 @@ function RequestList({ requests, empty, ...props }: ListProps & { empty: string 
   return <div className="mt-3 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{requests.map((item) => <MeetingCard key={item.id} item={item} {...props} />)}</div>;
 }
 
-function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext, updateDetails }: Omit<ListProps, "requests"> & { item: Meeting }) {
+function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext, cancelMeeting, markMeetingRead, unreadMeetingIds, updateDetails }: Omit<ListProps, "requests"> & { item: Meeting }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const confirmedStart = item.confirmed_start_at;
   const confirmedDuration = item.confirmed_duration_minutes;
@@ -265,11 +288,13 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const visual = meetingVisual(item, role);
   const displayedStart = confirmedStart ?? item.proposed_start_at ?? item.requested_start_at;
   const displayedDuration = confirmedDuration ?? item.proposed_duration_minutes ?? item.requested_duration_minutes;
+  const hasUnreadUpdate = unreadMeetingIds.includes(item.id);
+  const canMentorCancel = role === "mentor" && item.status === "accepted" && effectiveStart(item) - Date.now() >= 12 * 60 * 60 * 1000;
   return (
     <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${role === "parent" ? childCardClass(item.child_display_color) : visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
-        <span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span>
+        <div className="flex items-center gap-2">{hasUnreadUpdate && <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">חדש</span>}<span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span></div>
       </div>
       {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_gender === "girl" ? "בת" : "בן"} · {item.child_grade_or_age}</p>}
       {role === "mentor" && <p className="mt-2 font-black text-slate-900">{item.child_gender === "girl" ? "בת" : "בן"} · {item.child_grade_or_age}</p>}
@@ -284,7 +309,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         <p className="mt-2 rounded-xl bg-emerald-50 p-3 font-black text-emerald-900">המועד שאושר: {formatDate(confirmedStart)} · {confirmedDuration} דקות</p>
       ) : null}
       {declinedAlternative && role === "mentor" ? <p className="mt-2 font-bold text-red-700">ההורה דחה את המועד החלופי.</p> : null}
-      <button type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((value) => !value)} className="mt-3 min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 font-black text-blue-800">{detailsOpen ? "סגירת פרטי המפגש" : "פרטי המפגש המלאים"}</button>
+      <button type="button" aria-expanded={detailsOpen} onClick={() => { const opening = !detailsOpen; setDetailsOpen(opening); if (opening) void markMeetingRead(item.id); }} className="mt-3 min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 font-black text-blue-800">{detailsOpen ? "סגירת פרטי המפגש" : "פרטי המפגש המלאים"}</button>
       {detailsOpen && <div className="mt-3 space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 text-slate-800">
         <p><b>מטרת המפגש:</b> {item.help_goal}</p>
         <p><b>הבקשה נשלחה:</b> {formatDate(item.created_at)}</p>
@@ -294,6 +319,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         {item.equipment_notes && <p><b>מה להביא:</b> {item.equipment_notes}</p>}
         {item.meeting_location && <p><b>מיקום או קישור:</b> {item.meeting_location}</p>}
         {item.participant_names?.length > 0 && <p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}
+        {item.cancellation_reason && <p className="rounded-xl bg-red-50 p-3 text-red-900"><b>סיבת הביטול:</b> {item.cancellation_reason}</p>}
       </div>}
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
@@ -301,7 +327,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
           <a href={`tel:${item.contact_phone}`} className="min-h-11 rounded-xl border border-blue-300 bg-white px-4 py-2 font-bold text-blue-800">התקשרות</a>
           <a href={`https://wa.me/972${item.contact_phone.replace(/\D/g, "").replace(/^0/, "")}`} target="_blank" rel="noreferrer" className="min-h-11 rounded-xl bg-emerald-700 px-4 py-2 font-bold text-white">WhatsApp</a>
         </>}
-        {role === "parent" && item.status === "alternative_proposed" ? (
+        {role === "parent" && item.proposed_start_at && item.proposed_duration_minutes && ["alternative_proposed", "accepted"].includes(item.status) ? (
           <>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "accept_alternative", "לאשר את המועד החלופי?")} className="min-h-11 rounded-xl bg-green-700 px-4 py-2 font-bold text-white disabled:opacity-50">אישור המועד החלופי</button>
             <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "decline_alternative", "לדחות את המועד החלופי?")} className="min-h-11 rounded-xl border border-red-300 px-4 py-2 font-bold text-red-700 disabled:opacity-50">דחיית המועד החלופי</button>
@@ -320,9 +346,17 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
               <option value="">בחירת מועד חלופי</option>
               {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.requested_start_at).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
             </select>
-            <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת המועד הזמין הבא</button>
+            <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת מועד אחר</button>
           </>
         ) : null}
+        {role === "mentor" && item.status === "accepted" ? <>
+          <select aria-label="בחירת מועד אחר" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-violet-300 bg-white px-3">
+            <option value="">בחירת מועד אחר</option>
+            {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.confirmed_start_at && new Date(slot.startAt).getTime() > Date.now()).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
+          </select>
+          <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת מועד אחר</button>
+          {canMentorCancel ? <button type="button" disabled={busyId === item.id} onClick={() => void cancelMeeting(item)} className="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-700 disabled:opacity-50">ביטול הפגישה</button> : <p className="w-full rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-950">פחות מ־12 שעות נותרו לפגישה. לא ניתן לבטל דרך המערכת; יש ליצור קשר עם ההורה.</p>}
+        </> : null}
         {role === "mentor" && ["pending","alternative_proposed","accepted"].includes(item.status)&&<button type="button" disabled={busyId===item.id} onClick={()=>void updateDetails(item)} className="min-h-11 rounded-xl border border-blue-400 bg-white px-4 py-2 font-bold text-blue-800">עדכון פרטי המפגש</button>}
         {role === "parent" && ["cancelled","declined"].includes(item.status)&&<button type="button" disabled={busyId===item.id} onClick={()=>void act(item.id,"archive","להסיר את הבקשה מההיסטוריה?")} className="min-h-11 rounded-xl border px-4 py-2 font-bold">מחיקה מההיסטוריה</button>}
       </div>
@@ -366,7 +400,7 @@ function groupParentRequests(requests: Meeting[]) {
   const now = Date.now();
   const newestFirst = [...requests].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
   return {
-    actionRequired: newestFirst.filter((item) => item.status === "alternative_proposed"),
+    actionRequired: newestFirst.filter((item) => item.status === "alternative_proposed" || (item.status === "accepted" && Boolean(item.proposed_start_at))),
     waitingForMentor: newestFirst.filter((item) => item.status === "pending"),
     upcoming: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) >= now).sort((left, right) => effectiveStart(left) - effectiveStart(right)),
     completed: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) < now),
@@ -389,9 +423,9 @@ function statusLabel(item: Meeting, role: "parent" | "mentor") {
   return "ממתינה לתשובת החונך";
 }
 
-function NotificationBadge({ count, token, clear }: { count: number; token: string; clear: () => void }) {
+function NotificationBadge({ count }: { count: number }) {
   if (count <= 0) return null;
-  return <button type="button" onClick={async () => { await fetch("/api/notifications", { method: "PATCH", headers: { Authorization: `Bearer ${token}` } }); clear(); }} aria-label="סימון ההתראות כנקראו" className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">{count}</button>;
+  return <span aria-label={`${count} עדכונים חדשים`} className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">{count}</span>;
 }
 
 function formatDate(value: string) {

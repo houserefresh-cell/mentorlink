@@ -56,7 +56,7 @@ export async function PATCH(
         kind: "meeting_details_updated",
         title: "פרטי המפגש עודכנו",
         body: "החונך עדכן את ההכנה, הציוד או מיקום המפגש.",
-        href: "/dashboard/parent/requests",
+        href: `/dashboard/parent/requests?meeting=${requestId}`,
       });
       return Response.json({ request: updated.data });
     }
@@ -72,16 +72,29 @@ export async function PATCH(
         return Response.json({ error: "לא ניתן לבטל פגישה פחות מ־24 שעות מראש. יש ליצור קשר ישירות עם החונך." }, { status: 422 });
       }
     }
+    if (actor === "mentor" && action === "cancel" && current.status === "accepted") {
+      const startAt = current.confirmed_start_at ?? current.requested_start_at;
+      const hoursUntilMeeting = (new Date(startAt).getTime() - now.getTime()) / 3_600_000;
+      if (!Number.isFinite(hoursUntilMeeting) || hoursUntilMeeting < 12) {
+        return Response.json({ error: "לא ניתן לבטל פגישה פחות מ־12 שעות מראש. יש ליצור קשר ישירות עם ההורה." }, { status: 422 });
+      }
+      if (clean(payload.reason, 500).length < 3) {
+        return Response.json({ error: "יש לציין סיבה קצרה לביטול הפגישה." }, { status: 422 });
+      }
+    }
     const update: Record<string, unknown> = { updated_at: now.toISOString() };
     let recipientId: string;
     let kind: string;
     let title: string;
 
     if (action === "cancel") {
-      Object.assign(update, { status: "cancelled", cancelled_at: now.toISOString() });
-      recipientId = current.mentor_user_id;
+      const reason = clean(payload.reason, 500) || null;
+      Object.assign(update, { status: "cancelled", cancelled_at: now.toISOString(), cancellation_reason: reason });
+      recipientId = actor === "mentor" ? current.parent_user_id : current.mentor_user_id;
       kind = "meeting_request_cancelled";
-      title = current.status === "accepted" ? "הפגישה בוטלה על ידי ההורה" : "בקשת הפגישה בוטלה";
+      title = current.status === "accepted"
+        ? actor === "mentor" ? "הפגישה בוטלה על ידי החונך" : "הפגישה בוטלה על ידי ההורה"
+        : "בקשת הפגישה בוטלה";
     } else if (action === "decline") {
       Object.assign(update, {
         status: "declined",
@@ -94,8 +107,13 @@ export async function PATCH(
       kind = "meeting_request_declined";
       title = "בקשת הפגישה נדחתה";
     } else if (action === "decline_alternative") {
+      if (!current.proposed_start_at || !current.proposed_duration_minutes) {
+        return Response.json({ error: "אין מועד חלופי שממתין לתגובה." }, { status: 409 });
+      }
       Object.assign(update, {
-        status: "declined",
+        status: current.confirmed_start_at ? "accepted" : "declined",
+        proposed_start_at: null,
+        proposed_duration_minutes: null,
         responded_at: now.toISOString(),
       });
       recipientId = current.mentor_user_id;
@@ -112,6 +130,9 @@ export async function PATCH(
       }
 
       const acceptingAlternative = action === "accept_alternative";
+      if (acceptingAlternative && (!current.proposed_start_at || !current.proposed_duration_minutes)) {
+        return Response.json({ error: "אין מועד חלופי שממתין לאישור." }, { status: 409 });
+      }
       const startAt = acceptingAlternative ? current.proposed_start_at : current.requested_start_at;
       const duration = Number(acceptingAlternative
         ? current.proposed_duration_minutes
@@ -135,9 +156,14 @@ export async function PATCH(
 
       Object.assign(update, {
         status: "accepted",
+        requested_start_at: start.toISOString(),
+        requested_end_at: end.toISOString(),
+        requested_duration_minutes: duration,
         confirmed_start_at: start.toISOString(),
         confirmed_end_at: end.toISOString(),
         confirmed_duration_minutes: duration,
+        proposed_start_at: null,
+        proposed_duration_minutes: null,
         responded_at: now.toISOString(),
       });
       recipientId = acceptingAlternative ? current.mentor_user_id : current.parent_user_id;
@@ -159,7 +185,7 @@ export async function PATCH(
         return Response.json({ error: "המועד החלופי אינו זמין." }, { status: 422 });
       }
       Object.assign(update, {
-        status: "alternative_proposed",
+        status: current.status === "accepted" ? "accepted" : "alternative_proposed",
         proposed_start_at: proposedStart.toISOString(),
         proposed_duration_minutes: duration,
         mentor_response: clean(payload.response, 500),
@@ -183,12 +209,14 @@ export async function PATCH(
     if (result.error) throw new Error("update failed");
     if (!result.data) return Response.json({ error: "Request changed" }, { status: 409 });
 
-    const href = actor === "parent" ? "/dashboard/mentor/meeting-requests" : "/dashboard/parent";
+    const href = actor === "parent"
+      ? `/dashboard/mentor/meetings?meeting=${requestId}`
+      : `/dashboard/parent/requests?meeting=${requestId}`;
     await createMeetingNotification(client, {
       userId: recipientId,
       kind,
       title,
-      body: title,
+      body: action === "cancel" && clean(payload.reason, 500) ? `${title}: ${clean(payload.reason, 500)}` : title,
       href,
     });
     const recipient = await client.auth.admin.getUserById(recipientId);
