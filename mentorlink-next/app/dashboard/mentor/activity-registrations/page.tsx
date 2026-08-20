@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { MentorImportantUpdates } from "@/app/dashboard/mentor/_components/MentorDashboardShell";
 
 type Registration = {
   id: string; activityId: string; activityTitle: string; status: "registered" | "waitlisted"; registeredAt: string;
@@ -32,6 +33,7 @@ export default function MentorActivityRegistrationsPage() {
   })(); return () => { active = false; }; }, []);
   const shown = rows.filter((row) => view === "all" || row.status === view);
   return <section dir="rtl" className="mx-auto max-w-6xl">
+    <MentorImportantUpdates scope="activities" />
     <p className="font-black text-violet-700">הקהילה בפעילויות שלי</p>
     <h1 className="mt-2 text-3xl font-black">הרשמות חדשות לפעילויות</h1>
     <p className="mt-3 text-slate-600">כל ילד שנרשם או הצטרף לרשימת המתנה, עם פרטי ההורה והמפגש.</p>

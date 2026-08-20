@@ -1,5 +1,6 @@
 import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendPushToUser } from "@/lib/web-push-delivery";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
   const profile = await admin.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
   if (!profile.data?.phone) return Response.json({ error: "לפני הרשמה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
   const [activity, activeRegistrations] = await Promise.all([
-    admin.from("mentor_activities").select("max_participants").eq("id", activityId).maybeSingle(),
+    admin.from("mentor_activities").select("max_participants,mentor_user_id,title").eq("id", activityId).maybeSingle(),
     admin.from("mentor_activity_registrations").select("child_id,status").eq("activity_id", activityId).in("status", ["registered", "waitlisted"]),
   ]);
   if (activity.error || activeRegistrations.error || !activity.data) return Response.json({ error: "לא ניתן לבדוק את מצב הפעילות כרגע." }, { status: 500 });
@@ -40,6 +41,14 @@ export async function POST(request: Request) {
   if (message.includes("REGISTRATION_CLOSED") || message.includes("ACTIVITY_NOT_AVAILABLE") || message.includes("ACTIVITY_ALREADY_STARTED")) return Response.json({ error: "ההרשמה לפעילות אינה זמינה עוד." }, { status: 422 });
   if (message.includes("CHILD_NOT_OWNED")) return Response.json({ error: "לא ניתן לרשום ילד שאינו שייך לחשבון." }, { status: 403 });
   if (result.error) return Response.json({ error: "לא ניתן להשלים את ההרשמה כרגע." }, { status: 500 });
+  const children = await admin.from("parent_children").select("first_name").in("id", childIds).eq("parent_user_id", user.id);
+  const childNames = (children.data ?? []).map((child) => child.first_name).filter(Boolean).join(", ");
+  await sendPushToUser(admin, activity.data.mentor_user_id, {
+    type: "mentor_activity_registration",
+    title: availablePlaces > 0 ? "הרשמה חדשה לפעילות" : "הצטרפות לרשימת ההמתנה",
+    body: `${childNames || "ילד/ה"} הצטרף/ה ל${activity.data.title || "פעילות"}.`,
+    href: "/dashboard/mentor/activity-registrations",
+  });
   return Response.json({ registrations: result.data }, { status: 201 });
 }
 

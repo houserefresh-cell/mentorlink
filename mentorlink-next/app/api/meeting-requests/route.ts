@@ -158,7 +158,9 @@ export async function GET(request: Request) {
       const publication = await client.from("mentor_publication").select("public_booking_id").eq("user_id", user.id).maybeSingle();
       schedulingMentorBookingId = publication.data?.public_booking_id ?? null;
     }
-    const attentionKinds = user.role === "parent" ? ["meeting_details_updated", "meeting_alternative_proposed", "meeting_request_cancelled"] : ["meeting_request_created", "meeting_request_cancelled"];
+    const attentionKinds = user.role === "parent"
+      ? ["meeting_details_updated", "meeting_alternative_proposed", "meeting_request_cancelled"]
+      : ["meeting_request_created", "meeting_request_cancelled", "meeting_request_accepted", "meeting_request_declined"];
     const unread = await client.from("notifications").select("id, href").eq("user_id", user.id).is("read_at", null).in("kind", attentionKinds);
     const unreadMeetingIds = [...new Set((unread.data ?? []).flatMap((notification) => {
       const match = notification.href?.match(/[?&]meeting=([0-9a-f-]{36})/i);
