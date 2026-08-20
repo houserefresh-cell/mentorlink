@@ -58,6 +58,7 @@ export async function PATCH(
         body: "החונך עדכן את ההכנה, הציוד או מיקום המפגש.",
         href: `/dashboard/parent/requests?meeting=${requestId}`,
       });
+      await sendPushToUser(client,current.parent_user_id,{type:"meeting_details_updated",title:"פרטי המפגש עודכנו",body:"החונך עדכן את ההכנה, הציוד או מיקום המפגש.",href:`/dashboard/parent/requests?meeting=${requestId}`});
       return Response.json({ request: updated.data });
     }
     if (!canTransition(actor, current.status, action)) {
@@ -97,7 +98,7 @@ export async function PATCH(
         : "בקשת הפגישה בוטלה";
     } else if (action === "decline") {
       Object.assign(update, {
-        status: "declined",
+        status: "cancelled",
         mentor_response: clean(payload.response, 500),
         responded_at: now.toISOString(),
       });
@@ -111,7 +112,7 @@ export async function PATCH(
         return Response.json({ error: "אין מועד חלופי שממתין לתגובה." }, { status: 409 });
       }
       Object.assign(update, {
-        status: current.confirmed_start_at ? "accepted" : "declined",
+        status: current.confirmed_start_at ? "accepted" : "cancelled",
         proposed_start_at: null,
         proposed_duration_minutes: null,
         responded_at: now.toISOString(),

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { isUpcomingApprovedMeeting, newestFirst, requiresMentorAction, waitsForParentAction } from "@/lib/mentor-dashboard-status";
+import { MentorImportantUpdates } from "@/app/dashboard/mentor/_components/MentorDashboardShell";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
@@ -56,6 +57,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   const [parentView, setParentView] = useState<ParentMeetingView>("meetings");
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [mentorHistoryView, setMentorHistoryView] = useState<"completed"|"cancelled">("completed");
 
   const load = useCallback(async (accessToken: string) => {
     setLoadState("loading");
@@ -198,18 +200,20 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
             {parentView === "requests" && <RequestGroup title="ממתינות לאישור" requests={[...filteredGroups.waitingForMentor,...filteredGroups.actionRequired]} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
             {parentView === "meetings" && <RequestGroup title="פגישות שאושרו וטרם התקיימו" requests={filteredGroups.upcoming} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
             {parentView === "completed" && <RequestGroup title="פגישות שהתקיימו" requests={filteredGroups.completed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
-            {parentView === "cancelled" && <><RequestGroup title="פגישות שבוטלו או נדחו" requests={filteredGroups.closed} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} /><RequestGroup title="היסטוריה נוספת" requests={filteredGroups.history} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} /></>}
+            {parentView === "cancelled" && <RequestGroup title="פגישות שבוטלו" requests={[...filteredGroups.closed,...filteredGroups.history]} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />}
           </div>
         </>
       ) : (
         <>
+          <MentorImportantUpdates scope="meetings" />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="font-bold text-blue-700">בקשות ופגישות</p><h1 id="meeting-requests-title" className="mt-1 text-3xl font-black">{MENTOR_VIEWS[view].title}</h1></div>
             <NotificationBadge count={unreadCount} />
           </div>
-          <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? item.active : item.inactive}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
+          <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? `${item.active} scale-105 shadow-lg ring-4 ring-slate-900/15` : `${item.inactive} opacity-90 hover:opacity-100`}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
           <div className="mt-5">
-            <RequestGroup title={MENTOR_VIEWS[view].title} requests={mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />
+            {view==="history"&&<nav aria-label="סינון היסטוריית פגישות" className="mb-5 grid gap-2 rounded-2xl bg-slate-800 p-2 sm:grid-cols-2"><button onClick={()=>setMentorHistoryView("completed")} className={`min-h-12 rounded-xl px-5 font-black ${mentorHistoryView==="completed"?"scale-[1.03] bg-white text-slate-900 shadow-lg ring-2 ring-white":"text-white"}`}>הסתיימו ({mentorGroups.completed.length})</button><button onClick={()=>setMentorHistoryView("cancelled")} className={`min-h-12 rounded-xl px-5 font-black ${mentorHistoryView==="cancelled"?"scale-[1.03] bg-white text-slate-900 shadow-lg ring-2 ring-white":"text-white"}`}>בוטלו ({mentorGroups.cancelled.length})</button></nav>}
+            <RequestGroup title={view==="history"?(mentorHistoryView==="completed"?"פגישות שהסתיימו":"פגישות שבוטלו"):MENTOR_VIEWS[view].title} requests={view==="history"?mentorGroups[mentorHistoryView]:mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />
           </div>        </>
       )}
       {message && <p role="status" className="mt-4 rounded-xl bg-blue-50 p-3 font-bold">{message}</p>}
@@ -279,6 +283,7 @@ function RequestList({ requests, empty, ...props }: ListProps & { empty: string 
 
 function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives, act, proposeNext, cancelMeeting, markMeetingRead, unreadMeetingIds, updateDetails }: Omit<ListProps, "requests"> & { item: Meeting }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [renderNow] = useState(()=>Date.now());
   const confirmedStart = item.confirmed_start_at;
   const confirmedDuration = item.confirmed_duration_minutes;
   const declinedAlternative = item.status === "declined" && Boolean(item.proposed_start_at);
@@ -286,7 +291,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   const displayedStart = confirmedStart ?? item.proposed_start_at ?? item.requested_start_at;
   const displayedDuration = confirmedDuration ?? item.proposed_duration_minutes ?? item.requested_duration_minutes;
   const hasUnreadUpdate = unreadMeetingIds.includes(item.id);
-  const canMentorCancel = role === "mentor" && item.status === "accepted" && effectiveStart(item) - Date.now() >= 12 * 60 * 60 * 1000;
+  const canMentorCancel = role === "mentor" && item.status === "accepted" && effectiveStart(item) - renderNow >= 12 * 60 * 60 * 1000;
   return (
     <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${role === "parent" ? childCardClass(item.child_display_color) : visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -331,7 +336,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
           </>
         ) : null}
         {role === "parent" && ["pending","accepted"].includes(item.status) ? (
-          item.status === "accepted" && effectiveStart(item)-Date.now()<24*60*60*1000
+          item.status === "accepted" && effectiveStart(item)-renderNow<24*60*60*1000
             ? <p className="w-full rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-950">פחות מ־24 שעות נותרו לפגישה. לביטול יש ליצור קשר ישירות עם החונך.</p>
             : <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "cancel", item.status === "accepted" ? "לבטל את הפגישה? החונך יקבל הודעה." : "לבטל את בקשת הפגישה?")} className="min-h-11 rounded-xl border border-red-200 px-4 py-2 font-bold text-red-700 disabled:opacity-50">{item.status === "accepted" ? "ביטול הפגישה" : "ביטול הבקשה"}</button>
         ) : null}
@@ -349,7 +354,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         {role === "mentor" && item.status === "accepted" ? <>
           <select aria-label="בחירת מועד אחר" value={alternatives[item.id] ?? ""} onChange={(event) => setAlternatives((current) => ({ ...current, [item.id]: event.target.value }))} className="min-h-11 rounded-xl border border-violet-300 bg-white px-3">
             <option value="">בחירת מועד אחר</option>
-            {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.confirmed_start_at && new Date(slot.startAt).getTime() > Date.now()).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
+            {slots.filter((slot) => slot.meetingMode === item.meeting_mode && slot.startAt !== item.confirmed_start_at && new Date(slot.startAt).getTime() > renderNow).flatMap((slot) => slot.durations.map((duration) => <option key={`${slot.startAt}-${duration}`} value={`${slot.startAt}|${duration}`}>{formatDate(slot.startAt)} · {duration} דקות</option>))}
           </select>
           <button type="button" disabled={busyId === item.id || !alternatives[item.id]} onClick={() => void proposeNext(item)} className="min-h-11 rounded-xl bg-violet-700 px-4 py-2 font-bold text-white disabled:opacity-50">הצעת מועד אחר</button>
           {canMentorCancel ? <button type="button" disabled={busyId === item.id} onClick={() => void cancelMeeting(item)} className="min-h-11 rounded-xl border border-red-300 bg-white px-4 py-2 font-bold text-red-700 disabled:opacity-50">ביטול הפגישה</button> : <p className="w-full rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-950">פחות מ־12 שעות נותרו לפגישה. לא ניתן לבטל דרך המערכת; יש ליצור קשר עם ההורה.</p>}
@@ -388,9 +393,12 @@ function groupMentorRequests(requests: Meeting[]) {
   const ordered = newestFirst(requests);
   const actionRequired = ordered.filter(requiresMentorAction);
   const waitingForParent = ordered.filter(waitsForParentAction);
-  const upcomingApproved = ordered.filter((item) => isUpcomingApprovedMeeting(item));
+  const upcomingApproved = ordered.filter((item) => isUpcomingApprovedMeeting(item)).sort((left,right)=>effectiveStart(left)-effectiveStart(right));
   const visibleIds = new Set([...actionRequired, ...waitingForParent, ...upcomingApproved].map((item) => item.id));
-  return { actionRequired, waitingForParent, upcomingApproved, history: ordered.filter((item) => !visibleIds.has(item.id)) };
+  const history=ordered.filter((item)=>!visibleIds.has(item.id));
+  const completed=history.filter((item)=>item.status==="accepted"&&effectiveStart(item)<Date.now()).sort((left,right)=>effectiveStart(right)-effectiveStart(left));
+  const cancelled=history.filter((item)=>["cancelled","declined"].includes(item.status)).sort((left,right)=>new Date(right.updated_at).getTime()-new Date(left.updated_at).getTime());
+  return { actionRequired, waitingForParent, upcomingApproved, history:[...completed,...cancelled], completed, cancelled };
 }
 
 function groupParentRequests(requests: Meeting[]) {
@@ -414,8 +422,7 @@ function statusLabel(item: Meeting, role: "parent" | "mentor") {
   if (item.status === "accepted" && effectiveStart(item) < Date.now()) return "הסתיימה";
   if (item.status === "alternative_proposed") return role === "parent" ? "ממתין לאישורך" : "ממתין לאישור ההורה";
   if (item.status === "accepted") return "מאושרת";
-  if (item.status === "declined" && item.proposed_start_at) return role === "mentor" ? "ההורה דחה את המועד החלופי" : "המועד החלופי נדחה";
-  if (item.status === "declined") return "נדחתה";
+  if (item.status === "declined") return "בוטלה";
   if (item.status === "cancelled") return "בוטלה";
   return "ממתינה לתשובת החונך";
 }
