@@ -157,9 +157,6 @@ export async function PATCH(
 
       Object.assign(update, {
         status: "accepted",
-        requested_start_at: start.toISOString(),
-        requested_end_at: end.toISOString(),
-        requested_duration_minutes: duration,
         confirmed_start_at: start.toISOString(),
         confirmed_end_at: end.toISOString(),
         confirmed_duration_minutes: duration,
@@ -205,7 +202,7 @@ export async function PATCH(
       .select("id, status, requested_start_at, requested_duration_minutes, proposed_start_at, proposed_duration_minutes, confirmed_start_at, confirmed_duration_minutes")
       .maybeSingle();
     if (result.error?.code === "23P01") {
-      return Response.json({ error: "Meeting overlap" }, { status: 409 });
+      return Response.json({ error: "לא ניתן לאשר את הפגישה כי לחונך כבר יש פגישה או פעילות בשעה חופפת." }, { status: 409 });
     }
     if (result.error) throw new Error("update failed");
     if (!result.data) return Response.json({ error: "Request changed" }, { status: 409 });

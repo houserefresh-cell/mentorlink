@@ -123,7 +123,36 @@ export async function GET(request: Request) {
     if (user.role === "parent") query = query.is("archived_by_parent_at", null);
     const { data, error } = await query;
     if (error) throw new Error("query failed");
-    const rows = [...(data ?? [])].sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
+    const expiredIds = (data ?? []).filter((row) => {
+      if (!row.proposed_start_at || !row.proposed_duration_minutes) return false;
+      if (!["alternative_proposed", "accepted"].includes(row.status)) return false;
+      return new Date(row.proposed_start_at).getTime() + Number(row.proposed_duration_minutes) * 60_000 <= Date.now();
+    }).map((row) => row.id);
+    if (expiredIds.length) {
+      await Promise.all([
+        client.from("meeting_requests").update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: "המועד שהוצע חלף ללא אישור.",
+          proposed_start_at: null,
+          proposed_duration_minutes: null,
+          updated_at: new Date().toISOString(),
+        }).in("id", expiredIds).eq(column, user.id),
+        ...expiredIds.map((id) => client.from("notifications")
+          .update({ read_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("kind", "meeting_alternative_proposed")
+          .is("read_at", null)
+          .like("href", `%meeting=${id}%`)),
+      ]);
+    }
+    const rows = (data ?? []).map((row) => expiredIds.includes(row.id) ? {
+      ...row,
+      status: "cancelled",
+      cancellation_reason: "המועד שהוצע חלף ללא אישור.",
+      proposed_start_at: null,
+      proposed_duration_minutes: null,
+    } : row).sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
     const names = new Map<string, string>();
     const phones = new Map<string, string>();
     const childDetails = new Map<string, { gender: string | null; display_color: string | null }>();

@@ -8,6 +8,7 @@ const originalMigration = read("supabase/migrations/202607270010_create_parent_m
 const durationMigration = read("supabase/migrations/202607270013_create_field_level_mentor_review.sql");
 const confirmedMigration = read("supabase/migrations/202607300017_add_confirmed_meeting_interval.sql");
 const customDurationMigration = read("supabase/migrations/202607310021_allow_ten_minute_custom_durations.sql");
+const crossScheduleMigration = read("supabase/migrations/202608210045_rich_attention_and_cross_schedule_guards.sql");
 const createRoute = read("app/api/meeting-requests/route.ts");
 const actionRoute = read("app/api/meeting-requests/[requestId]/route.ts");
 const dataLoader = read("lib/meeting-data.ts");
@@ -47,13 +48,23 @@ test("slot loading blocks confirmed alternatives and legacy accepted requests", 
   assert.match(dataLoader, /confirmed_start_at, confirmed_end_at/);
   assert.match(dataLoader, /meeting\.confirmed_start_at \?\? meeting\.requested_start_at/);
   assert.match(dataLoader, /meeting\.confirmed_end_at \?\? meeting\.requested_end_at/);
+  assert.match(dataLoader, /mentor_activity_sessions/);
+  assert.match(dataLoader, /activitySessions\.data/);
+});
+
+test("database guards prevent meeting and activity intervals from overlapping", () => {
+  assert.match(crossScheduleMigration, /guard_meeting_against_activity_overlap/);
+  assert.match(crossScheduleMigration, /guard_published_activity_session_against_meeting_overlap/);
+  assert.match(crossScheduleMigration, /pg_advisory_xact_lock/);
+  assert.match(crossScheduleMigration, /tstzrange\([\s\S]*?'\[\)'\)[\s\S]*?&&/);
+  assert.match(crossScheduleMigration, /errcode = '23P01'/);
 });
 
 test("only the parent can respond to an alternative proposal", () => {
   assert.equal(canTransition("parent", "alternative_proposed", "accept_alternative"), true);
   assert.equal(canTransition("parent", "alternative_proposed", "decline_alternative"), true);
   assert.equal(canTransition("mentor", "alternative_proposed", "accept"), false);
-  assert.equal(canTransition("parent", "accepted", "accept_alternative"), false);
+  assert.equal(canTransition("parent", "accepted", "accept_alternative"), true);
 });
 
 test("conditional update and exclusion violation prevent simultaneous acceptance", () => {

@@ -210,7 +210,7 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
             <div><p className="font-bold text-blue-700">בקשות ופגישות</p><h1 id="meeting-requests-title" className="mt-1 text-3xl font-black">{MENTOR_VIEWS[view].title}</h1></div>
             <NotificationBadge count={unreadCount} />
           </div>
-          <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${view === key ? `${item.active} scale-105 shadow-lg ring-4 ring-slate-900/15` : `${item.inactive} opacity-90 hover:opacity-100`}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
+          <nav aria-label="סינון בקשות ופגישות" className="mt-5 flex flex-wrap gap-2">{Object.entries(MENTOR_VIEWS).map(([key, item]) => { const count = mentorViewRequests(mentorGroups, key as MentorMeetingView).length; return <Link key={key} href={"/dashboard/mentor/meetings?view=" + key} aria-current={view === key ? "page" : undefined} className={`rounded-full border px-4 py-2 font-bold transition ${item.style} ${view === key ? "scale-105 font-black shadow-md ring-2 ring-slate-700/30" : "opacity-90 hover:opacity-100"}`}>{item.title} <span className="font-black" aria-label={`${count} פריטים`}>({count})</span></Link>; })}</nav>
           <div className="mt-5">
             {view==="history"&&<nav aria-label="סינון היסטוריית פגישות" className="mb-5 grid gap-2 rounded-2xl bg-slate-800 p-2 sm:grid-cols-2"><button onClick={()=>setMentorHistoryView("completed")} className={`min-h-12 rounded-xl px-5 font-black ${mentorHistoryView==="completed"?"scale-[1.03] bg-white text-slate-900 shadow-lg ring-2 ring-white":"text-white"}`}>הסתיימו ({mentorGroups.completed.length})</button><button onClick={()=>setMentorHistoryView("cancelled")} className={`min-h-12 rounded-xl px-5 font-black ${mentorHistoryView==="cancelled"?"scale-[1.03] bg-white text-slate-900 shadow-lg ring-2 ring-white":"text-white"}`}>בוטלו ({mentorGroups.cancelled.length})</button></nav>}
             <RequestGroup title={view==="history"?(mentorHistoryView==="completed"?"פגישות שהסתיימו":"פגישות שבוטלו"):MENTOR_VIEWS[view].title} requests={view==="history"?mentorGroups[mentorHistoryView]:mentorViewRequests(mentorGroups, view)} role={role} busyId={busyId} slots={slots} alternatives={alternatives} setAlternatives={setAlternatives} act={act} proposeNext={proposeNext} cancelMeeting={cancelMeeting} markMeetingRead={markMeetingRead} unreadMeetingIds={unreadMeetingIds} updateDetails={setEditingMeeting} />
@@ -366,11 +366,11 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   );
 }
 
-const MENTOR_VIEWS: Record<MentorMeetingView, { title: string; active: string; inactive: string }> = {
-  "mentor-action": { title: "ממתינה לפעולת החונך", active: "border-amber-700 bg-amber-700 text-white", inactive: "border-amber-300 bg-amber-50 text-amber-950" },
-  "waiting-parent": { title: "ממתינה לתגובת ההורה", active: "border-violet-700 bg-violet-700 text-white", inactive: "border-violet-300 bg-violet-50 text-violet-950" },
-  "upcoming-approved": { title: "אושרה", active: "border-emerald-700 bg-emerald-700 text-white", inactive: "border-emerald-300 bg-emerald-50 text-emerald-950" },
-  history: { title: "היסטוריית פגישות", active: "border-slate-700 bg-slate-700 text-white", inactive: "border-slate-300 bg-slate-50 text-slate-800" },
+const MENTOR_VIEWS: Record<MentorMeetingView, { title: string; style: string }> = {
+  "upcoming-approved": { title: "אושרה", style: "border-emerald-300 bg-emerald-50 text-emerald-950" },
+  "mentor-action": { title: "ממתינה לפעולת החונך", style: "border-amber-300 bg-amber-50 text-amber-950" },
+  "waiting-parent": { title: "ממתינה לתגובת ההורה", style: "border-violet-300 bg-violet-50 text-violet-950" },
+  history: { title: "היסטוריית פגישות", style: "border-slate-300 bg-slate-50 text-slate-800" },
 };
 
 function meetingVisual(item: Meeting, role: "parent" | "mentor") {
