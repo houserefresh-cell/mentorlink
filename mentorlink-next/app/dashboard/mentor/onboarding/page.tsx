@@ -121,6 +121,7 @@ export default function MentorOnboardingPage() {
   const [storedPhotoPath, setStoredPhotoPath] = useState("");
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [createdByAdministrator, setCreatedByAdministrator] = useState(false);
   const subjectGroups = useMemo(() => subjects.reduce<Record<string, SubjectOption[]>>((groups, subject) => {
     (groups[subject.category] ??= []).push(subject);
     return groups;
@@ -184,6 +185,7 @@ export default function MentorOnboardingPage() {
 
       setUserId(auth.user.id);
       setEmailConfirmed(Boolean(auth.user.email_confirmed_at));
+      setCreatedByAdministrator(auth.user.user_metadata?.created_by_administrator === true);
 
       const [profileResult, subjectsResult, choicesResult, availabilityResult, locationsResult, experienceResult, preferencesResult, consentResult] = await Promise.all([
         supabase
@@ -670,11 +672,11 @@ export default function MentorOnboardingPage() {
   }
 
   useEffect(() => {
-    if (activeStep === 6 && readyForReview && !autoSubmitted && !submitting) {
+    if (activeStep === 6 && readyForReview && !createdByAdministrator && !autoSubmitted && !submitting) {
       setAutoSubmitted(true);
       void submitForReview();
     }
-  }, [activeStep, autoSubmitted, readyForReview, submitting]);
+  }, [activeStep, autoSubmitted, createdByAdministrator, readyForReview, submitting]);
 
   if (loading) {
     return <LoadingPage text="מכין את מסע ההרשמה..." />;
@@ -941,7 +943,9 @@ export default function MentorOnboardingPage() {
                 </h3>
                 <p className="mt-2 text-slate-700">
                   {consentStatus === "approved"
-                    ? "אישור ההורה התקבל והפרופיל נשלח אוטומטית לאישור מנהל."
+                    ? createdByAdministrator
+                      ? "אישור ההורה התקבל. החשבון נוצר על ידי מנהל המערכת, ולכן אין צורך בשליחה נוספת למנהל."
+                      : "אישור ההורה התקבל והפרופיל נשלח אוטומטית לאישור מנהל."
                     : consentStatus === "sent"
                       ? "הבקשה נשלחה. אפשר לבדוק את הסטטוס או לשלוח בקשה חדשה מעמוד אישור ההורה."
                       : "כדי להשלים את ההרשמה יש להזין את פרטי ההורה ולשלוח אליו בקשת אישור."}
@@ -960,7 +964,20 @@ export default function MentorOnboardingPage() {
               </div>
             )}
 
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 font-bold text-blue-900">{readyForReview ? "כל דרישות החובה הושלמו. הפרופיל נשלח אוטומטית לאישור מנהל." : "לאחר השלמת דרישות החובה ואישור ההורה, הפרופיל יישלח אוטומטית לאישור מנהל."}</div>
+            {createdByAdministrator ? (
+              <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-900">
+                <p className="font-extrabold">החשבון נוצר על ידי מנהל המערכת</p>
+                <p className="mt-1">
+                  {isMinor === true && consentStatus !== "approved"
+                    ? "כדי להשלים את ההרשמה נדרש עדיין אישור הורה. לאחר אישור ההורה אין צורך בשליחה נוספת למנהל."
+                    : readyForReview
+                      ? "כל דרישות החובה הושלמו. אין צורך בשליחה נוספת למנהל."
+                      : "לאחר השלמת דרישות החובה ההרשמה תושלם ללא שליחה נוספת למנהל."}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 font-bold text-blue-900">{readyForReview ? "כל דרישות החובה הושלמו. הפרופיל נשלח אוטומטית לאישור מנהל." : "לאחר השלמת דרישות החובה ואישור ההורה, הפרופיל יישלח אוטומטית לאישור מנהל."}</div>
+            )}
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6">
               <p className="text-sm font-bold text-slate-500">אופציונלי — לא נדרש להשלמת ההרשמה</p>

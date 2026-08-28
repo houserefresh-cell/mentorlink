@@ -55,17 +55,38 @@ export async function POST(request: Request) {
     const ownership = await admin.from("mentor_account_ownership").insert({
       user_id: created.data.user.id,
       owner_type: "mentor",
+      created_by_administrator: true,
     });
     if (ownership.error?.code === "23505") {
       const existing = await admin.from("mentor_account_ownership").select("owner_type").eq("user_id", created.data.user.id).maybeSingle();
       if (existing.data?.owner_type === "mentor") {
-        return Response.json({ userId: created.data.user.id, email, firstName, lastName }, { status: 201 });
+        const marked = await admin.from("mentor_account_ownership").update({ created_by_administrator: true }).eq("user_id", created.data.user.id).eq("owner_type", "mentor");
+        if (marked.error) {
+          console.error("Unable to mark managed mentor account", marked.error);
+          await admin.auth.admin.deleteUser(created.data.user.id);
+          return Response.json({ error: `החשבון לא הושלם ולכן בוטל. ${marked.error.message}` }, { status: 500 });
+        }
+      } else {
+        console.error("Managed mentor ownership conflicts with an existing account", ownership.error);
+        await admin.auth.admin.deleteUser(created.data.user.id);
+        return Response.json({ error: "החשבון לא הושלם ולכן בוטל." }, { status: 500 });
       }
     }
-    if (ownership.error) {
+    if (ownership.error && ownership.error.code !== "23505") {
       console.error("Unable to complete managed mentor account", ownership.error);
       await admin.auth.admin.deleteUser(created.data.user.id);
       return Response.json({ error: `החשבון לא הושלם ולכן בוטל. ${ownership.error.message}` }, { status: 500 });
+    }
+    const publication = await admin.from("mentor_publication").upsert({
+      user_id: created.data.user.id,
+      status: "approved",
+      submitted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    if (publication.error) {
+      console.error("Unable to approve managed mentor account", publication.error);
+      await admin.auth.admin.deleteUser(created.data.user.id);
+      return Response.json({ error: `החשבון לא הושלם ולכן בוטל. ${publication.error.message}` }, { status: 500 });
     }
     return Response.json({ userId: created.data.user.id, email, firstName, lastName }, { status: 201 });
   } catch (error) { return adminApiError(error); }

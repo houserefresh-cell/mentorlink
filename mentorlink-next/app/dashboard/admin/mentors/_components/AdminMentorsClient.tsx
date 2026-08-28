@@ -365,7 +365,23 @@ async function reviewField(changeId: string, action: "approve" | "reject") {
       <ReviewSection title="Experience and mentoring approach"><RecordFields value={mentor.experience} /></ReviewSection>
       <ReviewSection title="Matching preferences"><RecordFields value={mentor.preferences} /></ReviewSection>
       <ReviewSection title="Profile photo">{mentor.photoUrl ? <Image src={mentor.photoUrl} alt="Saved mentor profile" width={192} height={192} unoptimized className="h-48 w-48 rounded-2xl object-cover" /> : <EmptyValue />}</ReviewSection>
-      <ReviewSection title="Parent consent"><p className="mb-4 font-bold">{mentor.isMinor === true ? `Minor — consent status: ${String(mentor.parentConsent?.status ?? "missing")}` : mentor.isMinor === false ? "Adult — parent consent not required" : "Age unavailable"}</p>{mentor.isMinor === true ? <RecordFields value={mentor.parentConsent} /> : null}</ReviewSection>
+      <ReviewSection title="אישור הורה">
+        {mentor.isMinor === true ? (
+          <div dir="rtl" className="space-y-4">
+            <div className={`rounded-2xl border p-5 ${mentor.parentConsent?.status === "approved" ? "border-emerald-300 bg-emerald-50" : "border-amber-300 bg-amber-50"}`}>
+              <p className="text-sm font-bold text-slate-600">מצב האישור</p>
+              <p className="mt-1 text-xl font-black">{mentor.parentConsent?.status === "approved" ? "ההורה אישר" : String(mentor.parentConsent?.status ?? "טרם נשלחה בקשה")}</p>
+              {mentor.parentConsent?.consented_at ? <p className="mt-1 text-sm text-slate-600">מועד האישור: {formatDate(String(mentor.parentConsent.consented_at))}</p> : null}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm font-bold text-slate-500">שם ההורה</p><p className="mt-1 font-bold">{String(mentor.parentConsent?.parent_name ?? "לא הוזן")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm font-bold text-slate-500">קרבה לחונך</p><p className="mt-1 font-bold">{String(mentor.parentConsent?.parent_relationship ?? "לא הוזנה")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm font-bold text-slate-500">טלפון ההורה</p><p dir="ltr" className="mt-1 text-right font-bold">{String(mentor.parentConsent?.parent_phone ?? "לא הוזן")}</p></div>
+              <div className="rounded-xl bg-slate-50 p-4"><p className="text-sm font-bold text-slate-500">אימייל ההורה</p><p dir="ltr" className="mt-1 break-all text-right font-bold">{String(mentor.parentConsent?.parent_email ?? "לא הוזן")}</p></div>
+            </div>
+          </div>
+        ) : <p dir="rtl" className="font-bold">חונך בגיר — לא נדרש אישור הורה.</p>}
+      </ReviewSection>
     </div>
   );
 }
