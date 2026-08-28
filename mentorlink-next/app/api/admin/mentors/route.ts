@@ -46,7 +46,8 @@ export async function POST(request: Request) {
     const admin = createSupabaseAdmin();
     const created = await admin.auth.admin.createUser({
       email, password, email_confirm: true,
-      user_metadata: { role: "mentor", first_name: firstName, last_name: lastName, account_owner_type: "mentor", must_change_password: true, created_by_administrator: true },
+      user_metadata: { role: "mentor", first_name: firstName, last_name: lastName, account_owner_type: "mentor", must_change_password: true },
+      app_metadata: { created_by_administrator: true },
     });
     if (created.error || !created.data.user) {
       const duplicate = created.error?.message.toLowerCase().includes("already") || created.error?.message.toLowerCase().includes("registered");

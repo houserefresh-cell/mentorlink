@@ -12,9 +12,12 @@ const adminRecord = read("app/dashboard/admin/mentors/_components/AdminMentorsCl
 const migration = read("supabase/migrations/20260827190054_managed_mentor_direct_approval.sql");
 
 test("administrator-created mentors enter the approved publication state", () => {
-  assert.match(createRoute, /created_by_administrator: true/);
+  assert.match(createRoute, /app_metadata:\s*\{\s*created_by_administrator: true\s*\}/);
+  assert.doesNotMatch(createRoute, /user_metadata:[^\n]*created_by_administrator/);
   assert.match(createRoute, /status: "approved"/);
+  assert.match(onboarding, /auth\.user\.app_metadata\?\.created_by_administrator/);
   assert.match(migration, /created_by_administrator boolean not null default false/);
+  assert.doesNotMatch(migration, /raw_user_meta_data/);
   assert.match(migration, /then 'approved'/);
 });
 

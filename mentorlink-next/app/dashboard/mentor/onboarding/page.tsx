@@ -185,7 +185,7 @@ export default function MentorOnboardingPage() {
 
       setUserId(auth.user.id);
       setEmailConfirmed(Boolean(auth.user.email_confirmed_at));
-      setCreatedByAdministrator(auth.user.user_metadata?.created_by_administrator === true);
+      setCreatedByAdministrator(auth.user.app_metadata?.created_by_administrator === true);
 
       const [profileResult, subjectsResult, choicesResult, availabilityResult, locationsResult, experienceResult, preferencesResult, consentResult] = await Promise.all([
         supabase
