@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     if (!child.data) return Response.json({ error: "יש לבחור ילד/ה מהחשבון." }, { status: 422 });
     const mentor = await loadPublishedSchedulingMentor(client, bookingId);
     if (!mentor) return Response.json({ error: "Published mentor not found" }, { status: 404 });
-    if (!mentor.subjects.includes(subject) || !mentor.meetingModes.includes(meetingMode)) {
+    if (!mentor.subjects.includes(subject)) {
       return Response.json({ error: "Invalid mentor selection" }, { status: 400 });
     }
     const requestedStart = new Date(requestedStartAt);

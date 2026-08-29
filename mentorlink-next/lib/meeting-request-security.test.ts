@@ -19,7 +19,8 @@ test("meeting creation authenticates and authorizes a parent before service-role
   assert.match(createRoute, /user\.role !== "parent"/);
   assert.match(createRoute, /Published mentor not found/);
   assert.match(createRoute, /mentor\.subjects\.includes\(subject\)/);
-  assert.match(createRoute, /mentor\.meetingModes\.includes\(meetingMode\)/);
+  assert.doesNotMatch(createRoute, /mentor\.meetingModes\.includes\(meetingMode\)/);
+  assert.match(createRoute, /slot\.meetingMode === meetingMode/);
   assert.match(createRoute, /isCurrentGeneratedSlot/);
   assert.match(createRoute, /idempotency_key/);
   assert.match(createRoute, /23505/);
