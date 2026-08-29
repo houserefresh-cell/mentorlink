@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await authorizeAdministrator(request.headers.get("authorization"));
+    const administrator = await authorizeAdministrator(request.headers.get("authorization"));
     const body = await request.json() as Record<string, unknown>;
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -78,12 +78,15 @@ export async function POST(request: Request) {
       await admin.auth.admin.deleteUser(created.data.user.id);
       return Response.json({ error: `החשבון לא הושלם ולכן בוטל. ${ownership.error.message}` }, { status: 500 });
     }
-    const publication = await admin.from("mentor_publication").upsert({
+    const now = new Date().toISOString();
+    const publication = await admin.from("mentor_publication").insert({
       user_id: created.data.user.id,
       status: "approved",
-      submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
+      submitted_at: now,
+      reviewed_at: now,
+      reviewed_by: administrator.id,
+      updated_at: now,
+    });
     if (publication.error) {
       console.error("Unable to approve managed mentor account", publication.error);
       await admin.auth.admin.deleteUser(created.data.user.id);
