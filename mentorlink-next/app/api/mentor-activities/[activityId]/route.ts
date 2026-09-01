@@ -5,6 +5,8 @@ import {
   authenticateMentorActivityUser,
   loadOwnedActivity,
 } from "@/lib/mentor-activity-data";
+import { isAllowedMentorActivityPrice } from "@/lib/mentor-age";
+import { loadMentorCapabilities } from "@/lib/mentor-capabilities-data";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 type Context = { params: Promise<{ activityId: string }> };
@@ -106,6 +108,10 @@ export async function PATCH(request: Request, context: Context) {
     const publishing = action === "publish";
     const validated = validateActivityInput(merged, publishing ? "published" : "draft");
     if (!validated.ok) return Response.json({ error: validated.error, code: validated.code }, { status: 400 });
+    const capabilities = await loadMentorCapabilities(loaded.client, loaded.user.id);
+    if (!isAllowedMentorActivityPrice(validated.activity.price, capabilities)) {
+      return Response.json({ error: "לחונך מתחת לגיל 18 מחיר הפעילות מוגבל ל־25 ₪ למשתתף.", code: "MINOR_ACTIVITY_PRICE_LIMIT" }, { status: 400 });
+    }
     if (!await activeSubjectExists(loaded.client, validated.activity.subject_id)) {
       return Response.json({ error: "Subject is not active", code: "SUBJECT_NOT_ACTIVE" }, { status: 400 });
     }

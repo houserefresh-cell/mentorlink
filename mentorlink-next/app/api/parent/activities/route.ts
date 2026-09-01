@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     const mentorPhone = activity.contact_phone_visibility === "public" && (isAdult || hasContactConsent) ? mentor?.phone ?? null : null;
     return [{
       id: activity.id, title: activity.title, description: activity.description, subjectId: activity.subject_id,
-      subjectName: subject?.name ?? "פעילות העשרה", mentorName: `${mentor?.first_name ?? "חונך/ת"}${mentor?.last_name ? ` ${Array.from(mentor.last_name)[0]}׳` : ""}`,
+      subjectName: subject?.name ?? "פעילות העשרה", subjectCategory: subject?.category ?? null, mentorName: `${mentor?.first_name ?? "חונך/ת"}${mentor?.last_name ? ` ${Array.from(mentor.last_name)[0]}׳` : ""}`,
       mentorBookingId: (publications.data ?? []).find((publication) => publication.user_id === activity.mentor_user_id)?.public_booking_id ?? null,
       city: mentor?.city ?? null, locationType: activity.location_type, venueName: activity.venue_name,
       locationDetails: activity.location_details, minParticipants: activity.min_participants,

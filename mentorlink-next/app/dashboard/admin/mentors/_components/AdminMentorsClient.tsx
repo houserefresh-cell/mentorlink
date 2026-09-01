@@ -236,6 +236,18 @@ function DetailView({ mentor }: { mentor: Detail }) {
     finally { setBusy(false); }
   }
 
+  async function sendPasswordReset() {
+    setBusy(true); setMessage(null);
+    try {
+      const response = await fetch("/api/admin/password-reset", { method: "POST", headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: mentor.userId, accountType: "mentor" }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "לא ניתן לשלוח קישור לאיפוס סיסמה.");
+      setMessage({ type: "success", text: `קישור לאיפוס סיסמה נשלח ל־${body.email ?? mentor.email ?? "כתובת החשבון"}.` });
+    } catch (reason) {
+      setMessage({ type: "error", text: reason instanceof Error ? reason.message : "לא ניתן לשלוח קישור לאיפוס סיסמה." });
+    } finally { setBusy(false); }
+  }
+
 async function reviewField(changeId: string, action: "approve" | "reject") {
     const reason = action === "reject" ? window.prompt("Rejection reason")?.trim() ?? "" : "";
     if (action === "reject" && reason.length < 3) return;
@@ -301,6 +313,7 @@ async function reviewField(changeId: string, action: "approve" | "reject") {
         <div dir="rtl" className="space-y-4">
           <div className="rounded-xl bg-slate-50 p-4"><p><b>דוא״ל:</b> {mentor.email ?? "לא זמין"}</p><p className="mt-1"><b>מצב החשבון:</b> {accountControl?.status === "blocked" ? "חסום" : accountControl?.status === "suspended" ? "מושבת זמנית" : "פעיל"}</p>{accountControl?.reason ? <p className="mt-1"><b>סיבה:</b> {accountControl.reason}</p> : null}{accountControl?.suspendedUntil ? <p className="mt-1"><b>עד:</b> {formatDate(accountControl.suspendedUntil)}</p> : null}</div>
           {!accountAction ? <div className="flex flex-wrap gap-3">
+            <button type="button" disabled={busy || !mentor.email} onClick={() => void sendPasswordReset()} className="rounded-xl border-2 border-blue-500 bg-blue-50 px-5 py-3 font-bold text-blue-800 disabled:opacity-50">שליחת קישור לאיפוס סיסמה</button>
             {accountControl?.status !== "suspended" ? <button onClick={() => setAccountAction("suspend")} className="rounded-xl bg-amber-500 px-5 py-3 font-bold text-white">השבתה זמנית</button> : null}
             {accountControl?.status !== "blocked" ? <button onClick={() => setAccountAction("block")} className="rounded-xl bg-red-600 px-5 py-3 font-bold text-white">חסימת חונך</button> : null}
             {accountControl && accountControl.status !== "active" ? <button onClick={() => setAccountAction("restore")} className="rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white">שחזור והסרת חסימה</button> : null}

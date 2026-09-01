@@ -7,7 +7,7 @@ import { getDashboardPath } from "../../../lib/auth-routing";
 
 export default function AuthCallbackPage() {
   return (
-    <Suspense fallback={<CallbackStatus text="משלים את ההתחברות עם Google..." />}>
+    <Suspense fallback={<CallbackStatus text="משלים את הפעולה..." />}>
       <AuthCallbackContent />
     </Suspense>
   );
@@ -39,6 +39,10 @@ function AuthCallbackContent() {
       }
 
       const flow = searchParams.get("flow");
+      if (flow === "password_recovery") {
+        router.replace("/account/reset-password");
+        return;
+      }
       const isMentorRegistration = flow === "mentor_register";
       const isParentRegistration = flow === "parent_register";
 

@@ -39,8 +39,10 @@ export default function LoginPage() {
         <p className="mb-8 text-center text-slate-500">ברוכים הבאים ל־MentorLink</p>
         <form onSubmit={loginWithEmail}>
           <input type="email" dir="ltr" placeholder="אימייל" required value={email} onChange={(e) => setEmail(e.target.value)} className="mb-4 w-full rounded-xl border border-slate-300 p-3 text-left" />
-          <input type="password" placeholder="סיסמה" required value={password} onChange={(e) => setPassword(e.target.value)} className="mb-6 w-full rounded-xl border border-slate-300 p-3" />
-          <button disabled={loading} className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white disabled:bg-slate-400">{loading ? "מתחבר..." : "התחברות עם מייל"}</button>
+                    <input type="password" placeholder="סיסמה" required value={password} onChange={(e) => setPassword(e.target.value)} className="mb-2 w-full rounded-xl border border-slate-300 p-3" />
+          <div className="mb-5 text-left"><Link href="/forgot-password" className="text-sm font-black text-blue-700 underline underline-offset-4">שכחתי סיסמה</Link></div>
+          <button disabled={loading}
+ className="w-full rounded-xl bg-blue-600 py-3 font-bold text-white disabled:bg-slate-400">{loading ? "מתחבר..." : "התחברות עם מייל"}</button>
         </form>
         {message && <p className="mt-5 rounded-xl bg-red-50 p-4 text-center text-red-700">{message}</p>}
         <p className="mt-7 text-center text-slate-600">עדיין אין חשבון? <Link href="/register/mentor" className="font-bold text-blue-600">הרשמה כחונך</Link></p>

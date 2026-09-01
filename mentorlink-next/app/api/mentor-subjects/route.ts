@@ -2,9 +2,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import {
-  SUBJECT_CATEGORIES,
   validateProposedSubject,
-  type SubjectCategory,
+  validateSubjectCategory,
 } from "@/lib/subject-catalog-core";
 
 const AGE_GROUPS = new Set([
@@ -77,7 +76,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const category = body.category;
+  const category = validateSubjectCategory(body.category);
   const addToProfile = body.addToProfile === undefined ? true : body.addToProfile;
   if (typeof addToProfile !== "boolean") {
     return Response.json(
@@ -85,10 +84,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (
-    typeof category !== "string" ||
-    !SUBJECT_CATEGORIES.includes(category as SubjectCategory)
-  ) {
+  if (!category) {
     return Response.json({ error: "Invalid category", code: "INVALID_CATEGORY" }, { status: 400 });
   }
 

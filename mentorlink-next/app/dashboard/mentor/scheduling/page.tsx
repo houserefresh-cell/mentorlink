@@ -19,6 +19,7 @@ export default function SchedulingAvailabilityPage() {
   const [windows, setWindows] = useState<WindowRow[]>([]);
   const [subjects, setSubjects] = useState<MentorSubject[]>([]);
   const [editingId, setEditingId] = useState("");
+  const [capabilities, setCapabilities] = useState<{ age: number | null; isAdult: boolean }>({ age: null, isAdult: false });
   const [form, setForm] = useState({ weekdays: [0] as number[], startTime: "16:00", endTime: "18:00", meetingMode: "אונליין", meetingPrice: 0, durations: [60], subjectIds: [] as number[], effectiveStartDate: "", effectiveEndDate: "" });
   const [customDuration, setCustomDuration] = useState("");
   const [message, setMessage] = useState("");
@@ -39,6 +40,7 @@ export default function SchedulingAvailabilityPage() {
       return;
     }
     setWindows(body.windows ?? []);
+    setCapabilities(body.capabilities ?? { age: null, isAdult: false });
     const selectedIds = new Set<number>((subjectBody.selected ?? []).map((item: { subject_id: number }) => item.subject_id));
     setSubjects((subjectBody.catalog ?? []).filter((subject: MentorSubject) => selectedIds.has(subject.id)));
   }
@@ -60,6 +62,14 @@ export default function SchedulingAvailabilityPage() {
     }
     if (!form.subjectIds.length) {
       setMessage("יש לבחור לפחות מקצוע או תחום אחד לחלון הזמינות. (INVALID_WINDOW_SUBJECTS)");
+      return;
+    }
+    if (!capabilities.isAdult && ![0, 10, 20, 30, 40].includes(Number(form.meetingPrice))) {
+      setMessage("לחונך מתחת לגיל 18 ניתן לקבוע 0, 10, 20, 30 או 40 ₪ לפגישה. (INVALID_WINDOW)");
+      return;
+    }
+    if (capabilities.isAdult && (!Number.isFinite(Number(form.meetingPrice)) || Number(form.meetingPrice) < 0)) {
+      setMessage("עלות הפגישה אינה תקינה. (INVALID_WINDOW)");
       return;
     }
     setBusy(true);
@@ -116,7 +126,7 @@ export default function SchedulingAvailabilityPage() {
       <div className="grid gap-5 rounded-3xl border bg-white p-5 shadow-sm sm:grid-cols-2">
         <fieldset className="sm:col-span-2"><legend className="font-bold">ימים</legend><div className="mt-2 flex flex-wrap gap-2">{DAYS.map((day, weekday) => <button type="button" key={day} aria-pressed={form.weekdays.includes(weekday)} onClick={() => setForm({ ...form, weekdays: editingId ? [weekday] : form.weekdays.includes(weekday) ? form.weekdays.filter((item) => item !== weekday) : [...form.weekdays, weekday] })} className={`min-h-11 rounded-xl border px-4 py-2 font-bold ${form.weekdays.includes(weekday) ? "bg-blue-700 text-white" : ""}`}>{day}</button>)}</div>{editingId && <p className="mt-2 text-sm text-slate-500">בעריכת חלון קיים ניתן לבחור יום אחד. להוספת כמה ימים יחד, צרו חלון חדש.</p>}</fieldset>
         <Select label="אופן פגישה" value={form.meetingMode} onChange={(meetingMode) => setForm({ ...form, meetingMode })} options={["אונליין", "פרונטלי"].map((value) => ({ label: value, value }))} />
-        <Select label="עלות הפגישה" value={String(form.meetingPrice)} onChange={(value) => setForm({ ...form, meetingPrice: Number(value) })} options={[{ label: "ללא עלות", value: "0" }, { label: "10 ₪", value: "10" }, { label: "20 ₪", value: "20" }, { label: "30 ₪", value: "30" }]} />
+        {capabilities.isAdult ? <label className="grid gap-2 font-bold">עלות הפגישה<input type="number" min="0" step="0.01" value={form.meetingPrice} onChange={(event) => setForm({ ...form, meetingPrice: Number(event.target.value) })} className="rounded-xl border p-3" /><span className="text-xs font-medium text-slate-500">מגיל 18 ניתן לקבוע את המחיר באופן חופשי.</span></label> : <Select label="עלות הפגישה" value={String(form.meetingPrice)} onChange={(value) => setForm({ ...form, meetingPrice: Number(value) })} options={[{ label: "ללא עלות", value: "0" }, { label: "10 ₪", value: "10" }, { label: "20 ₪", value: "20" }, { label: "30 ₪", value: "30" }, { label: "40 ₪", value: "40" }]} />}
         <label className="grid gap-2 font-bold">משעה<input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} className="rounded-xl border p-3" /></label>
         <label className="grid gap-2 font-bold">עד שעה<input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} className="rounded-xl border p-3" /></label>
 <label className="grid gap-2 font-bold">מתאריך (לא חובה)<input type="date" value={form.effectiveStartDate} onChange={(event) => setForm({ ...form, effectiveStartDate: event.target.value })} className="rounded-xl border p-3" /></label><label className="grid gap-2 font-bold">עד תאריך (לא חובה)<input type="date" value={form.effectiveEndDate} onChange={(event) => setForm({ ...form, effectiveEndDate: event.target.value })} className="rounded-xl border p-3" /></label>

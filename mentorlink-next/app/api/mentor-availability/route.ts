@@ -1,6 +1,8 @@
 import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { israelLocalDateTimeToUtc } from "@/lib/israel-calendar";
 import { isMeetingDuration, MEETING_MODES } from "@/lib/meeting-scheduling-core";
+import { isAllowedMentorMeetingPrice, type MentorCapabilities } from "@/lib/mentor-age";
+import { loadMentorCapabilities } from "@/lib/mentor-capabilities-data";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 function availabilityDiagnostic(stage: string, ok: boolean, code: string) {
@@ -13,9 +15,10 @@ export async function GET(request: Request) {
   if (user.role !== "mentor") return Response.json({ error: "Mentor role required", code: "MENTOR_ROLE_REQUIRED" }, { status: 403 });
   try {
     const client = createSupabaseAdmin();
-    const [windows, blackouts] = await Promise.all([
+    const [windows, blackouts, capabilities] = await Promise.all([
       client.from("mentor_availability_windows").select("*").eq("mentor_user_id", user.id).order("weekday").order("start_time"),
       client.from("mentor_blackout_periods").select("*").eq("mentor_user_id", user.id).order("starts_at"),
+      loadMentorCapabilities(client, user.id),
     ]);
     if (windows.error || blackouts.error) throw new Error("query failed");
     const windowIds = (windows.data ?? []).map((window) => window.id);
@@ -31,6 +34,7 @@ export async function GET(request: Request) {
     return Response.json({
       windows: (windows.data ?? []).map((window) => ({ ...window, subject_ids: subjectIdsByWindow.get(window.id) ?? [] })),
       blackouts: blackouts.data ?? [],
+      capabilities,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     availabilityDiagnostic("load", false, error instanceof Error ? error.name : "UnknownError");
@@ -62,8 +66,9 @@ export async function POST(request: Request) {
       availabilityDiagnostic("save_blackout", true, "BLACKOUT_SAVED");
       return Response.json({ blackout: result.data }, { status: 201 });
     }
-    const window = validateWindow(payload);
-    if (!window) return Response.json({ error: "שעות, אופן הפגישה או המשכים אינם תקינים.", code: "INVALID_WINDOW" }, { status: 400 });
+    const capabilities = await loadMentorCapabilities(client, user.id);
+    const window = validateWindow(payload, capabilities);
+    if (!window) return Response.json({ error: capabilities.isAdult ? "שעות, אופן הפגישה, המחיר או המשכים אינם תקינים." : "שעות, אופן הפגישה, המשכים או המחיר אינם תקינים. לחונך מתחת לגיל 18 המחירים הזמינים הם 0, 10, 20, 30 או 40 ₪.", code: "INVALID_WINDOW" }, { status: 400 });
     const subjectIds = await validateSubjectIds(client, user.id, payload.subjectIds);
     if (!subjectIds) return Response.json({ error: "יש לבחור לפחות מקצוע אחד מתוך המקצועות שלך.", code: "INVALID_WINDOW_SUBJECTS" }, { status: 400 });
     const duplicate = await client.from("mentor_availability_windows").select("id")
@@ -96,10 +101,12 @@ export async function PATCH(request: Request) {
   let payload: Record<string, unknown>;
   try { payload = await request.json(); } catch { return Response.json({ error: "בקשה לא תקינה.", code: "INVALID_REQUEST" }, { status: 400 }); }
   const id = clean(payload.id, 36);
-  const window = validateWindow(payload);
-  if (!/^[0-9a-f-]{36}$/i.test(id) || !window) return Response.json({ error: "חלון הזמינות אינו תקין.", code: "INVALID_WINDOW" }, { status: 400 });
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "חלון הזמינות אינו תקין.", code: "INVALID_WINDOW" }, { status: 400 });
   try {
     const client = createSupabaseAdmin();
+    const capabilities = await loadMentorCapabilities(client, user.id);
+    const window = validateWindow(payload, capabilities);
+    if (!window) return Response.json({ error: capabilities.isAdult ? "חלון הזמינות או המחיר אינם תקינים." : "חלון הזמינות אינו תקין. לחונך מתחת לגיל 18 המחירים הזמינים הם 0, 10, 20, 30 או 40 ₪.", code: "INVALID_WINDOW" }, { status: 400 });
     const subjectIds = payload.subjectIds === undefined
       ? null
       : await validateSubjectIds(client, user.id, payload.subjectIds);
@@ -155,11 +162,11 @@ export async function DELETE(request: Request) {
   }
 }
 
-function validateWindow(payload: Record<string, unknown>) {
+function validateWindow(payload: Record<string, unknown>, capabilities: MentorCapabilities) {
   const weekday = Number(payload.weekday); const startTime = clean(payload.startTime, 8); const endTime = clean(payload.endTime, 8); const meetingMode = clean(payload.meetingMode, 20);
   const durations = Array.isArray(payload.durations) ? payload.durations.map(Number).filter(isMeetingDuration) : [];
   const meetingPrice = Number(payload.meetingPrice ?? 0);
-  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime || !MEETING_MODES.includes(meetingMode as never) || !durations.length || ![0, 10, 20, 30].includes(meetingPrice)) return null;
+  if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime || !MEETING_MODES.includes(meetingMode as never) || !durations.length || !isAllowedMentorMeetingPrice(meetingPrice, capabilities)) return null;
   return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, meeting_price: meetingPrice, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
 }
 function clean(value: unknown, maximum: number) { return typeof value === "string" && value.trim().length <= maximum ? value.trim() : ""; }

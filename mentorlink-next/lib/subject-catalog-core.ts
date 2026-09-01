@@ -8,7 +8,7 @@ export const SUBJECT_CATEGORIES = [
   "כישורי חיים והעשרה",
 ] as const;
 
-export type SubjectCategory = (typeof SUBJECT_CATEGORIES)[number];
+export type SubjectCategory = string;
 
 const BLOCKED_TERMS = [
   "זונה",
@@ -62,6 +62,15 @@ function editDistance(left: string, right: string) {
     previous.splice(0, previous.length, ...current);
   }
   return previous[right.length];
+}
+
+export function validateSubjectCategory(value: unknown) {
+  if (typeof value !== "string") return null;
+  const category = normalizeSubjectName(value);
+  const letters = Array.from(category.matchAll(/\p{L}/gu)).length;
+  if (category.length < 2 || category.length > 50 || letters < 2) return null;
+  if (!/^[\p{L}\p{N}][\p{L}\p{N}\s׳'״"-]*$/u.test(category)) return null;
+  return category;
 }
 
 export function validateProposedSubject(

@@ -123,38 +123,70 @@ export async function GET(request: Request) {
     if (user.role === "parent") query = query.is("archived_by_parent_at", null);
     const { data, error } = await query;
     if (error) throw new Error("query failed");
-    const expiredIds = (data ?? []).filter((row) => {
+    const nowMs = Date.now();
+    const expiredAlternativeIds = (data ?? []).filter((row) => {
       if (!row.proposed_start_at || !row.proposed_duration_minutes) return false;
       if (!["alternative_proposed", "accepted"].includes(row.status)) return false;
-      return new Date(row.proposed_start_at).getTime() + Number(row.proposed_duration_minutes) * 60_000 <= Date.now();
+      return new Date(row.proposed_start_at).getTime() + Number(row.proposed_duration_minutes) * 60_000 <= nowMs;
     }).map((row) => row.id);
-    if (expiredIds.length) {
+    const expiredPendingIds = (data ?? []).filter((row) =>
+      row.status === "pending" &&
+      Number.isFinite(new Date(row.requested_start_at).getTime()) &&
+      new Date(row.requested_start_at).getTime() <= nowMs
+    ).map((row) => row.id);
+    const changedAt = new Date().toISOString();
+    if (expiredAlternativeIds.length) {
       await Promise.all([
         client.from("meeting_requests").update({
           status: "cancelled",
-          cancelled_at: new Date().toISOString(),
+          cancelled_at: changedAt,
           cancellation_reason: "המועד שהוצע חלף ללא אישור.",
           proposed_start_at: null,
           proposed_duration_minutes: null,
-          updated_at: new Date().toISOString(),
-        }).in("id", expiredIds).eq(column, user.id),
-        ...expiredIds.map((id) => client.from("notifications")
-          .update({ read_at: new Date().toISOString() })
+          updated_at: changedAt,
+        }).in("id", expiredAlternativeIds).eq(column, user.id),
+        ...expiredAlternativeIds.map((id) => client.from("notifications")
+          .update({ read_at: changedAt })
           .eq("user_id", user.id)
           .eq("kind", "meeting_alternative_proposed")
           .is("read_at", null)
           .like("href", `%meeting=${id}%`)),
       ]);
     }
-    const rows = (data ?? []).map((row) => expiredIds.includes(row.id) ? {
+    if (expiredPendingIds.length) {
+      await Promise.all([
+        client.from("meeting_requests").update({
+          status: "cancelled",
+          cancelled_at: changedAt,
+          cancellation_reason: "החונך לא אישר את הפגישה בזמן.",
+          updated_at: changedAt,
+        }).in("id", expiredPendingIds).eq("status", "pending").eq(column, user.id),
+        ...expiredPendingIds.map((id) => client.from("notifications")
+          .update({ read_at: changedAt })
+          .eq("user_id", user.id)
+          .eq("kind", "meeting_request_created")
+          .is("read_at", null)
+          .like("href", `%meeting=${id}%`)),
+      ]);
+    }
+    const rows = (data ?? []).map((row) => expiredPendingIds.includes(row.id) ? {
       ...row,
       status: "cancelled",
+      cancelled_at: changedAt,
+      cancellation_reason: "החונך לא אישר את הפגישה בזמן.",
+      updated_at: changedAt,
+    } : expiredAlternativeIds.includes(row.id) ? {
+      ...row,
+      status: "cancelled",
+      cancelled_at: changedAt,
       cancellation_reason: "המועד שהוצע חלף ללא אישור.",
       proposed_start_at: null,
       proposed_duration_minutes: null,
-    } : row).sort((left, right) => Number(right.status === "pending") - Number(left.status === "pending"));
+      updated_at: changedAt,
+    } : row);
     const names = new Map<string, string>();
     const phones = new Map<string, string>();
+    const bookingIds = new Map<string, string>();
     const childDetails = new Map<string, { gender: string | null; display_color: string | null }>();
     const childIds = [...new Set(rows.map((row) => row.child_id).filter(Boolean))];
     if (childIds.length) {
@@ -182,6 +214,15 @@ export async function GET(request: Request) {
         }
       }
     }
+    if (user.role === "parent") {
+      const mentorIds = [...new Set(rows.map((row) => row.mentor_user_id))];
+      if (mentorIds.length) {
+        const publicationRows = await client.from("mentor_publication").select("user_id, public_booking_id").in("user_id", mentorIds).eq("status", "published");
+        for (const publication of publicationRows.data ?? []) {
+          if (publication.public_booking_id) bookingIds.set(publication.user_id, publication.public_booking_id);
+        }
+      }
+    }
     let schedulingMentorBookingId: string | null = null;
     if (user.role === "mentor") {
       const publication = await client.from("mentor_publication").select("public_booking_id").eq("user_id", user.id).maybeSingle();
@@ -203,7 +244,7 @@ export async function GET(request: Request) {
         ...row,
         child_gender: childDetails.get(row.child_id)?.gender ?? null,
         child_display_color: childDetails.get(row.child_id)?.display_color ?? "green",
-        ...(user.role === "parent" ? { mentor_display_name: names.get(mentor_user_id) ?? "חונך/ת" } : {}),
+        ...(user.role === "parent" ? { mentor_display_name: names.get(mentor_user_id) ?? "חונך/ת", mentor_booking_id: bookingIds.get(mentor_user_id) ?? null } : {}),
         ...(user.role === "mentor" ? { parent_display_name: names.get(parent_user_id) ?? "הורה" } : {}),
         contact_phone: phones.get(user.role === "parent" ? mentor_user_id : parent_user_id) ?? null,
       })),

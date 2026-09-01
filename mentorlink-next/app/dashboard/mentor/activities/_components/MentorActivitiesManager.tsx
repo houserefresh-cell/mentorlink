@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { ActivityInfoGrid, type ActivityInfoItem } from "./ActivityInfoGrid";
 
 type Status = "draft" | "published" | "cancelled" | "completed";
-type ActivityFilter = "full" | "registered" | "empty" | "completed" | "draft" | "cancelled" | "all";
+type ActivityFilter = "current" | "full" | "registered" | "empty" | "completed" | "draft" | "cancelled" | "all";
 type Session = { id: string; starts_at: string; ends_at: string; estimated_overrun: "none" | "5_10_minutes" | "15_20_minutes" };
 type Activity = {
   id: string;
@@ -62,7 +62,7 @@ export function MentorActivitiesManager() {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [filter, setFilter] = useState<ActivityFilter>("full");
+  const [filter, setFilter] = useState<ActivityFilter>("current");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
@@ -112,6 +112,7 @@ export function MentorActivitiesManager() {
   }
 
   const filters: Array<{ key: ActivityFilter; label: string }> = [
+    { key: "current", label: "פעילויות חדשות" },
     { key: "full", label: "פעילויות מלאות" }, { key: "registered", label: "עם נרשמים" },
     { key: "empty", label: "חדשות ללא נרשמים" }, { key: "completed", label: "הסתיימו" },
     { key: "draft", label: "טיוטות" }, { key: "cancelled", label: "בוטלו" }, { key: "all", label: "הכול" },
@@ -367,6 +368,7 @@ function matchesFilter(activity: Activity, filter: ActivityFilter) {
   const registered = activity.registration_counts?.registered ?? 0;
   const capacity = activity.max_participants;
   if (filter === "all") return true;
+  if (filter === "current") return activity.status === "published" && Boolean(nextSession(activity.sessions));
   if (filter === "full") return activity.status === "published" && capacity != null && capacity > 0 && registered >= capacity;
   if (filter === "registered") return activity.status === "published" && registered > 0 && (capacity == null || registered < capacity);
   if (filter === "empty") return activity.status === "published" && registered === 0;

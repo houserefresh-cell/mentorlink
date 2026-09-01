@@ -5,6 +5,8 @@ import {
   loadOwnedActivity,
   registrationCounts,
 } from "@/lib/mentor-activity-data";
+import { isAllowedMentorActivityPrice } from "@/lib/mentor-age";
+import { loadMentorCapabilities } from "@/lib/mentor-capabilities-data";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(request: Request) {
@@ -67,6 +69,10 @@ export async function POST(request: Request) {
   if (!validated.ok) return Response.json({ error: validated.error, code: validated.code }, { status: 400 });
   const client = createSupabaseAdmin();
   try {
+    const capabilities = await loadMentorCapabilities(client, authentication.user.id);
+    if (!isAllowedMentorActivityPrice(validated.activity.price, capabilities)) {
+      return Response.json({ error: "לחונך מתחת לגיל 18 מחיר הפעילות מוגבל ל־25 ₪ למשתתף.", code: "MINOR_ACTIVITY_PRICE_LIMIT" }, { status: 400 });
+    }
     if (!await activeSubjectExists(client, validated.activity.subject_id)) {
       return Response.json({ error: "Subject is not active", code: "SUBJECT_NOT_ACTIVE" }, { status: 400 });
     }

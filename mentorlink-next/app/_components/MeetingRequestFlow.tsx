@@ -246,7 +246,19 @@ function dateKey(value: string) {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", dateStyle: "medium" }).format(new Date(`${value}T12:00:00Z`));
+  const date = new Date(`${value}T12:00:00Z`);
+  const rawWeekday = new Intl.DateTimeFormat("he-IL", {
+    weekday: "long",
+    timeZone: "Asia/Jerusalem",
+  }).format(date);
+  const weekday = rawWeekday.startsWith("יום ") ? rawWeekday : `יום ${rawWeekday}`;
+  const calendarDate = new Intl.DateTimeFormat("he-IL", {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+    timeZone: "Asia/Jerusalem",
+  }).format(date);
+  return `${weekday}, ${calendarDate}`;
 }
 function formatTime(value: string) {
   return new Intl.DateTimeFormat("he-IL", { timeZone: "Asia/Jerusalem", hour: "2-digit", minute: "2-digit" }).format(new Date(value));

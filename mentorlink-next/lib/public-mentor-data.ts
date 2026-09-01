@@ -12,6 +12,7 @@ import {
   type SubjectRow,
 } from "./public-mentor-core";
 import { loadSlots } from "./meeting-data";
+import { getMentorCapabilities } from "./mentor-age";
 
 export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   const publications = await admin
@@ -55,7 +56,9 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   const allowedPhotoPaths = new Map(
     (profiles.data ?? []).flatMap((profile) => {
       const consent = (consents.data ?? []).find((row) => row.user_id === profile.user_id);
-      if (consent?.status !== "approved" || consent.profile_photo_visibility !== "public" || !profile.profile_photo_path) return [];
+      const capabilities = getMentorCapabilities(profile.birth_date);
+      if (!profile.profile_photo_path) return [];
+      if (!capabilities.isAdult && (consent?.status !== "approved" || consent.profile_photo_visibility !== "public")) return [];
       const publication = (publications.data ?? []).find((row) => row.user_id === profile.user_id);
       return publication ? [[publication.public_booking_id, profile.profile_photo_path] as const] : [];
     }),

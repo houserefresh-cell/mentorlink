@@ -66,6 +66,9 @@ export async function PATCH(
     }
 
     const now = new Date();
+    if (action === "cancel" && clean(payload.reason, 500).length < 3) {
+      return Response.json({ error: "יש לציין סיבה קצרה לביטול." }, { status: 422 });
+    }
     if (actor === "parent" && action === "cancel" && current.status === "accepted") {
       const startAt = current.confirmed_start_at ?? current.requested_start_at;
       const hoursUntilMeeting = (new Date(startAt).getTime() - now.getTime()) / 3_600_000;
@@ -89,7 +92,7 @@ export async function PATCH(
     let title: string;
 
     if (action === "cancel") {
-      const reason = clean(payload.reason, 500) || null;
+      const reason = clean(payload.reason, 500);
       Object.assign(update, { status: "cancelled", cancelled_at: now.toISOString(), cancellation_reason: reason });
       recipientId = actor === "mentor" ? current.parent_user_id : current.mentor_user_id;
       kind = "meeting_request_cancelled";
@@ -100,6 +103,8 @@ export async function PATCH(
       Object.assign(update, {
         status: "cancelled",
         mentor_response: clean(payload.response, 500),
+        cancellation_reason: clean(payload.response, 500) || "החונך דחה את בקשת הפגישה.",
+        cancelled_at: now.toISOString(),
         responded_at: now.toISOString(),
       });
       const template = await client.from("mentor_meeting_preparation_templates").select("preparation_notes,equipment_notes,meeting_location").eq("mentor_user_id", user.id).eq("subject", current.subject).maybeSingle();
@@ -113,6 +118,8 @@ export async function PATCH(
       }
       Object.assign(update, {
         status: current.confirmed_start_at ? "accepted" : "cancelled",
+        cancellation_reason: current.confirmed_start_at ? current.cancellation_reason : "ההורה דחה את המועד החלופי.",
+        cancelled_at: current.confirmed_start_at ? current.cancelled_at : now.toISOString(),
         proposed_start_at: null,
         proposed_duration_minutes: null,
         responded_at: now.toISOString(),

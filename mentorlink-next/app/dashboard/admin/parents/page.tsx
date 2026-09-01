@@ -91,6 +91,14 @@ function ParentCard({ parent, onChanged }: { parent: ParentAccount; onChanged: (
   const address = parent.wantsHomeMentoring
     ? [parent.city, parent.street, parent.houseNumber && `מס׳ ${parent.houseNumber}`, parent.entrance && `כניסה ${parent.entrance}`, parent.apartment && `דירה ${parent.apartment}`].filter(Boolean).join(", ")
     : [parent.city, parent.street].filter(Boolean).join(", ");
+  async function resetPassword() {
+    setActionError("");
+    const session = (await supabase.auth.getSession()).data.session;
+    const response = await fetch("/api/admin/password-reset", { method: "POST", headers: { Authorization: `Bearer ${session?.access_token ?? ""}`, "Content-Type": "application/json" }, body: JSON.stringify({ userId: parent.userId, accountType: "parent" }) });
+    const body = await response.json().catch(() => ({}));
+    if (response.ok) window.alert(`נשלח קישור לאיפוס סיסמה ל־${body.email ?? parent.email ?? "כתובת החשבון"}.`);
+    else setActionError(body.error ?? "לא ניתן לשלוח קישור לאיפוס סיסמה.");
+  }
   async function accountAction(action: "suspend"|"restore"|"delete") {
     if (action === "delete" && !window.confirm("מחיקת חשבון היא סופית. להמשיך?")) return;
     setActionError("");
@@ -111,7 +119,8 @@ function ParentCard({ parent, onChanged }: { parent: ParentAccount; onChanged: (
         <section className="rounded-2xl bg-blue-50 p-4"><h3 className="font-black">כתובת</h3><p className="mt-2">{address || "לא נמסרה כתובת"}</p><p className="mt-1 text-sm font-bold text-blue-900">{parent.wantsHomeMentoring ? "ההורה ביקש אפשרות לחונכות בבית" : "לא סומנה חונכות בבית"}</p>{parent.addressNotes && <p className="mt-2 whitespace-pre-wrap">הערות: {parent.addressNotes}</p>}</section>
       </div>
       <section className="mt-4"><h3 className="font-black">ילדים בפרופיל</h3><div className="mt-3 grid gap-3 md:grid-cols-2">{parent.children.map((child) => <article key={child.id} className="rounded-2xl border border-slate-200 p-4"><h4 className="font-black">{[child.firstName, child.lastName].filter(Boolean).join(" ")}</h4><p className="mt-1 text-slate-700">{child.grade ? gradeLabels[child.grade] ?? child.grade : "כיתה לא צוינה"}{child.schoolName ? ` · ${child.schoolName}` : ""}</p><p className="mt-2 text-sm font-semibold">תחומי עניין: {child.interests.join(", ") || "לא נבחרו"}</p></article>)}{!parent.children.length && <p className="rounded-2xl bg-slate-50 p-4">לא נוספו ילדים לחשבון.</p>}</div></section>
-      <div className="mt-5 flex flex-wrap gap-2 border-t pt-4"><button onClick={()=>void accountAction(parent.accountDisabled?"restore":"suspend")} className="rounded-xl border border-amber-400 px-4 py-2 font-black">{parent.accountDisabled?"הפעלת החשבון":"השבתת החשבון"}</button><button onClick={()=>void accountAction("delete")} className="rounded-xl border border-red-400 px-4 py-2 font-black text-red-700">מחיקת החשבון</button></div>
+      <div className="mt-5 flex flex-wrap gap-2 border-t pt-4"><button onClick={()=>void resetPassword()} className="rounded-xl border border-blue-400 bg-blue-50 px-4 py-2 font-black text-blue-800">שליחת קישור לאיפוס סיסמה</button><button onClick={()=>void accountAction(parent.accountDisabled?"restore":"suspend")}
+ className="rounded-xl border border-amber-400 px-4 py-2 font-black">{parent.accountDisabled?"הפעלת החשבון":"השבתת החשבון"}</button><button onClick={()=>void accountAction("delete")} className="rounded-xl border border-red-400 px-4 py-2 font-black text-red-700">מחיקת החשבון</button></div>
       {actionError && <p role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 font-bold text-red-800">{actionError}</p>}
     </details>
   );

@@ -5,12 +5,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { isUpcomingApprovedMeeting, newestFirst, requiresMentorAction, waitsForParentAction } from "@/lib/mentor-dashboard-status";
 import { MentorImportantUpdates } from "@/app/dashboard/mentor/_components/MentorDashboardShell";
+import MentorNameButton from "@/app/_components/MentorNameButton";
 
 type Slot = { startAt: string; meetingMode: string; durations: number[] };
 type Meeting = {
   id: string;
   child_id: string;
   mentor_display_name?: string;
+  mentor_booking_id?: string | null;
   parent_display_name?: string;
   subject: string;
   child_first_name: string;
@@ -91,9 +93,35 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   }, [load]);
 
   async function act(id: string, action: string, confirmation: string) {
+    let actionReason = "";
+
+    if (action === "decline" || action === "cancel") {
+      const reason = window.prompt(
+        action === "decline"
+          ? "מה הסיבה לדחיית בקשת הפגישה? הסיבה תוצג להורה."
+          : "מה הסיבה לביטול הבקשה או הפגישה? הסיבה תישמר בכרטיס.",
+        ""
+      );
+
+      if (reason === null) return;
+
+      actionReason = reason.trim();
+
+      if (actionReason.length < 3) {
+        setMessage(
+          action === "decline"
+            ? "יש לציין סיבה קצרה לדחייה."
+            : "יש לציין סיבה קצרה לביטול."
+        );
+        return;
+      }
+    }
+
     if (!window.confirm(confirmation)) return;
+
     setBusyId(id);
     setMessage("");
+
     try {
       const response = await fetch(`/api/meeting-requests/${id}`, {
         method: "PATCH",
@@ -101,10 +129,23 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(
+          action === "decline"
+            ? { action, response: actionReason }
+            : action === "cancel"
+              ? { action, reason: actionReason }
+              : { action }
+        ),
       });
+
       const body = await response.json().catch(() => ({}));
-      setMessage(response.ok ? "הבקשה עודכנה." : body.error ?? "לא ניתן לעדכן את הבקשה.");
+
+      setMessage(
+        response.ok
+          ? "הבקשה עודכנה."
+          : body.error ?? "לא ניתן לעדכן את הבקשה."
+      );
+
       if (response.ok) await load(token);
     } finally {
       setBusyId("");
@@ -143,15 +184,16 @@ export default function MeetingRequestsPanel({ role, view = "mentor-action" }: {
   }
 
   async function cancelMeeting(item: Meeting) {
-    const reason = window.prompt("מה הסיבה לביטול הפגישה? הסיבה תישלח להורה.", "");
+    const recipient = role === "parent" ? "לחונך" : "להורה";
+    const reason = window.prompt(`מה הסיבה לביטול? הסיבה תוצג ותישלח ${recipient}.`, "");
     if (reason === null) return;
-    if (reason.trim().length < 3) { setMessage("יש לציין סיבה קצרה לביטול הפגישה."); return; }
-    if (!window.confirm("לבטל את הפגישה? ההורה יקבל הודעה.")) return;
+    if (reason.trim().length < 3) { setMessage("יש לציין סיבה קצרה לביטול."); return; }
+    if (!window.confirm("לבטל? סיבת הביטול תישמר בהיסטוריה.")) return;
     setBusyId(item.id); setMessage("");
     try {
       const response = await fetch(`/api/meeting-requests/${item.id}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: "cancel", reason: reason.trim() }) });
-      const body = await response.json().catch(() => ({}));
-      setMessage(response.ok ? "הפגישה בוטלה וההורה קיבל עדכון." : body.error ?? "לא ניתן לבטל את הפגישה.");
+      const body = await response.json().catch(()=>({}));
+      setMessage(response.ok ? "הביטול נשמר יחד עם הסיבה." : body.error ?? "לא ניתן לבטל.");
       if (response.ok) await load(token);
     } finally { setBusyId(""); }
   }
@@ -295,7 +337,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
   return (
     <article className={`flex min-h-[24rem] flex-col overflow-hidden rounded-3xl border-2 p-5 shadow-sm ${role === "parent" ? childCardClass(item.child_display_color) : visual.card}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h4 className="font-black">{role === "parent" ? item.mentor_display_name : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
+        <h4 className="font-black">{role === "parent" ? <MentorNameButton bookingId={item.mentor_booking_id} displayName={item.mentor_display_name ?? "חונך/ת"} className="text-base" /> : `${item.child_first_name} · ${item.child_grade_or_age}`}</h4>
         <div className="flex items-center gap-2">{hasUnreadUpdate && <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-black text-white">חדש</span>}<span className={`rounded-full border px-3 py-1 text-sm font-bold ${visual.badge}`}>{statusLabel(item, role)}</span></div>
       </div>
       {role === "parent" && <p className="mt-2 font-black text-slate-900">עבור {item.child_first_name} · {item.child_gender === "girl" ? "בת" : "בן"} · {item.child_grade_or_age}</p>}
@@ -303,7 +345,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
       {role === "mentor" && <p className="mt-2 font-black text-slate-900">הורה: {item.parent_display_name ?? "הורה"}</p>}
       <p className="mt-2 font-bold text-slate-700">{item.subject} · {item.meeting_mode}</p>
       <div className="mt-2 grid gap-2 rounded-xl bg-white/80 p-3 text-sm sm:grid-cols-2"><p><b>מיקום:</b> {item.meeting_location || (item.meeting_mode === "אונליין" ? "קישור יימסר לאחר האישור" : "טרם נקבע")}</p><p><b>עלות:</b> {item.meeting_price ? `${item.meeting_price} ₪` : "ללא עלות"}</p></div>
-      <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : "בקשת פגישה — עדיין לא אושרה"}</p><p className="mt-2 text-xl font-black">{formatDate(displayedStart)}</p><p className="mt-1 font-bold">אורך המפגש: {displayedDuration} דקות</p></div>
+      <div className={`mt-4 rounded-2xl p-4 ${item.status === "accepted" ? "bg-blue-700 text-white" : ["cancelled","declined"].includes(item.status) ? "bg-red-50 text-red-950 ring-1 ring-red-200" : "bg-blue-50 text-blue-950"}`}><p className="text-sm font-black">{item.status === "accepted" ? "פגישה קרובה" : ["cancelled","declined"].includes(item.status) ? "בקשת פגישה — בוטלה" : "בקשת פגישה — עדיין לא אושרה"}</p>{["cancelled","declined"].includes(item.status) && <p className="mt-2 rounded-xl bg-white/80 p-3 font-black text-red-800"><span className="block text-xs text-red-600">סיבת הביטול</span>{item.cancellation_reason || "הבקשה בוטלה."}</p>}<p className="mt-3 text-xl font-black">{formatDate(displayedStart)}</p><p className="mt-1 font-bold">אורך המפגש: {displayedDuration} דקות</p></div>
       {item.proposed_start_at && item.proposed_duration_minutes ? (
         <p className="mt-2 rounded-xl bg-amber-50 p-3 font-bold text-amber-950">המועד החלופי: {formatDate(item.proposed_start_at)} · {item.proposed_duration_minutes} דקות</p>
       ) : null}
@@ -321,7 +363,7 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         {item.equipment_notes && <p><b>מה להביא:</b> {item.equipment_notes}</p>}
         {item.meeting_location && <p><b>מיקום או קישור:</b> {item.meeting_location}</p>}
         {item.participant_names?.length > 0 && <p><b>משתתפים נוספים:</b> {item.participant_names.join(", ")}</p>}
-        {item.cancellation_reason && <p className="rounded-xl bg-red-50 p-3 text-red-900"><b>סיבת הביטול:</b> {item.cancellation_reason}</p>}
+
       </div>}
 
       <div className="mt-auto flex flex-wrap gap-2 pt-5">
@@ -338,7 +380,8 @@ function MeetingCard({ item, role, busyId, slots, alternatives, setAlternatives,
         {role === "parent" && ["pending","accepted"].includes(item.status) ? (
           item.status === "accepted" && effectiveStart(item)-renderNow<24*60*60*1000
             ? <p className="w-full rounded-xl bg-amber-50 p-3 text-sm font-bold text-amber-950">פחות מ־24 שעות נותרו לפגישה. לביטול יש ליצור קשר ישירות עם החונך.</p>
-            : <button type="button" disabled={busyId === item.id} onClick={() => void act(item.id, "cancel", item.status === "accepted" ? "לבטל את הפגישה? החונך יקבל הודעה." : "לבטל את בקשת הפגישה?")} className="min-h-11 rounded-xl border border-red-200 px-4 py-2 font-bold text-red-700 disabled:opacity-50">{item.status === "accepted" ? "ביטול הפגישה" : "ביטול הבקשה"}</button>
+            : <button type="button" disabled={busyId === item.id} onClick={() => void cancelMeeting(item)}
+ className="min-h-11 rounded-xl border border-red-200 px-4 py-2 font-bold text-red-700 disabled:opacity-50">{item.status === "accepted" ? "ביטול הפגישה" : "ביטול הבקשה"}</button>
         ) : null}
         {role === "mentor" && item.status === "pending" ? (
           <>
@@ -403,14 +446,79 @@ function groupMentorRequests(requests: Meeting[]) {
 
 function groupParentRequests(requests: Meeting[]) {
   const now = Date.now();
-  const newestFirst = [...requests].sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime());
+
+  const byMeetingDate = (
+    items: Meeting[],
+    getTime: (item: Meeting) => number,
+  ) =>
+    [...items].sort((left, right) => {
+      const leftTime = getTime(left);
+      const rightTime = getTime(right);
+
+      return (
+        Math.abs(leftTime - now) - Math.abs(rightTime - now) ||
+        leftTime - rightTime
+      );
+    });
+
+  const proposedOrEffectiveStart = (item: Meeting) =>
+    item.proposed_start_at
+      ? new Date(item.proposed_start_at).getTime()
+      : effectiveStart(item);
+
   return {
-    actionRequired: newestFirst.filter((item) => item.status === "alternative_proposed" || (item.status === "accepted" && Boolean(item.proposed_start_at))),
-    waitingForMentor: newestFirst.filter((item) => item.status === "pending"),
-    upcoming: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) >= now).sort((left, right) => effectiveStart(left) - effectiveStart(right)),
-    completed: newestFirst.filter((item) => item.status === "accepted" && effectiveStart(item) < now),
-    closed: newestFirst.filter((item) => ["declined", "cancelled"].includes(item.status)),
-    history: newestFirst.filter((item) => !["alternative_proposed", "pending", "accepted", "declined", "cancelled"].includes(item.status)),
+    actionRequired: byMeetingDate(
+      requests.filter(
+        (item) =>
+          item.status === "alternative_proposed" ||
+          (item.status === "accepted" && Boolean(item.proposed_start_at)),
+      ),
+      proposedOrEffectiveStart,
+    ),
+
+    waitingForMentor: byMeetingDate(
+      requests.filter((item) => item.status === "pending"),
+      (item) => new Date(item.requested_start_at).getTime(),
+    ),
+
+    upcoming: byMeetingDate(
+      requests.filter(
+        (item) =>
+          item.status === "accepted" &&
+          effectiveStart(item) >= now,
+      ),
+      effectiveStart,
+    ),
+
+    completed: byMeetingDate(
+      requests.filter(
+        (item) =>
+          item.status === "accepted" &&
+          effectiveStart(item) < now,
+      ),
+      effectiveStart,
+    ),
+
+    closed: byMeetingDate(
+      requests.filter((item) =>
+        ["declined", "cancelled"].includes(item.status),
+      ),
+      effectiveStart,
+    ),
+
+    history: byMeetingDate(
+      requests.filter(
+        (item) =>
+          ![
+            "alternative_proposed",
+            "pending",
+            "accepted",
+            "declined",
+            "cancelled",
+          ].includes(item.status),
+      ),
+      effectiveStart,
+    ),
   };
 }
 

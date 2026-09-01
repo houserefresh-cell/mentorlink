@@ -19,6 +19,7 @@ export default function MentorSubjectsPage() {
   const [catalog, setCatalog] = useState<Subject[]>([]);
   const [selections, setSelections] = useState<Record<number, string[]>>({});
   const [newCategory, setNewCategory] = useState<SubjectCategory>("לימודים");
+  const [newCustomCategory, setNewCustomCategory] = useState("");
   const [newName, setNewName] = useState("");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,7 +65,7 @@ export default function MentorSubjectsPage() {
   }, [router]);
 
   const grouped = useMemo(
-    () => SUBJECT_CATEGORIES.map((category) => ({
+    () => [...new Set<string>([...SUBJECT_CATEGORIES, ...catalog.map((subject) => subject.category)])].map((category) => ({
       category,
       subjects: catalog.filter((subject) =>
         subject.category === category &&
@@ -104,7 +105,7 @@ export default function MentorSubjectsPage() {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name: newName, category: newCategory }),
+      body: JSON.stringify({ name: newName, category: newCategory === "__new__" ? newCustomCategory : newCategory }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -116,6 +117,8 @@ export default function MentorSubjectsPage() {
     setCatalog((current) => [...current, subject]);
     setSelections((current) => ({ ...current, [subject.id]: [...AGE_GROUPS] }));
     setNewName("");
+    setNewCustomCategory("");
+    if (newCategory === "__new__") setNewCategory(subject.category);
     setMessage({ type: "success", text: `${subject.name} נוסף מיד למקצועות שלך.` });
     setAdding(false);
   }
@@ -238,11 +241,15 @@ export default function MentorSubjectsPage() {
           <h2 className="text-xl font-extrabold">לא מצאת? הוספת מקצוע או תחום חדש</h2>
           <p className="mt-2 text-sm text-slate-600">ערך תקין יתווסף מיד למאגר ולבחירות שלך.</p>
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_2fr_auto]">
-            <select value={newCategory} onChange={(event) => setNewCategory(event.target.value as SubjectCategory)} className="rounded-xl border px-4 py-3">
-              {SUBJECT_CATEGORIES.map((category) => <option key={category}>{category}</option>)}
-            </select>
+            <div className="grid gap-2">
+              <select value={newCategory} onChange={(event) => setNewCategory(event.target.value as SubjectCategory)} className="rounded-xl border px-4 py-3">
+                {[...new Set<string>([...SUBJECT_CATEGORIES, ...catalog.map((subject) => subject.category)])].map((category) => <option key={category}>{category}</option>)}
+                <option value="__new__">+ קטגוריה חדשה</option>
+              </select>
+              {newCategory === "__new__" && <input value={newCustomCategory} onChange={(event) => setNewCustomCategory(event.target.value)} maxLength={50} placeholder="שם הקטגוריה החדשה" className="rounded-xl border px-4 py-3" />}
+            </div>
             <input value={newName} onChange={(event) => setNewName(event.target.value)} maxLength={50} placeholder="שם המקצוע או התחום" className="rounded-xl border px-4 py-3" />
-            <button disabled={adding || !newName.trim()} className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:bg-slate-400">
+            <button disabled={adding || !newName.trim() || (newCategory === "__new__" && !newCustomCategory.trim())} className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white disabled:bg-slate-400">
               {adding ? "מוסיף..." : "הוספה"}
             </button>
           </div>
