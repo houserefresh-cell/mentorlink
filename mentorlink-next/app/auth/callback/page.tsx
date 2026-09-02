@@ -24,25 +24,47 @@ function AuthCallbackContent() {
     exchangeStarted.current = true;
 
     async function finish() {
-      const code = searchParams.get("code");
-      if (!code) {
-        setErrorMessage("קוד ההתחברות חסר או אינו תקין.");
-        return;
-      }
-
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      const user = data.session?.user;
-      if (error || !user) {
-        console.error("Google OAuth callback failed", error);
-        setErrorMessage("לא ניתן להשלים את ההתחברות עם Google.");
-        return;
-      }
-
       const flow = searchParams.get("flow");
-      if (flow === "password_recovery") {
+      const tokenHash = searchParams.get("token_hash");
+
+      if (flow === "password_recovery" && tokenHash) {
+        const { data, error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+
+        if (error || !data.session?.user) {
+          console.error("Password recovery verification failed", error);
+          setErrorMessage(
+            "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05d4\u05d0\u05d9\u05e4\u05d5\u05e1 \u05d0\u05d9\u05e0\u05d5 \u05ea\u05e7\u05e3 \u05d0\u05d5 \u05e9\u05e4\u05d2 \u05ea\u05d5\u05e7\u05e4\u05d5. \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d1\u05e7\u05e9 \u05e7\u05d9\u05e9\u05d5\u05e8 \u05d7\u05d3\u05e9."
+          );
+          return;
+        }
+
         router.replace("/account/reset-password");
         return;
       }
+
+      const code = searchParams.get("code");
+      if (!code) {
+        setErrorMessage(
+          "\u05e7\u05d5\u05d3 \u05d4\u05d4\u05ea\u05d7\u05d1\u05e8\u05d5\u05ea \u05d7\u05e1\u05e8 \u05d0\u05d5 \u05d0\u05d9\u05e0\u05d5 \u05ea\u05e7\u05d9\u05df."
+        );
+        return;
+      }
+
+      const { data, error } =
+        await supabase.auth.exchangeCodeForSession(code);
+      const user = data.session?.user;
+
+      if (error || !user) {
+        console.error("Google OAuth callback failed", error);
+        setErrorMessage(
+          "\u05dc\u05d0 \u05e0\u05d9\u05ea\u05df \u05dc\u05d4\u05e9\u05dc\u05d9\u05dd \u05d0\u05ea \u05d4\u05d4\u05ea\u05d7\u05d1\u05e8\u05d5\u05ea \u05e2\u05dd Google."
+        );
+        return;
+      }
+
       const isMentorRegistration = flow === "mentor_register";
       const isParentRegistration = flow === "parent_register";
 
