@@ -15,14 +15,19 @@ test("password recovery is branded, generic to anonymous users and available to 
   assert.doesNotMatch(requestRoute, /user not found/i);
   assert.match(helper, /RESEND_API_KEY/);
   assert.match(helper, /generateLink/);
-  assert.match(helper, /hashed_token/);
+  assert.match(helper, /options: \{ redirectTo \}/);
   assert.match(helper, /https:\/\/mentorlink\.co\.il/);
-  assert.doesNotMatch(helper, /properties\.action_link/);
+  assert.match(helper, /properties\?\.action_link/);
+  assert.doesNotMatch(helper, /recoveryUrl\.searchParams\.set\("token_hash"/);
   assert.match(callback, /password_recovery/);
   assert.match(callback, /token_hash/);
   assert.match(callback, /verifyOtp/);
   assert.match(callback, /type: "recovery"/);
   assert.match(callback, /exchangeCodeForSession/);
+  assert.match(callback, /access_token/);
+  assert.match(callback, /refresh_token/);
+  assert.match(callback, /setSession/);
+  assert.match(callback, /מאמת את קישור איפוס הסיסמה/);
   assert.match(adminRoute, /authorizeAdministrator/);
 });
 

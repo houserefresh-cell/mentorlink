@@ -18,30 +18,67 @@ function AuthCallbackContent() {
   const searchParams = useSearchParams();
   const [errorMessage, setErrorMessage] = useState("");
   const exchangeStarted = useRef(false);
+  const flow = searchParams.get("flow");
+  const isPasswordRecovery = flow === "password_recovery";
 
   useEffect(() => {
     if (exchangeStarted.current) return;
     exchangeStarted.current = true;
 
-    async function finish() {
-      const flow = searchParams.get("flow");
+    async function finishPasswordRecovery() {
       const tokenHash = searchParams.get("token_hash");
-
-      if (flow === "password_recovery" && tokenHash) {
+      if (tokenHash) {
         const { data, error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
           type: "recovery",
         });
-
-        if (error || !data.session?.user) {
-          console.error("Password recovery verification failed", error);
-          setErrorMessage(
-            "\u05e7\u05d9\u05e9\u05d5\u05e8 \u05d4\u05d0\u05d9\u05e4\u05d5\u05e1 \u05d0\u05d9\u05e0\u05d5 \u05ea\u05e7\u05e3 \u05d0\u05d5 \u05e9\u05e4\u05d2 \u05ea\u05d5\u05e7\u05e4\u05d5. \u05d0\u05e4\u05e9\u05e8 \u05dc\u05d1\u05e7\u05e9 \u05e7\u05d9\u05e9\u05d5\u05e8 \u05d7\u05d3\u05e9."
-          );
-          return;
+        if (!error && data.session?.user) {
+          router.replace("/account/reset-password");
+          return true;
         }
+        console.error("Password recovery token hash verification failed", error);
+      }
 
+      const code = searchParams.get("code");
+      if (code) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error && data.session?.user) {
+          router.replace("/account/reset-password");
+          return true;
+        }
+        console.error("Password recovery code exchange failed", error);
+      }
+
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      if (accessToken && refreshToken) {
+        const { data, error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (!error && data.session?.user) {
+          router.replace("/account/reset-password");
+          return true;
+        }
+        console.error("Password recovery hash session failed", error);
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
         router.replace("/account/reset-password");
+        return true;
+      }
+
+      setErrorMessage(
+        "קישור האיפוס אינו תקף או שפג תוקפו. אפשר לבקש קישור חדש."
+      );
+      return false;
+    }
+
+    async function finish() {
+      if (isPasswordRecovery) {
+        await finishPasswordRecovery();
         return;
       }
 
@@ -177,11 +214,16 @@ function AuthCallbackContent() {
     }
 
     void finish();
-  }, [router, searchParams]);
+  }, [isPasswordRecovery, router, searchParams]);
 
   return (
     <CallbackStatus
-      text={errorMessage || "משלים את ההתחברות עם Google..."}
+      text={
+        errorMessage ||
+        (isPasswordRecovery
+          ? "מאמת את קישור איפוס הסיסמה..."
+          : "משלים את ההתחברות עם Google...")
+      }
       error={Boolean(errorMessage)}
     />
   );

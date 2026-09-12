@@ -5,21 +5,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export async function sendPasswordRecoveryLink(client: SupabaseClient, email: string) {
   const normalized = email.trim().toLowerCase();
   const siteUrl = "https://mentorlink.co.il";
+  const redirectTo = `${siteUrl}/auth/callback?flow=password_recovery`;
+
   const generated = await client.auth.admin.generateLink({
     type: "recovery",
     email: normalized,
+    options: { redirectTo },
   });
-  const properties = generated.data.properties;
-  if (generated.error || !properties?.hashed_token) {
+
+  const actionLink = generated.data.properties?.action_link;
+  if (generated.error || !actionLink) {
     throw generated.error ?? new Error("Unable to create password recovery link");
   }
 
-  const recoveryUrl = new URL(`${siteUrl}/auth/callback`);
-  recoveryUrl.searchParams.set("flow", "password_recovery");
-  recoveryUrl.searchParams.set("token_hash", properties.hashed_token);
-  recoveryUrl.searchParams.set("type", "recovery");
-
-  await sendRecoveryEmail(normalized, recoveryUrl.toString());
+  await sendRecoveryEmail(normalized, actionLink);
 }
 
 async function sendRecoveryEmail(to: string, actionLink: string) {
