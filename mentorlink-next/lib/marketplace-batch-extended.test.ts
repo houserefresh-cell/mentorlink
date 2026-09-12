@@ -31,6 +31,12 @@ test("password recovery is branded, generic to anonymous users and available to 
   assert.match(adminRoute, /authorizeAdministrator/);
 });
 
+test("reset flow reports same-password explicitly without blaming an expired link", async () => {
+  const page = await readFile(new URL("../app/account/reset-password/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /same_password/i);
+  assert.match(page, /הסיסמה שהזנת זהה לסיסמה הנוכחית/);
+});
+
 test("expired meeting requests are cancelled with reasons and parent lists are date ordered", async () => {
   const [route, actionRoute, panel] = await Promise.all([
     readFile(new URL("../app/api/meeting-requests/route.ts", import.meta.url), "utf8"),

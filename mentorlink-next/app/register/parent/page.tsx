@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
+import PasswordInput from "@/app/_components/PasswordInput";
 import RegistrationSupport from "@/app/_components/RegistrationSupport";
 import RegistrationIntro from "@/app/_components/RegistrationIntro";
 import { supabase } from "@/lib/supabase";
@@ -155,15 +156,15 @@ export default function ParentRegisterPage() {
                 סיסמה
               </label>
 
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
+                ariaLabel="סיסמה"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
                 minLength={6}
                 autoComplete="new-password"
-                className="w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                className="w-full"
               />
 
               <p className="mt-2 text-xs text-slate-500">

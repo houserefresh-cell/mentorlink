@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import PasswordInput from "@/app/_components/PasswordInput";
 import { supabase } from "../../../lib/supabase";
 import MentorOnboardingPage from "../../dashboard/mentor/onboarding/page";
 import { resolveMentorRegistrationView } from "../../../lib/mentor-register-view";
@@ -150,7 +151,7 @@ export default function MentorRegisterPage() {
 
           <form onSubmit={registerWithEmail} className="mt-6">
             <label className="text-base font-extrabold text-slate-950">אימייל<input type="email" dir="ltr" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 text-left font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
-            <label className="mt-5 block text-base font-extrabold text-slate-950">סיסמה<input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-2 w-full rounded-xl border-2 border-slate-500 bg-white px-4 py-3 font-semibold text-slate-950 outline-none focus:border-blue-700 focus:ring-4 focus:ring-blue-100" /></label>
+            <label className="mt-5 block text-base font-extrabold text-slate-950">סיסמה<PasswordInput ariaLabel="סיסמה" value={password} required minLength={6} onChange={(e) => setPassword(e.target.value)} className="mt-2" /></label>
             <button disabled={loading} className="mt-7 w-full rounded-xl bg-gradient-to-l from-violet-700 to-fuchsia-600 py-4 text-lg font-bold text-white shadow-lg disabled:bg-slate-400">{loading ? "ממשיך..." : "הרשמה עם מייל"}</button>
           </form>
 
