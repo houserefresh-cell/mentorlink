@@ -70,7 +70,7 @@ function createMentorSection(items: MentorResult[]): SearchResultSection<MentorR
     title: "חונכים",
     items,
     getLabel: formatMentorLabel,
-    getHref: (item: MentorResult) => `/dashboard/admin/mentors/${item.user_id}`,
+    getHref: () => "/dashboard/admin/mentors",
   };
 }
 
@@ -97,7 +97,7 @@ function createMeetingSection(items: MeetingResult[]): SearchResultSection<Meeti
     title: "פגישות",
     items,
     getLabel: formatMeetingLabel,
-    getHref: (item: MeetingResult) => `/dashboard/admin/meetings/${item.id}`,
+    getHref: (item: MeetingResult) => `/dashboard/admin/meetings?meeting=${item.id}`,
   };
 }
 
@@ -106,7 +106,7 @@ function createActivitySection(items: ActivityResult[]): SearchResultSection<Act
     title: "פעילויות",
     items,
     getLabel: formatActivityLabel,
-    getHref: (item: ActivityResult) => `/dashboard/admin/activities/${item.id}`,
+    getHref: (item: ActivityResult) => `/dashboard/admin/activities?activity=${item.id}`,
   };
 }
 

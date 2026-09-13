@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type MeetingRow = {
@@ -21,7 +22,7 @@ type MeetingRow = {
   parentName: string | null;
 };
 
-export default function AdminMeetingsPage() {
+function AdminMeetingsPageContent() {
   const [rows, setRows] = useState<MeetingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -33,6 +34,9 @@ export default function AdminMeetingsPage() {
   const [pageSize] = useState(40);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const searchParams = useSearchParams();
+  const selectedMeetingId = searchParams.get("meeting");
+  const selectedMeeting = useMemo(() => rows.find((row) => row.id === selectedMeetingId) ?? null, [rows, selectedMeetingId]);
 
   useEffect(() => {
     let active = true;
@@ -91,6 +95,15 @@ export default function AdminMeetingsPage() {
 
   const visibleRows = useMemo(() => rows, [rows]);
 
+  function Detail({ label, value }: { label: string; value: string }) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs font-black text-slate-500">{label}</p>
+        <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold text-slate-800">{value || "—"}</p>
+      </div>
+    );
+  }
+
   return (
     <main dir="rtl" className="min-h-screen bg-slate-50 p-5 text-slate-950 sm:p-10">
       <div className="mx-auto max-w-7xl">
@@ -146,7 +159,7 @@ export default function AdminMeetingsPage() {
                       <td className="px-3 py-3">{row.subject || "—"}</td>
                       <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-xs font-black ${statusColors[row.status ?? ""] ?? "bg-slate-100 text-slate-800"}`}>{row.status ?? "—"}</span></td>
                       <td className="px-3 py-3 whitespace-nowrap">{row.updated_at ? new Date(row.updated_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"}</td>
-                      <td className="px-3 py-3"><Link href={`/dashboard/admin/meetings/${row.id}`} className="font-black text-blue-700">פתח</Link></td>
+                      <td className="px-3 py-3"><Link href={`/dashboard/admin/meetings?meeting=${row.id}`} className="font-black text-blue-700">פתח</Link></td>
                     </tr>
                   ))}
                 </tbody>
@@ -160,7 +173,49 @@ export default function AdminMeetingsPage() {
           <span className="font-bold text-slate-700">עמוד {page}</span>
           <button disabled={!hasMore} onClick={() => setPage((value) => value + 1)} className="rounded-xl border border-slate-300 bg-white px-4 py-2 font-bold disabled:opacity-50">הבא</button>
         </div>
+
+        {selectedMeeting ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) { window.history.replaceState({}, "", "/dashboard/admin/meetings"); } }}>
+            <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+              <header className="flex items-center justify-between border-b border-slate-200 p-5">
+                <div>
+                  <p className="text-sm font-black text-violet-700">פגישה</p>
+                  <h2 className="mt-1 text-2xl font-black">{selectedMeeting.subject || "פרטי פגישה"}</h2>
+                </div>
+                <button type="button" onClick={() => window.history.replaceState({}, "", "/dashboard/admin/meetings")} aria-label="סגירה" className="grid h-11 w-11 place-items-center rounded-full bg-slate-100 text-2xl font-black">×</button>
+              </header>
+              <div className="grid gap-3 p-5 sm:grid-cols-2">
+                <Detail label="תאריך / שעה" value={selectedMeeting.confirmed_start_at ? new Date(selectedMeeting.confirmed_start_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : selectedMeeting.requested_start_at ? new Date(selectedMeeting.requested_start_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="סטטוס" value={selectedMeeting.status || "—"} />
+                <Detail label="חונך" value={selectedMeeting.mentorName || selectedMeeting.mentor_user_id || "—"} />
+                <Detail label="הורה" value={selectedMeeting.parentName || selectedMeeting.parent_user_id || "—"} />
+                <Detail label="ילד" value={selectedMeeting.child_first_name || "—"} />
+                <Detail label="נושא" value={selectedMeeting.subject || "—"} />
+                <Detail label="זמן מבוקש" value={selectedMeeting.requested_start_at ? new Date(selectedMeeting.requested_start_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="זמן מוצע" value={selectedMeeting.proposed_start_at ? new Date(selectedMeeting.proposed_start_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="זמן מאושר" value={selectedMeeting.confirmed_start_at ? new Date(selectedMeeting.confirmed_start_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="נוצר" value={selectedMeeting.created_at ? new Date(selectedMeeting.created_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="עודכן" value={selectedMeeting.updated_at ? new Date(selectedMeeting.updated_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                <Detail label="בוטל" value={selectedMeeting.cancelled_at ? new Date(selectedMeeting.cancelled_at).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
+  );
+}
+
+export default function AdminMeetingsPage() {
+  return (
+    <Suspense fallback={
+      <main dir="rtl" className="min-h-screen bg-slate-50 p-5 text-slate-950 sm:p-10">
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 font-bold text-slate-700">טוען פגישות…</div>
+        </div>
+      </main>
+    }>
+      <AdminMeetingsPageContent />
+    </Suspense>
   );
 }
