@@ -18,6 +18,7 @@ const cards = [
   { key: "preferences", title: "העדפות התאמה", description: "העדפות שיעזרו ליצור התאמה טובה.", href: "/dashboard/mentor/preferences" },
   { key: "photo", title: "תמונת פרופיל", description: "התמונה שמוצגת למשפחות.", href: "/dashboard/mentor/photo" },
   { key: "parentConsent", title: "אישור הורה", description: "לחונכים שטרם מלאו להם 18: שליחת בקשה ומעקב אחר אישור ההורה.", href: "/dashboard/mentor/parent-consent" },
+  { key: "visibility", title: "מי יוכל למצוא אותי?", description: "קבעו אם הפרופיל גלוי לכולם או רק לקהילות מאושרות.", href: "/dashboard/mentor/profile" },
 ] as const;
 
 export default function MentorAccountPage() {

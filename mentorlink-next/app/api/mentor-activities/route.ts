@@ -8,6 +8,7 @@ import {
 import { isAllowedMentorActivityPrice } from "@/lib/mentor-age";
 import { loadMentorCapabilities } from "@/lib/mentor-capabilities-data";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { validateMentorAudience } from "@/lib/mentor-audience-access";
 
 export async function GET(request: Request) {
   const authentication = await authenticateMentorActivityUser(request);
@@ -76,6 +77,9 @@ export async function POST(request: Request) {
     if (!await activeSubjectExists(client, validated.activity.subject_id)) {
       return Response.json({ error: "Subject is not active", code: "SUBJECT_NOT_ACTIVE" }, { status: 400 });
     }
+    const audience = await validateMentorAudience(client, authentication.user.id, validated.activity.audience_scope, validated.activity.community_ids);
+    if (!audience.ok) return Response.json({ error: "קהל הפעילות חורג מהרשאות החשיפה של החונך.", code: audience.code }, { status: 403 });
+    validated.activity.community_ids = audience.communityIds;
     const saved = await client.rpc("save_mentor_activity", {
       p_activity_id: null,
       p_mentor_user_id: authentication.user.id,
@@ -91,6 +95,8 @@ export async function POST(request: Request) {
       }
       throw new Error("activity save failed");
     }
+    const audienceUpdate = await client.from("mentor_activities").update({ audience_scope: validated.activity.audience_scope, community_ids: validated.activity.community_ids }).eq("id", saved.data).eq("mentor_user_id", authentication.user.id);
+    if (audienceUpdate.error) throw new Error("activity audience save failed");
     const activity = await loadOwnedActivity(client, authentication.user.id, saved.data);
     if (!activity) throw new Error("saved activity missing");
     return Response.json({ activity }, { status: 201 });

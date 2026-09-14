@@ -7,6 +7,7 @@ export const ACTIVITY_LOCATIONS = [
 export const ACTIVITY_OVERRUNS = ["none", "5_10_minutes", "15_20_minutes"] as const;
 export const ACTIVITY_PICKUPS = ["school", "after_school", "home", "other"] as const;
 export const ACTIVITY_CONTACT_VISIBILITIES = ["public", "registered_parents", "mentor_approved"] as const;
+export const ACTIVITY_AUDIENCE_SCOPES = ["all", "community"] as const;
 export const ACTIVITY_ACCESSIBILITY = [
   "wheelchair", "accessible_restrooms", "accessible_parking", "visual_impairment",
   "hearing_impairment", "written_visual_instructions", "sensory_friendly",
@@ -47,6 +48,8 @@ export type CleanActivity = {
   accessibility: string | null;
   cancellation_policy: string | null;
   contact_phone_visibility: (typeof ACTIVITY_CONTACT_VISIBILITIES)[number];
+  audience_scope: (typeof ACTIVITY_AUDIENCE_SCOPES)[number];
+  community_ids: string[];
   pickup_options: string[];
   pickup_details: string | null;
 };
@@ -116,6 +119,10 @@ export function validateActivityInput(
     : null;
   const cancellationPolicy = text(payload.cancellationPolicy, 2000);
   const contactPhoneVisibility = choice(payload.contactPhoneVisibility, ACTIVITY_CONTACT_VISIBILITIES) ?? "registered_parents";
+  const audienceScope = choice(payload.audienceScope, ACTIVITY_AUDIENCE_SCOPES) ?? "all";
+  const communityIds = Array.isArray(payload.communityIds)
+    ? [...new Set(payload.communityIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0))]
+    : [];
   const pickups = choices(payload.pickupOptions, ACTIVITY_PICKUPS);
   const pickupDetails = text(payload.pickupDetails, 500);
 
@@ -128,6 +135,9 @@ export function validateActivityInput(
     equipment === undefined || accessibilityOptions === null || accessibilityOther === undefined ||
     cancellationPolicy === undefined || pickups === null || pickupDetails === undefined
   ) return invalid("INVALID_ACTIVITY", "Activity fields are invalid");
+  if (audienceScope === "community" && communityIds.length === 0) {
+    return invalid("INVALID_AUDIENCE_SCOPE", "Community-only activities require at least one community");
+  }
 
   if (!ACTIVITY_CONTACT_VISIBILITIES.includes(contactPhoneVisibility)) {
     return invalid("INVALID_CONTACT_VISIBILITY", "Contact phone visibility is invalid");
@@ -181,8 +191,8 @@ export function validateActivityInput(
     minimum_age: minimumAge, maximum_age: maximumAge, suitable_grades: grades,
     is_free: isFree, price, registration_deadline: deadline, equipment,
     accessibility, cancellation_policy: cancellationPolicy,
-    contact_phone_visibility: contactPhoneVisibility, pickup_options: pickups,
-    pickup_details: pickupDetails,
+    contact_phone_visibility: contactPhoneVisibility, audience_scope: audienceScope,
+    community_ids: communityIds, pickup_options: pickups, pickup_details: pickupDetails,
   }, sessions };
 }
 

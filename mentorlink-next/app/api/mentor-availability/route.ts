@@ -4,6 +4,7 @@ import { isMeetingDuration, MEETING_MODES } from "@/lib/meeting-scheduling-core"
 import { isAllowedMentorMeetingPrice, type MentorCapabilities } from "@/lib/mentor-age";
 import { loadMentorCapabilities } from "@/lib/mentor-capabilities-data";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { validateMentorAudience } from "@/lib/mentor-audience-access";
 
 function availabilityDiagnostic(stage: string, ok: boolean, code: string) {
   console.info("Mentor availability", { stage, ok, code });
@@ -30,9 +31,19 @@ export async function GET(request: Request) {
     for (const link of links.data ?? []) {
       subjectIdsByWindow.set(link.window_id, [...(subjectIdsByWindow.get(link.window_id) ?? []), link.subject_id]);
     }
+    const meetingRows = windowIds.length
+      ? await client.from("meeting_requests").select("id, source_availability_id, requested_start_at, confirmed_start_at, child_first_name, subject, status").eq("mentor_user_id", user.id).in("source_availability_id", windowIds).order("requested_start_at", { ascending: false })
+      : { data: [], error: null };
+    if (meetingRows.error) throw new Error("meeting history failed");
+    const meetingsByWindow = new Map<string, typeof meetingRows.data>();
+    for (const meeting of meetingRows.data ?? []) {
+      const key = String(meeting.source_availability_id ?? "");
+      if (!key) continue;
+      meetingsByWindow.set(key, [...(meetingsByWindow.get(key) ?? []), meeting]);
+    }
     availabilityDiagnostic("load", true, "AVAILABILITY_LOADED");
     return Response.json({
-      windows: (windows.data ?? []).map((window) => ({ ...window, subject_ids: subjectIdsByWindow.get(window.id) ?? [] })),
+      windows: (windows.data ?? []).map((window) => ({ ...window, subject_ids: subjectIdsByWindow.get(window.id) ?? [], meetings: meetingsByWindow.get(window.id) ?? [] })),
       blackouts: blackouts.data ?? [],
       capabilities,
     }, { headers: { "Cache-Control": "no-store" } });
@@ -69,6 +80,17 @@ export async function POST(request: Request) {
     const capabilities = await loadMentorCapabilities(client, user.id);
     const window = validateWindow(payload, capabilities);
     if (!window) return Response.json({ error: capabilities.isAdult ? "שעות, אופן הפגישה, המחיר או המשכים אינם תקינים." : "שעות, אופן הפגישה, המשכים או המחיר אינם תקינים. לחונך מתחת לגיל 18 המחירים הזמינים הם 0, 10, 20, 30 או 40 ₪.", code: "INVALID_WINDOW" }, { status: 400 });
+    const audienceScope = normalizeAudienceScope(payload.audienceScope);
+    const requestedCommunityIds = audienceScope === "community" && Array.isArray(payload.communityIds)
+      ? [...new Set(payload.communityIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0))]
+      : [];
+    const audience = await validateMentorAudience(client, user.id, audienceScope, requestedCommunityIds);
+    if (!audience.ok) {
+      const message = audience.code === "PUBLIC_AUDIENCE_NOT_ALLOWED"
+        ? "חשיפה ציבורית אינה מותרת לפי הגדרות החשיפה ואישור ההורה."
+        : "יש לבחור רק קהילות שמותר לחונך לפרסם בהן.";
+      return Response.json({ error: message, code: audience.code }, { status: 403 });
+    }
     const subjectIds = await validateSubjectIds(client, user.id, payload.subjectIds);
     if (!subjectIds) return Response.json({ error: "יש לבחור לפחות מקצוע אחד מתוך המקצועות שלך.", code: "INVALID_WINDOW_SUBJECTS" }, { status: 400 });
     const duplicate = await client.from("mentor_availability_windows").select("id")
@@ -77,7 +99,7 @@ export async function POST(request: Request) {
       .eq("meeting_mode", window.meeting_mode).maybeSingle();
     if (duplicate.error) throw new Error("duplicate check failed");
     if (duplicate.data) return Response.json({ error: "חלון זמינות זה כבר קיים.", code: "DUPLICATE_WINDOW" }, { status: 409 });
-    const result = await client.from("mentor_availability_windows").insert({ mentor_user_id: user.id, ...window }).select("*").single();
+    const result = await client.from("mentor_availability_windows").insert({ mentor_user_id: user.id, ...window, audience_scope: audienceScope, community_ids: audience.communityIds }).select("*").single();
     if (result.error) throw new Error("insert failed");
     const linked = await client.from("mentor_availability_window_subjects").insert(
       subjectIds.map((subjectId) => ({ window_id: result.data.id, subject_id: subjectId })),
@@ -107,6 +129,17 @@ export async function PATCH(request: Request) {
     const capabilities = await loadMentorCapabilities(client, user.id);
     const window = validateWindow(payload, capabilities);
     if (!window) return Response.json({ error: capabilities.isAdult ? "חלון הזמינות או המחיר אינם תקינים." : "חלון הזמינות אינו תקין. לחונך מתחת לגיל 18 המחירים הזמינים הם 0, 10, 20, 30 או 40 ₪.", code: "INVALID_WINDOW" }, { status: 400 });
+    const audienceScope = normalizeAudienceScope(payload.audienceScope);
+    const requestedCommunityIds = audienceScope === "community" && Array.isArray(payload.communityIds)
+      ? [...new Set(payload.communityIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0))]
+      : [];
+    const audience = await validateMentorAudience(client, user.id, audienceScope, requestedCommunityIds);
+    if (!audience.ok) {
+      const message = audience.code === "PUBLIC_AUDIENCE_NOT_ALLOWED"
+        ? "חשיפה ציבורית אינה מותרת לפי הגדרות החשיפה ואישור ההורה."
+        : "יש לבחור רק קהילות שמותר לחונך לפרסם בהן.";
+      return Response.json({ error: message, code: audience.code }, { status: 403 });
+    }
     const subjectIds = payload.subjectIds === undefined
       ? null
       : await validateSubjectIds(client, user.id, payload.subjectIds);
@@ -119,7 +152,7 @@ export async function PATCH(request: Request) {
       .eq("meeting_mode", window.meeting_mode).neq("id", id).maybeSingle();
     if (duplicate.error) throw new Error("duplicate check failed");
     if (duplicate.data) return Response.json({ error: "חלון זמינות זה כבר קיים.", code: "DUPLICATE_WINDOW" }, { status: 409 });
-    const result = await client.from("mentor_availability_windows").update({ ...window, updated_at: new Date().toISOString() }).eq("id", id).eq("mentor_user_id", user.id).select("*").maybeSingle();
+    const result = await client.from("mentor_availability_windows").update({ ...window, audience_scope: audienceScope, community_ids: audience.communityIds, updated_at: new Date().toISOString() }).eq("id", id).eq("mentor_user_id", user.id).select("*").maybeSingle();
     if (result.error) throw new Error("update failed");
     if (!result.data) return Response.json({ error: "חלון הזמינות לא נמצא.", code: "WINDOW_NOT_FOUND" }, { status: 404 });
     if (subjectIds) {
@@ -166,8 +199,13 @@ function validateWindow(payload: Record<string, unknown>, capabilities: MentorCa
   const weekday = Number(payload.weekday); const startTime = clean(payload.startTime, 8); const endTime = clean(payload.endTime, 8); const meetingMode = clean(payload.meetingMode, 20);
   const durations = Array.isArray(payload.durations) ? payload.durations.map(Number).filter(isMeetingDuration) : [];
   const meetingPrice = Number(payload.meetingPrice ?? 0);
+  const location = clean(payload.location, 240);
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6 || !/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime) || endTime <= startTime || !MEETING_MODES.includes(meetingMode as never) || !durations.length || !isAllowedMentorMeetingPrice(meetingPrice, capabilities)) return null;
-  return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, meeting_price: meetingPrice, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
+  if (meetingMode === "פרונטלי" && !location) return null;
+  return { weekday, start_time: startTime, end_time: endTime, meeting_mode: meetingMode, location: meetingMode === "אונליין" ? null : location, meeting_price: meetingPrice, supported_durations: [...new Set(durations)], is_active: payload.isActive !== false, effective_start_date: clean(payload.effectiveStartDate, 10) || null, effective_end_date: clean(payload.effectiveEndDate, 10) || null, timezone: "Asia/Jerusalem" };
+}
+function normalizeAudienceScope(value: unknown) {
+  return value === "community" ? "community" : "all";
 }
 function clean(value: unknown, maximum: number) { return typeof value === "string" && value.trim().length <= maximum ? value.trim() : ""; }
 

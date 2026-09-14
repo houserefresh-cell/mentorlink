@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../../lib/supabase";
 import { ChoicePills, Field, FormMessage, LoadingPage, MentorPageShell, SavePanel, inputClassName, toggleValue } from "../_components/MentorPageShell";
+import CityAutocomplete from "@/app/_components/CityAutocomplete";
 
 const SCHOOLS = ["בית ספר יסודי", "חטיבת ביניים", "תיכון", "בית ספר אחר"];
 const PLACES = ["בבית התלמיד", "בבית החונך", "בבית הספר", "במרכז קהילתי", "אונליין"];
@@ -43,7 +44,7 @@ export default function LocationsPage() {
   return <MentorPageShell title="אזורי פעילות ובתי ספר" description="בחרו היכן תוכלו לקיים את מפגשי החונכות.">
     <form onSubmit={save} className="rounded-3xl border border-blue-100 bg-white p-8 shadow-xl">
       <div className="grid gap-5 md:grid-cols-2">
-        <Field label="עיר מגורים" htmlFor="city"><input id="city" required value={city} onChange={(e) => setCity(e.target.value)} className={inputClassName} /></Field>
+        <div><CityAutocomplete label="עיר מגורים" value={city} onChange={setCity} required /></div>
         <Field label="שכונות או אזורי פעילות" htmlFor="areas"><input id="areas" value={areas} onChange={(e) => setAreas(e.target.value)} placeholder="הפרדה בפסיקים" className={inputClassName} /></Field>
       </div>
       <div className="mt-7"><h2 className="mb-3 font-bold">בתי ספר מועדפים</h2><ChoicePills options={SCHOOLS} selected={schools} onToggle={(v) => setSchools(toggleValue(schools, v))} /></div>

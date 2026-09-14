@@ -60,6 +60,8 @@ export default function MentorProfilePage() {
   const [saving, setSaving] = useState(false);
   const [cancellingField, setCancellingField] = useState<string | null>(null);
   const [message, setMessage] = useState<Message>(null);
+  const [visibility, setVisibility] = useState({ generalScope: "public" as "public" | "community_restricted", parentApprovedScope: "community_restricted" as "public" | "community_restricted" });
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -73,9 +75,17 @@ export default function MentorProfilePage() {
       setUserId(user.id); setAccessToken(token);
       const response = await fetch("/api/mentor-profile", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       const body = await response.json().catch(() => ({}));
+      const visibilityResponse = await fetch("/api/mentor-visibility", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+      const visibilityBody = await visibilityResponse.json().catch(() => ({}));
       if (!active) return;
       if (!response.ok) { setMessage({ type: "error", text: "לא ניתן לטעון את הפרופיל." }); setLoading(false); return; }
       const data = body.profile as MentorProfile | null;
+      if (visibilityResponse.ok) {
+        setVisibility({
+          generalScope: visibilityBody.generalScope === "community_restricted" ? "community_restricted" : "public",
+          parentApprovedScope: visibilityBody.parentApprovedScope === "public" ? "public" : "community_restricted",
+        });
+      }
       setFirstName(data?.first_name ?? user.user_metadata?.first_name ?? "");
       setLastName(data?.last_name ?? user.user_metadata?.last_name ?? "");
       setBirthDate(data?.birth_date ?? ""); setGrade(data?.grade ?? ""); setSchool(data?.school ?? "");
@@ -121,6 +131,29 @@ export default function MentorProfilePage() {
   const hasChanges =
     initialValues !== null &&
     JSON.stringify(currentValues) !== JSON.stringify(initialValues);
+
+  async function saveVisibility(nextScope: "public" | "community_restricted") {
+    if (!accessToken) return;
+    setVisibilitySaving(true);
+    setMessage(null);
+    const response = await fetch("/api/mentor-visibility", {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ generalScope: nextScope, communityIds: [] }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage({ type: "error", text: result.error ?? "לא ניתן לשמור את הגדרות הנראות." });
+      setVisibilitySaving(false);
+      return;
+    }
+    setVisibility({
+      generalScope: result.generalScope === "community_restricted" ? "community_restricted" : "public",
+      parentApprovedScope: result.parentApprovedScope === "public" ? "public" : "community_restricted",
+    });
+    setMessage({ type: "success", text: "הגדרות הנראות נשמרו." });
+    setVisibilitySaving(false);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -420,6 +453,27 @@ export default function MentorProfilePage() {
               />
             </FormField>
           </div>
+
+          <section className="mt-8 rounded-2xl border border-violet-200 bg-violet-50 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-violet-700">מי יוכל למצוא אותי?</p>
+                <h2 className="mt-1 text-xl font-black text-slate-900">הגדרות נראות</h2>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-800">{visibility.parentApprovedScope === "public" ? "אישור הורה: ציבורי" : "אישור הורה: מוגבל לקהילות"}</span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button type="button" disabled={visibilitySaving} onClick={() => void saveVisibility("public")} className={`rounded-2xl border px-4 py-3 text-right font-black ${visibility.generalScope === "public" ? "border-blue-700 bg-blue-700 text-white" : "border-slate-300 bg-white text-slate-800"}`}>
+                גלוי לכולם
+              </button>
+              <button type="button" disabled={visibilitySaving} onClick={() => void saveVisibility("community_restricted")} className={`rounded-2xl border px-4 py-3 text-right font-black ${visibility.generalScope === "community_restricted" ? "border-violet-700 bg-violet-700 text-white" : "border-slate-300 bg-white text-slate-800"}`}>
+                רק לקהילות שאושרו
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-6 text-slate-700">
+              אם אישרת הורית שהפרופיל שלך יהיה ציבורי, אפשר להציג אותו לכולם. אם האישור מוגבל לקהילות, הערך המוגן נשמר עד לבחירה חדשה.
+            </p>
+          </section>
 
           {pendingChanges.length > 0 && (
             <section

@@ -63,3 +63,9 @@ test("duplicate creates a fresh draft without sessions, dates or registrations",
   assert.match(duplicate, /sessions: \[\]/);
   assert.doesNotMatch(duplicate, /mentor_activity_(?:sessions|registrations)[\s\S]*insert/);
 });
+
+test("availability and activity payloads support audience scopes and community restrictions", () => {
+  assert.match(read("lib/mentor-activity-core.ts"), /audienceScope|communityIds|audience_scope|community_ids/);
+  assert.match(read("app/api/mentor-availability/route.ts"), /audienceScope|communityIds|audience_scope|community_ids/);
+  assert.match(read("app/api/meeting-requests/route.ts"), /selectedSlot\.(?:audienceScope|communityIds)|community_memberships|communityIds/);
+});

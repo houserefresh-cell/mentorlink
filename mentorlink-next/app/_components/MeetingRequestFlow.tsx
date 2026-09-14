@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type Slot = { startAt: string; meetingMode: string; meetingPrice: number; durations: number[]; subjects: string[] };
+type Slot = { startAt: string; meetingMode: string; meetingPrice: number; location?: string | null; durations: number[]; subjects: string[] };
 type ParentChild = { id: string; first_name: string; grade: string | null; default_mentor_message: string | null; auto_include_mentor_message: boolean };
 type Config = {
   mentor: {
@@ -60,25 +60,20 @@ export default function MeetingRequestFlow({
 
   useEffect(() => {
     if (!open) return;
-    void Promise.all([
-      supabase.auth.getSession(),
-      fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}`).then(async (response) => ({ ok: response.ok, body: await response.json() })),
-    ]).then(([session, scheduling]) => {
+    void supabase.auth.getSession().then(async (session) => {
       const nextToken = session.data.session?.access_token ?? null;
       setAccessToken(nextToken);
       setRole(session.data.session?.user.user_metadata?.role ?? null);
       setAuthState("resolved");
-      if (scheduling.ok && scheduling.body?.mentor && Array.isArray(scheduling.body?.slots)) {
-        setConfig(scheduling.body);
-        setConfigError("");
-      } else {
-        setConfig(null);
-        setConfigError(scheduling.body?.error ?? "לא ניתן לטעון את המועדים הזמינים.");
-      }
+      const headers = nextToken ? { Authorization: `Bearer ${nextToken}` } : undefined;
+      const response = await fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}`, { headers, cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok && body?.mentor && Array.isArray(body?.slots)) { setConfig(body); setConfigError(""); }
+      else { setConfig(null); setConfigError(body?.error ?? "לא ניתן לטעון את המועדים הזמינים."); }
       if (nextToken && session.data.session?.user.user_metadata?.role === "parent") {
         void fetch("/api/parent/children", { headers: { Authorization: `Bearer ${nextToken}` }, cache: "no-store" })
-          .then(async (response) => response.ok ? response.json() : { children: [] })
-          .then((body) => setChildren(body.children ?? []))
+          .then(async (childrenResponse) => childrenResponse.ok ? childrenResponse.json() : { children: [] })
+          .then((childrenBody) => setChildren(childrenBody.children ?? []))
           .catch(() => setChildren([]));
       }
     }).catch(() => { setAuthState("resolved"); setConfigError("לא ניתן לטעון את המועדים הזמינים."); });
@@ -127,7 +122,7 @@ export default function MeetingRequestFlow({
     if (loadingLater) return;
     setLoadingLater(true);
     try {
-      const response = await fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}&days=60`);
+      const response = await fetch(`/api/meeting-requests/available-slots?mentor=${encodeURIComponent(mentorBookingId)}&days=60`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined, cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.code ?? "SLOT_LOAD_FAILED");
       setConfig(body);
@@ -215,7 +210,7 @@ export default function MeetingRequestFlow({
                 </div>{children.length > 0 && <p className="mt-2 text-sm font-bold text-slate-600">בחירת ילד ממלאת אוטומטית את השם והכיתה. עדיין אפשר לעדכן ידנית לפני השליחה.</p>}</fieldset>
                 <Field label="ו. במה נדרשת עזרה"><textarea value={goal} onChange={(event) => setGoal(event.target.value)} maxLength={500} rows={3} /></Field>
                 <Field label="ז. הודעה קצרה לחונך (לא חובה)"><textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={500} rows={2} /></Field>
-                {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p><p>עלות הפגישה: {slot.meetingPrice ? `${slot.meetingPrice} ₪` : "ללא עלות"}</p><p>{childName} · {grade}</p></div>}
+                {complete && slot && <div className="rounded-2xl bg-slate-50 p-4 text-sm"><p className="font-black">סיכום</p><p>{subject} · {mode} · {formatDate(selectedDate)} · {formatTime(slot.startAt)} · {duration} דקות</p>{slot.location && <p>📍 {slot.location}</p>}<p>עלות הפגישה: {slot.meetingPrice ? `${slot.meetingPrice} ₪` : "ללא עלות"}</p><p>{childName} · {grade}</p></div>}
                 {hasSelectableSlots && !slot && mode && <p role="status" className="rounded-xl bg-amber-50 p-3 font-bold text-amber-900">יש לבחור מועד לפגישה.</p>}
                 {!complete && <div role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="font-black">כדי לשלוח את הבקשה:</p><ul className="mt-2 list-inside list-disc text-sm text-slate-700">{missingRequirements.map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></div>}
                 <button type="button" disabled={!complete || busy || submitted} onClick={submit} className="min-h-12 w-full rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-400">{submitted ? "הבקשה נשלחה" : busy ? "שולח..." : "שליחת בקשת פגישה"}</button>

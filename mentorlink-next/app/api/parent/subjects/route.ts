@@ -13,7 +13,7 @@ export async function GET(request: Request) {
 
   const client = createSupabaseAdmin();
   try {
-    const [publications, catalog] = await Promise.all([
+    const [publications, catalog, memberships] = await Promise.all([
       client.from("mentor_publication").select("user_id").eq("status", "published"),
       client
         .from("subjects")
@@ -21,8 +21,10 @@ export async function GET(request: Request) {
         .eq("moderation_status", "active")
         .order("category")
         .order("name"),
+      client.from("community_memberships").select("community_id").eq("user_id", user.id).eq("status", "active"),
     ]);
-    if (publications.error || catalog.error) throw new Error("marketplace lookup failed");
+    if (publications.error || catalog.error || memberships.error) throw new Error("marketplace lookup failed");
+    const memberIds = new Set((memberships.data ?? []).map((row) => String(row.community_id)));
 
     const mentorIds = [...new Set((publications.data ?? []).map((row) => row.user_id))];
     const subjects = catalog.data ?? [];
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
     const slotGroups = await Promise.all(
       mentorIds.map(async (mentorUserId) => ({
         mentorUserId,
-        slots: await loadSlots(client, mentorUserId, new Date(), 60).catch(() => []),
+        slots: (await loadSlots(client, mentorUserId, new Date(), 60).catch(() => [])).filter((slot) => slot.audienceScope !== "community" || (slot.communityIds ?? []).some((id) => memberIds.has(id))),
       })),
     );
     for (const { mentorUserId, slots } of slotGroups) {
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
     const activities = mentorIds.length
       ? await client
           .from("mentor_activities")
-          .select("id, mentor_user_id, subject_id, registration_deadline")
+          .select("id, mentor_user_id, subject_id, registration_deadline, audience_scope, community_ids")
           .in("mentor_user_id", mentorIds)
           .eq("status", "published")
           .gt("registration_deadline", now)
@@ -74,6 +76,7 @@ export async function GET(request: Request) {
 
     const activityCountBySubject = new Map<number, number>();
     for (const activity of activities.data ?? []) {
+      if (activity.audience_scope === "community" && !(activity.community_ids ?? []).some((id: string) => memberIds.has(String(id)))) continue;
       if (!activity.subject_id || !activityWithFutureSession.has(activity.id)) continue;
       activityCountBySubject.set(
         activity.subject_id,

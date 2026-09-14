@@ -18,6 +18,7 @@ import {
   toggleValue,
 } from "../_components/MentorPageShell";
 import WebPushControls from "../../_components/WebPushControls";
+import CityAutocomplete from "@/app/_components/CityAutocomplete";
 
 const AGE_GROUPS = [
   "א׳–ב׳",
@@ -734,7 +735,7 @@ export default function MentorOnboardingPage() {
             </div>
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="בית ספר" htmlFor="school"><input id="school" value={school} onChange={(event) => setSchool(event.target.value)} className={inputClassName} /></Field>
-              <Field label="עיר" htmlFor="city" required><input id="city" required value={city} onChange={(event) => setCity(event.target.value)} className={inputClassName} /></Field>
+              <div className="md:col-span-1"><CityAutocomplete label="עיר" value={city} onChange={setCity} required /></div>
             </div>
             <div className="grid gap-5 md:grid-cols-2">
               <Field label="טלפון" htmlFor="phone"><input id="phone" type="tel" dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} className={`${inputClassName} text-left`} /></Field>

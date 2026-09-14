@@ -14,7 +14,7 @@ import {
 import { loadSlots } from "./meeting-data";
 import { getMentorCapabilities } from "./mentor-age";
 
-export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
+export async function loadPublishedMentors(admin = createSupabaseAdmin(), userId?: string | null) {
   const publications = await admin
     .from("mentor_publication")
     .select("user_id, status, public_booking_id")
@@ -23,19 +23,45 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
   const ids = ((publications.data ?? []) as PublishedRow[]).map((row) => row.user_id);
   if (!ids.length) return [];
 
-  const [profiles, subjects, experiences, preferences, availability, consents] = await Promise.all([
+  const [profiles, subjects, experiences, preferences, availability, consents, visibilitySettings, visibilityCommunityLinks, userCommunityMemberships] = await Promise.all([
     admin.from("mentor_profiles").select("user_id, first_name, last_name, city, bio, birth_date, profile_photo_path").in("user_id", ids),
     admin.from("mentor_subjects").select("user_id, custom_subject, age_groups, subjects(name)").in("user_id", ids),
     admin.from("mentor_experience").select("user_id, experience_types, mentoring_types").in("user_id", ids),
     admin.from("mentor_preferences").select("user_id, preferred_age_groups, meeting_modes").in("user_id", ids),
     admin.from("mentor_availability").select("user_id, flexible_availability, available_on_holidays, time_preferences").in("user_id", ids),
     admin.from("mentor_parent_consents").select("user_id, status, profile_photo_visibility").in("user_id", ids),
+    admin.from("mentor_visibility_settings").select("user_id, general_scope").in("user_id", ids),
+    admin.from("mentor_visibility_communities").select("user_id, community_id").in("user_id", ids).eq("status", "active"),
+    userId ? admin.from("community_memberships").select("community_id").eq("user_id", userId).eq("status", "active") : Promise.resolve({ data: [], error: null }),
   ]);
-  if ([profiles, subjects, experiences, preferences, availability, consents].some((result) => result.error)) {
+  if ([profiles, subjects, experiences, preferences, availability, consents, visibilitySettings, visibilityCommunityLinks, userCommunityMemberships].some((result) => result.error)) {
     throw new Error("Unable to load published mentor cards");
   }
+  const visibilityMap = new Map((visibilitySettings.data ?? []).map((row) => [row.user_id, row.general_scope ?? "public"]));
+  const allowedCommunityMap = new Map<string, Set<string>>();
+  for (const link of visibilityCommunityLinks.data ?? []) {
+    const communityId = String(link.community_id ?? "");
+    if (!communityId) continue;
+    const set = allowedCommunityMap.get(link.user_id) ?? new Set<string>();
+    set.add(communityId);
+    allowedCommunityMap.set(link.user_id, set);
+  }
+  const userCommunityIds = new Set((userCommunityMemberships.data ?? []).map((row) => String(row.community_id ?? "")).filter(Boolean));
+  const visibleUserIds = new Set<string>();
+  for (const publication of publications.data ?? []) {
+    const userIdValue = publication.user_id;
+    const scope = visibilityMap.get(userIdValue) ?? "public";
+    if (scope === "public") {
+      visibleUserIds.add(userIdValue);
+      continue;
+    }
+    if (userId && allowedCommunityMap.get(userIdValue)?.size) {
+      const match = [...(allowedCommunityMap.get(userIdValue) ?? [])].some((communityId) => userCommunityIds.has(communityId));
+      if (match) visibleUserIds.add(userIdValue);
+    }
+  }
   const mapped = mapPublishedMentors({
-    publications: publications.data as PublishedRow[],
+    publications: (publications.data as PublishedRow[]).filter((row) => visibleUserIds.has(row.user_id)),
     profiles: profiles.data as ProfileRow[],
     subjects: subjects.data as SubjectRow[],
     experiences: experiences.data as ExperienceRow[],
@@ -77,7 +103,7 @@ export async function loadPublishedMentors(admin = createSupabaseAdmin()) {
 }
 
 export const getPublishedMentors = unstable_cache(
-  loadPublishedMentors,
+  async (userId?: string | null) => loadPublishedMentors(createSupabaseAdmin(), userId),
   ["public-published-mentors"],
   { revalidate: 60, tags: ["public-mentors"] },
 );
