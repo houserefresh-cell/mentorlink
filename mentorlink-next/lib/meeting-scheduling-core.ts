@@ -30,23 +30,16 @@ export type AvailabilityWindow = {
   effective_end_date: string | null;
   timezone: string;
   meeting_price?: number;
-  location?: string | null;
-  audience_scope?: "all" | "community";
-  community_ids?: string[];
   subjects?: string[];
 };
 
 export type TimePeriod = { starts_at: string; ends_at: string };
 export type BookableSlot = {
-  id?: string;
   startAt: string;
   meetingMode: string;
   durations: number[];
   subjects: string[];
   meetingPrice: number;
-  location?: string | null;
-  audienceScope?: "all" | "community";
-  communityIds?: string[];
 };
 
 function addDays(date: string, days: number) {
@@ -108,15 +101,11 @@ export function generateBookableSlots(input: {
           });
         if (durations.length) {
           slots.push({
-            id: window.id,
             startAt: start.toISOString(),
             meetingMode: window.meeting_mode,
             durations,
             subjects: window.subjects ?? [],
             meetingPrice: window.meeting_price ?? 0,
-            location: window.location ?? null,
-            audienceScope: window.audience_scope ?? "all",
-            communityIds: [...new Set((window.community_ids ?? []).filter(Boolean))],
           });
         }
       }

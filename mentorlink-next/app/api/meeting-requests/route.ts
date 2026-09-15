@@ -61,14 +61,6 @@ export async function POST(request: Request) {
     if (!isCurrentGeneratedSlot(slots, requestedStartAt, meetingMode, duration, subject) || !selectedSlot) {
       return Response.json({ error: "המועד אינו זמין עוד." }, { status: 422 });
     }
-    const userCommunityIds = await client.from("community_memberships").select("community_id").eq("user_id", user.id).eq("status", "active");
-    if (selectedSlot.audienceScope === "community" && selectedSlot.communityIds?.length) {
-      const allowed = new Set(selectedSlot.communityIds.map(String));
-      const memberIds = new Set((userCommunityIds.data ?? []).map((row) => String(row.community_id)).filter(Boolean));
-      if (![...allowed].some((communityId) => memberIds.has(communityId))) {
-        return Response.json({ error: "הזמינות הזו מוגבלת לקהילה מסוימת ולא קיימת לך חברות פעילה בה." }, { status: 403 });
-      }
-    }
     const { data, error } = await client.from("meeting_requests").insert({
       idempotency_key: idempotencyKey,
       parent_user_id: user.id,
@@ -84,8 +76,6 @@ export async function POST(request: Request) {
       requested_duration_minutes: duration,
       parent_message: parentMessage,
       meeting_price: selectedSlot.meetingPrice,
-      meeting_location: selectedSlot.location ?? null,
-      source_availability_id: selectedSlot.id ?? null,
     }).select("id, status").single();
     if (error?.code === "23505") return Response.json({ error: "Duplicate request" }, { status: 409 });
     if (error || !data) throw new Error("insert failed");

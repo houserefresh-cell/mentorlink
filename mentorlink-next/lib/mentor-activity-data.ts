@@ -70,8 +70,6 @@ export function activityPayloadFromRow(row: Record<string, unknown>) {
     accessibilityOther: row.accessibility_other,
     cancellationPolicy: row.cancellation_policy,
     contactPhoneVisibility: row.contact_phone_visibility ?? "registered_parents",
-    audienceScope: row.audience_scope ?? "all",
-    communityIds: Array.isArray(row.community_ids) ? row.community_ids.filter((value) => typeof value === "string") : [],
     pickupOptions: row.pickup_options,
     pickupDetails: row.pickup_details,
   };

@@ -1,70 +1,150 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { MentorPageShell } from "../_components/MentorPageShell";
 import { supabase } from "@/lib/supabase";
 
 const DAYS = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 const DURATIONS = [30, 45, 60, 75, 90];
-type Meeting = { id: string; requested_start_at: string; confirmed_start_at?: string | null; child_first_name: string; subject: string; status: string };
-type WindowRow = { id: string; weekday: number; start_time: string; end_time: string; meeting_mode: string; location: string | null; supported_durations: number[]; is_active: boolean; subject_ids: number[]; effective_start_date: string | null; effective_end_date: string | null; meeting_price: number; audience_scope?: "all" | "community"; community_ids?: string[]; meetings?: Meeting[] };
+type WindowRow = {
+  id: string; weekday: number; start_time: string; end_time: string;
+  meeting_mode: string; supported_durations: number[]; is_active: boolean; subject_ids: number[];
+  effective_start_date: string | null; effective_end_date: string | null;
+  meeting_price: number;
+};
 type MentorSubject = { id: number; name: string; category: string };
-type Community = { id: string; name: string; locality: string };
-type Visibility = { generalScope: "public" | "community_restricted"; parentApprovedScope: "public" | "community_restricted"; communityIds: string[]; isMinor: boolean };
-type Form = { weekdays: number[]; startTime: string; endTime: string; meetingMode: string; location: string; meetingPrice: number; durations: number[]; subjectIds: number[]; effectiveStartDate: string; effectiveEndDate: string; audienceScope: "all" | "community"; communityIds: string[] };
-const freshForm = (): Form => ({ weekdays: [0], startTime: "16:00", endTime: "18:00", meetingMode: "פרונטלי", location: "", meetingPrice: 0, durations: [60], subjectIds: [], effectiveStartDate: "", effectiveEndDate: "", audienceScope: "all", communityIds: [] });
 
 export default function SchedulingAvailabilityPage() {
-  const [token, setToken] = useState(""); const [windows, setWindows] = useState<WindowRow[]>([]); const [subjects, setSubjects] = useState<MentorSubject[]>([]); const [communities, setCommunities] = useState<Community[]>([]); const [visibility, setVisibility] = useState<Visibility | null>(null);
-  const [editingId, setEditingId] = useState(""); const [historyId, setHistoryId] = useState(""); const [showInactive, setShowInactive] = useState(false);
-  const [capabilities, setCapabilities] = useState<{ age: number | null; isAdult: boolean }>({ age: null, isAdult: false }); const [form, setForm] = useState<Form>(freshForm()); const [customDuration, setCustomDuration] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
+  const [token, setToken] = useState("");
+  const [windows, setWindows] = useState<WindowRow[]>([]);
+  const [subjects, setSubjects] = useState<MentorSubject[]>([]);
+  const [editingId, setEditingId] = useState("");
+  const [capabilities, setCapabilities] = useState<{ age: number | null; isAdult: boolean }>({ age: null, isAdult: false });
+  const [form, setForm] = useState({ weekdays: [0] as number[], startTime: "16:00", endTime: "18:00", meetingMode: "אונליין", meetingPrice: 0, durations: [60], subjectIds: [] as number[], effectiveStartDate: "", effectiveEndDate: "" });
+  const [customDuration, setCustomDuration] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function load(accessToken: string) {
     const headers = { Authorization: `Bearer ${accessToken}` };
-    const [response, subjectResponse, communityResponse, visibilityResponse] = await Promise.all([fetch("/api/mentor-availability", { headers, cache: "no-store" }), fetch("/api/mentor-subjects", { headers, cache: "no-store" }), fetch("/api/communities", { headers, cache: "no-store" }), fetch("/api/mentor-visibility", { headers, cache: "no-store" })]);
-    const [body, subjectBody, communityBody, visibilityBody] = await Promise.all([response.json().catch(() => ({})), subjectResponse.json().catch(() => ({})), communityResponse.json().catch(() => ({})), visibilityResponse.json().catch(() => ({}))]);
-    if (!response.ok || !subjectResponse.ok || !communityResponse.ok || !visibilityResponse.ok) { setMessage(body.error ?? subjectBody.error ?? communityBody.error ?? visibilityBody.error ?? "לא ניתן לטעון את הזמינות."); return; }
-    setWindows(body.windows ?? []); setCapabilities(body.capabilities ?? { age: null, isAdult: false }); setCommunities(communityBody.communities ?? []); setVisibility(visibilityBody);
-    const selectedIds = new Set<number>((subjectBody.selected ?? []).map((item: { subject_id: number }) => item.subject_id)); setSubjects((subjectBody.catalog ?? []).filter((subject: MentorSubject) => selectedIds.has(subject.id)));
+    const [response, subjectResponse] = await Promise.all([
+      fetch("/api/mentor-availability", { headers }),
+      fetch("/api/mentor-subjects", { headers, cache: "no-store" }),
+    ]);
+    const [body, subjectBody] = await Promise.all([
+      response.json().catch(() => ({})),
+      subjectResponse.json().catch(() => ({})),
+    ]);
+    if (!response.ok || !subjectResponse.ok) {
+      setMessage(`${body.error ?? subjectBody.error ?? "לא ניתן לטעון את הזמינות."} (${body.code ?? "AVAILABILITY_LOAD_FAILED"})`);
+      return;
+    }
+    setWindows(body.windows ?? []);
+    setCapabilities(body.capabilities ?? { age: null, isAdult: false });
+    const selectedIds = new Set<number>((subjectBody.selected ?? []).map((item: { subject_id: number }) => item.subject_id));
+    setSubjects((subjectBody.catalog ?? []).filter((subject: MentorSubject) => selectedIds.has(subject.id)));
   }
-  useEffect(() => { void supabase.auth.getSession().then(({ data }) => { const accessToken = data.session?.access_token ?? ""; setToken(accessToken); if (accessToken) void load(accessToken); }); }, []);
+  useEffect(() => { void supabase.auth.getSession().then(({ data }) => {
+    const accessToken = data.session?.access_token ?? "";
+    setToken(accessToken);
+    if (accessToken) void load(accessToken);
+  }); }, []);
 
-  const allowedCommunities = useMemo(() => visibility?.generalScope === "community_restricted" ? communities.filter((c) => visibility.communityIds.includes(c.id)) : communities, [communities, visibility]);
-  const canPublic = Boolean(visibility && visibility.generalScope === "public" && (!visibility.isMinor || visibility.parentApprovedScope === "public"));
-
-  async function save() {
-    if (busy) return; if (form.endTime <= form.startTime || !form.durations.length || !form.subjectIds.length || !form.weekdays.length) { setMessage("יש להשלים יום, שעות, משך ומקצוע."); return; }
-    if (form.meetingMode === "פרונטלי" && !form.location.trim()) { setMessage("יש להזין מיקום לזמינות פרונטלית."); return; }
-    if (form.audienceScope === "community" && !form.communityIds.length) { setMessage("יש לבחור לפחות קהילה אחת."); return; }
-    setBusy(true); setMessage("");
-    try { for (const weekday of form.weekdays) { const response = await fetch("/api/mentor-availability", { method: editingId ? "PATCH" : "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ ...form, weekday, id: editingId || undefined }) }); const body = await response.json().catch(() => ({})); if (!response.ok) { setMessage(body.error ?? "לא ניתן לשמור את הזמינות."); return; } } setEditingId(""); setForm(freshForm()); await load(token); setMessage("הזמינות נשמרה בהצלחה."); }
-    finally { setBusy(false); }
+  async function addWindow() {
+    if (busy) return;
+    if (form.endTime <= form.startTime) {
+      setMessage("שעת הסיום חייבת להיות מאוחרת משעת ההתחלה. (INVALID_WINDOW)");
+      return;
+    }
+    if (!form.durations.length) {
+      setMessage("יש לבחור משך פגישה אחד לפחות. (INVALID_WINDOW)");
+      return;
+    }
+    if (!form.subjectIds.length) {
+      setMessage("יש לבחור לפחות מקצוע או תחום אחד לחלון הזמינות. (INVALID_WINDOW_SUBJECTS)");
+      return;
+    }
+    if (!capabilities.isAdult && ![0, 10, 20, 30, 40].includes(Number(form.meetingPrice))) {
+      setMessage("לחונך מתחת לגיל 18 ניתן לקבוע 0, 10, 20, 30 או 40 ₪ לפגישה. (INVALID_WINDOW)");
+      return;
+    }
+    if (capabilities.isAdult && (!Number.isFinite(Number(form.meetingPrice)) || Number(form.meetingPrice) < 0)) {
+      setMessage("עלות הפגישה אינה תקינה. (INVALID_WINDOW)");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      if (!form.weekdays.length) {
+        setMessage("יש לבחור לפחות יום אחד. (INVALID_WINDOW)");
+        return;
+      }
+      for (const weekday of form.weekdays) {
+        const response = await fetch("/api/mentor-availability", {
+          method: editingId ? "PATCH" : "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ...form, weekday, id: editingId || undefined }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setMessage(`${body.error ?? "לא ניתן לשמור את הזמינות."} (${body.code ?? "AVAILABILITY_SAVE_FAILED"})`);
+          return;
+        }
+      }
+      setEditingId("");
+      await load(token);
+      setMessage("הזמינות נשמרה בהצלחה.");
+    } catch (error) {
+      console.info("Mentor availability UI", { stage: "save", errorName: error instanceof Error ? error.name : "UnknownError" });
+      setMessage("לא ניתן לשמור את הזמינות. (AVAILABILITY_API_FAILED)");
+    } finally {
+      setBusy(false);
+    }
   }
-  async function patch(window: WindowRow, extra: Record<string, unknown>) { await fetch("/api/mentor-availability", { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ id: window.id, weekday: window.weekday, startTime: window.start_time.slice(0,5), endTime: window.end_time.slice(0,5), meetingMode: window.meeting_mode, location: window.location ?? "", meetingPrice: window.meeting_price, durations: window.supported_durations, subjectIds: window.subject_ids, effectiveStartDate: window.effective_start_date ?? "", effectiveEndDate: window.effective_end_date ?? "", audienceScope: window.audience_scope ?? "all", communityIds: window.community_ids ?? [], ...extra }) }); await load(token); }
-  async function remove(id: string) { if (!confirm("למחוק את הזמינות?")) return; const response = await fetch(`/api/mentor-availability?id=${id}&type=window`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }); if (response.ok) await load(token); }
-  function edit(window: WindowRow) { setEditingId(window.id); setForm({ weekdays:[window.weekday], startTime:window.start_time.slice(0,5), endTime:window.end_time.slice(0,5), meetingMode:window.meeting_mode, location:window.location ?? "", meetingPrice:window.meeting_price ?? 0, durations:window.supported_durations, subjectIds:window.subject_ids, effectiveStartDate:window.effective_start_date ?? "", effectiveEndDate:window.effective_end_date ?? "", audienceScope:window.audience_scope ?? "all", communityIds:window.community_ids ?? [] }); globalThis.scrollTo?.({ top: 0, behavior: "smooth" }); }
-  const active = windows.filter(w => w.is_active), inactive = windows.filter(w => !w.is_active);
+  async function remove(id: string) {
+    const response = await fetch(`/api/mentor-availability?id=${id}&type=window`, {
+      method: "DELETE", headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.ok) { setEditingId(""); await load(token); }
+  }
+  async function toggle(window: WindowRow) {
+    await fetch("/api/mentor-availability", {
+      method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: window.id, weekday: window.weekday, startTime: window.start_time.slice(0, 5),
+        endTime: window.end_time.slice(0, 5), meetingMode: window.meeting_mode,
+        meetingPrice: window.meeting_price ?? 0,
+        durations: window.supported_durations, isActive: !window.is_active,
+      }),
+    });
+    await load(token);
+  }
 
-  return <MentorPageShell title="הזמינות שלי" description="מגדירים מתי, איפה ולמי אפשר לבקש פגישה.">
-    {message && <p className="mb-4 rounded-xl bg-blue-50 p-3 font-bold text-blue-900">{message}</p>}
-    <section className="rounded-3xl border bg-white p-5 shadow-sm"><h2 className="text-xl font-black">{editingId ? "עריכת זמינות" : "זמינות חדשה"}</h2>
-      <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Field label="ימים"><div className="flex flex-wrap gap-2">{DAYS.map((day,i)=><Pill key={day} checked={form.weekdays.includes(i)} label={day} onClick={()=>setForm({...form,weekdays:form.weekdays.includes(i)?form.weekdays.filter(x=>x!==i):[...form.weekdays,i]})}/>)}</div></Field>
-        <Field label="משעה"><input type="time" value={form.startTime} onChange={e=>setForm({...form,startTime:e.target.value})} className="input"/></Field><Field label="עד שעה"><input type="time" value={form.endTime} onChange={e=>setForm({...form,endTime:e.target.value})} className="input"/></Field>
-        <Field label="אופן פגישה"><select value={form.meetingMode} onChange={e=>setForm({...form,meetingMode:e.target.value,location:e.target.value==="אונליין"?"":form.location})} className="input"><option>פרונטלי</option><option>אונליין</option></select></Field>
-        {form.meetingMode === "פרונטלי" && <Field label="מיקום"><input value={form.location} onChange={e=>setForm({...form,location:e.target.value})} placeholder="לדוגמה: ספורטק הוד השרון" className="input"/></Field>}
-        <Field label="עלות לפגישה"><input type="number" min="0" value={form.meetingPrice} onChange={e=>setForm({...form,meetingPrice:Number(e.target.value)})} className="input"/></Field>
-        <Field label="למי הזמינות פתוחה?"><select value={form.audienceScope} onChange={e=>setForm({...form,audienceScope:e.target.value as "all"|"community",communityIds:[]})} className="input"><option value="all" disabled={!canPublic}>🌐 ציבורי / כל MentorLink</option><option value="community">🔒 קהילה/קהילות</option></select>{!canPublic && <small className="text-amber-800">חשיפה ציבורית דורשת הרשאה מתאימה. ניתן לבקש הרחבת הרשאה דרך החשבון שלי.</small>}</Field>
-        {form.audienceScope === "community" && <Field label="קהילות"><div className="flex flex-wrap gap-2">{allowedCommunities.map(c=><Pill key={c.id} checked={form.communityIds.includes(c.id)} label={`${c.name}${c.locality?` · ${c.locality}`:""}`} onClick={()=>setForm({...form,communityIds:form.communityIds.includes(c.id)?form.communityIds.filter(x=>x!==c.id):[...form.communityIds,c.id]})}/>)}</div></Field>}
-        <Field label="משכי פגישה"><div className="flex flex-wrap gap-2">{DURATIONS.map(d=><Pill key={d} checked={form.durations.includes(d)} label={`${d} דק׳`} onClick={()=>setForm({...form,durations:form.durations.includes(d)?form.durations.filter(x=>x!==d):[...form.durations,d]})}/>)}</div><div className="mt-2 flex gap-2"><input value={customDuration} onChange={e=>setCustomDuration(e.target.value)} placeholder="משך אחר" className="input"/><button type="button" className="btn" onClick={()=>{const n=Number(customDuration);if(n>=10&&n<=240)setForm({...form,durations:[...new Set([...form.durations,n])].sort((a,b)=>a-b)});setCustomDuration("")}}>הוסף</button></div></Field>
-        <Field label="מקצועות"><div className="flex flex-wrap gap-2">{subjects.map(s=><Pill key={s.id} checked={form.subjectIds.includes(s.id)} label={s.name} onClick={()=>setForm({...form,subjectIds:form.subjectIds.includes(s.id)?form.subjectIds.filter(x=>x!==s.id):[...form.subjectIds,s.id]})}/>)}</div></Field>
-      </div><div className="mt-5 flex gap-2"><button disabled={busy} onClick={save} className="rounded-xl bg-blue-700 px-5 py-3 font-black text-white disabled:opacity-50">{busy?"שומר...":editingId?"שמור שינויים":"הוסף זמינות"}</button>{editingId&&<button onClick={()=>{setEditingId("");setForm(freshForm())}} className="btn">ביטול</button>}</div>
-    </section>
-    <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{active.map(w=><AvailabilityCard key={w.id} window={w} communities={communities} subjects={subjects} historyOpen={historyId===w.id} onHistory={()=>setHistoryId(historyId===w.id?"":w.id)} onEdit={()=>edit(w)} onToggle={()=>patch(w,{isActive:false})} onDelete={()=>remove(w.id)}/>)}</div>
-    {inactive.length>0&&<section className="mt-6"><button onClick={()=>setShowInactive(!showInactive)} className="font-black text-slate-700">{showInactive?"▾":"◂"} זמינויות לא פעילות ({inactive.length})</button>{showInactive&&<div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{inactive.map(w=><AvailabilityCard key={w.id} window={w} communities={communities} subjects={subjects} historyOpen={historyId===w.id} onHistory={()=>setHistoryId(historyId===w.id?"":w.id)} onEdit={()=>edit(w)} onToggle={()=>patch(w,{isActive:true})} onDelete={()=>remove(w.id)}/>)}</div>}</section>}
-    <style jsx global>{`.input{width:100%;border:1px solid #cbd5e1;border-radius:.75rem;padding:.7rem;background:white}.btn{border:1px solid #cbd5e1;border-radius:.75rem;padding:.7rem 1rem;font-weight:800;background:white}`}</style>
-  </MentorPageShell>;
+  return (
+    <MentorPageShell title="זמינות לפגישות" description="הגדירו חלונות שבועיים מדויקים ותאריכים שאינם זמינים.">
+      {message && <p role="status" aria-live="polite" className="mb-5 rounded-xl bg-blue-50 p-4 text-center font-bold">{message}</p>}
+      <div className="grid gap-5 rounded-3xl border bg-white p-5 shadow-sm sm:grid-cols-2">
+        <fieldset className="sm:col-span-2"><legend className="font-bold">ימים</legend><div className="mt-2 flex flex-wrap gap-2">{DAYS.map((day, weekday) => <button type="button" key={day} aria-pressed={form.weekdays.includes(weekday)} onClick={() => setForm({ ...form, weekdays: editingId ? [weekday] : form.weekdays.includes(weekday) ? form.weekdays.filter((item) => item !== weekday) : [...form.weekdays, weekday] })} className={`min-h-11 rounded-xl border px-4 py-2 font-bold ${form.weekdays.includes(weekday) ? "bg-blue-700 text-white" : ""}`}>{day}</button>)}</div>{editingId && <p className="mt-2 text-sm text-slate-500">בעריכת חלון קיים ניתן לבחור יום אחד. להוספת כמה ימים יחד, צרו חלון חדש.</p>}</fieldset>
+        <Select label="אופן פגישה" value={form.meetingMode} onChange={(meetingMode) => setForm({ ...form, meetingMode })} options={["אונליין", "פרונטלי"].map((value) => ({ label: value, value }))} />
+        {capabilities.isAdult ? <label className="grid gap-2 font-bold">עלות הפגישה<input type="number" min="0" step="0.01" value={form.meetingPrice} onChange={(event) => setForm({ ...form, meetingPrice: Number(event.target.value) })} className="rounded-xl border p-3" /><span className="text-xs font-medium text-slate-500">מגיל 18 ניתן לקבוע את המחיר באופן חופשי.</span></label> : <Select label="עלות הפגישה" value={String(form.meetingPrice)} onChange={(value) => setForm({ ...form, meetingPrice: Number(value) })} options={[{ label: "ללא עלות", value: "0" }, { label: "10 ₪", value: "10" }, { label: "20 ₪", value: "20" }, { label: "30 ₪", value: "30" }, { label: "40 ₪", value: "40" }]} />}
+        <label className="grid gap-2 font-bold">משעה<input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} className="rounded-xl border p-3" /></label>
+        <label className="grid gap-2 font-bold">עד שעה<input type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} className="rounded-xl border p-3" /></label>
+<label className="grid gap-2 font-bold">מתאריך (לא חובה)<input type="date" value={form.effectiveStartDate} onChange={(event) => setForm({ ...form, effectiveStartDate: event.target.value })} className="rounded-xl border p-3" /></label><label className="grid gap-2 font-bold">עד תאריך (לא חובה)<input type="date" value={form.effectiveEndDate} onChange={(event) => setForm({ ...form, effectiveEndDate: event.target.value })} className="rounded-xl border p-3" /></label>
+        <fieldset className="sm:col-span-2"><legend className="font-bold">אורך המפגש</legend><div className="mt-2 flex flex-wrap gap-2">{[...new Set([...DURATIONS, ...form.durations])].sort((a, b) => a - b).map((duration) => <button type="button" key={duration} onClick={() => setForm({ ...form, durations: form.durations.includes(duration) ? form.durations.filter((item) => item !== duration) : [...form.durations, duration].sort((a, b) => a - b) })} className={`min-h-11 rounded-xl border px-4 py-2 font-bold ${form.durations.includes(duration) ? "bg-blue-700 text-white" : ""}`}>{duration} דקות</button>)}</div>
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4"><label className="grid max-w-xs gap-2 font-bold">אורך מפגש רצוי<input type="number" inputMode="numeric" min="15" max="180" step="1" value={customDuration} placeholder="לדוגמה: 50 דקות" onChange={(event) => setCustomDuration(event.target.value)} className="min-h-11 rounded-xl border bg-white p-3" /></label><p className="mt-2 text-sm text-slate-600">אפשר להוסיף אורך מפגש בין 15 ל־180 דקות.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={customDuration === "" || !Number.isInteger(Number(customDuration)) || Number(customDuration) < 15 || Number(customDuration) > 180 || form.durations.includes(Number(customDuration))} onClick={() => { const duration = Number(customDuration); setForm({ ...form, durations: [...form.durations, duration].sort((a, b) => a - b) }); setCustomDuration(""); }} className="min-h-11 rounded-xl bg-blue-700 px-5 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300">הוספה</button><button type="button" onClick={() => { setCustomDuration(""); setForm({ ...form, durations: form.durations.filter((duration) => DURATIONS.includes(duration)) }); }} className="min-h-11 rounded-xl border border-slate-300 bg-white px-5 font-bold text-slate-800">ניקוי</button></div></div>
+        </fieldset>
+        <fieldset className="sm:col-span-2">
+          <legend className="font-bold">לאילו מקצועות החלון הזה מיועד?</legend>
+          {subjects.length ? <div className="mt-3 grid gap-3 sm:grid-cols-2">{subjects.map((subject) => <label key={subject.id} className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-3 ${form.subjectIds.includes(subject.id) ? "border-blue-400 bg-blue-50" : "bg-white"}`}><span><span className="block font-bold">{subject.name}</span><span className="text-xs text-slate-500">{subject.category}</span></span><input type="checkbox" checked={form.subjectIds.includes(subject.id)} onChange={() => setForm({ ...form, subjectIds: form.subjectIds.includes(subject.id) ? form.subjectIds.filter((id) => id !== subject.id) : [...form.subjectIds, subject.id] })} className="h-5 w-5 accent-blue-700" /></label>)}</div> : <p className="mt-3 rounded-xl bg-amber-50 p-4 font-bold text-amber-900">לפני יצירת חלון זמינות יש לבחור מקצועות במסך „המקצועות והתחומים שלי”.</p>}
+        </fieldset>
+        <button type="button" onClick={addWindow} disabled={busy} className="min-h-12 rounded-xl bg-blue-700 font-black text-white disabled:bg-slate-400 sm:col-span-2">{busy ? "שומר..." : editingId ? "עדכון חלון זמינות" : "הוספת חלון זמינות"}</button>
+      </div>
+      <div className="mt-6 grid gap-3">{windows.map((window) => <div key={window.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white p-4"><div><p className="font-bold">{DAYS[window.weekday]} · {window.start_time.slice(0, 5)}–{window.end_time.slice(0, 5)} · {window.meeting_mode} · {window.supported_durations.join(", ")} דקות</p><p className="mt-1 font-bold text-emerald-800">עלות: {window.meeting_price ? `${window.meeting_price} ₪` : "ללא עלות"}</p><p className={`mt-2 text-sm font-bold ${window.subject_ids.length ? "text-blue-700" : "text-amber-700"}`}>{window.subject_ids.length ? window.subject_ids.map((id) => subjects.find((subject) => subject.id === id)?.name).filter(Boolean).join(", ") : "לא הוגדר מקצוע — החלון אינו מוצג להורים"}</p></div><div className="flex gap-2"><button type="button" onClick={() => { setEditingId(window.id); setForm({ weekdays: [window.weekday], startTime: window.start_time.slice(0, 5), endTime: window.end_time.slice(0, 5), meetingMode: window.meeting_mode, meetingPrice: window.meeting_price ?? 0, durations: window.supported_durations, subjectIds: window.subject_ids, effectiveStartDate: window.effective_start_date ?? "", effectiveEndDate: window.effective_end_date ?? "" }); }} className="cursor-pointer rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 font-bold text-blue-800 transition hover:bg-blue-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50">עריכה</button><button type="button" onClick={() => toggle(window)} className={`cursor-pointer rounded-xl border px-3 py-2 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50 ${window.is_active ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100" : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"}`}>{window.is_active ? "השבתה" : "הפעלה"}</button><button type="button" onClick={() => remove(window.id)} className="cursor-pointer rounded-xl border border-red-300 bg-red-50 px-3 py-2 font-bold text-red-700 transition hover:bg-red-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 disabled:cursor-not-allowed disabled:opacity-50">מחיקה</button></div></div>)}</div>
+
+    </MentorPageShell>
+  );
 }
-function AvailabilityCard({window,communities,subjects,historyOpen,onHistory,onEdit,onToggle,onDelete}:{window:WindowRow;communities:Community[];subjects:MentorSubject[];historyOpen:boolean;onHistory:()=>void;onEdit:()=>void;onToggle:()=>void;onDelete:()=>void}) { const meetings=window.meetings??[]; const upcoming=meetings.filter(m=>!["cancelled","declined"].includes(m.status)&&new Date(m.confirmed_start_at??m.requested_start_at)>new Date()).length; const completed=meetings.filter(m=>new Date(m.confirmed_start_at??m.requested_start_at)<new Date()&&!["cancelled","declined"].includes(m.status)).length; const names=(window.community_ids??[]).map(id=>communities.find(c=>c.id===id)?.name).filter(Boolean).join(", "); return <article className="rounded-3xl border bg-white p-5 shadow-sm"><p className="text-lg font-black">{DAYS[window.weekday]} · {window.start_time.slice(0,5)}–{window.end_time.slice(0,5)}</p><p className="mt-1 text-slate-700">{window.meeting_mode} · {window.supported_durations.join(", ")} דקות</p>{window.location&&<p className="text-slate-700">📍 {window.location}</p>}<p className="mt-2 font-bold">{window.audience_scope==="community"?`🔒 ${names||"קהילה"}`:"🌐 ציבורי"}</p><p className="mt-2 text-sm">{subjects.filter(s=>window.subject_ids.includes(s.id)).map(s=>s.name).join(", ")}</p><p className="mt-2 font-bold text-emerald-800">{window.meeting_price?`${window.meeting_price} ₪` : "ללא עלות"}</p><button onClick={onHistory} className="mt-3 text-sm font-black text-blue-700">{upcoming} פגישות קרובות · {completed} התקיימו</button>{historyOpen&&<div className="mt-3 border-t pt-3">{meetings.length?meetings.map(m=><div key={m.id} className="border-b py-2 text-sm"><b>{new Date(m.confirmed_start_at??m.requested_start_at).toLocaleString("he-IL")}</b> · {m.child_first_name} · {m.subject}<div>{m.status}</div></div>):<p className="text-sm text-slate-500">עדיין אין פגישות מזמינות זו.</p>}</div>}<div className="mt-4 flex flex-wrap gap-2"><button onClick={onEdit} className="btn">עריכה</button><button onClick={onToggle} className="btn">{window.is_active?"השבתה":"הפעלה"}</button><button onClick={onDelete} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-bold text-red-700">מחיקה</button></div></article> }
-function Field({label,children}:{label:string;children:React.ReactNode}) { return <label className="grid content-start gap-2 font-bold">{label}{children}</label> }
-function Pill({checked,label,onClick}:{checked:boolean;label:string;onClick:()=>void}) { return <button type="button" onClick={onClick} className={`rounded-full border px-3 py-2 text-sm font-bold ${checked?"bg-slate-900 text-white":"bg-white"}`}>{label}</button> }
+
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { label: string; value: string }[] }) {
+  return <label className="grid gap-2 font-bold">{label}<select value={value} onChange={(event) => onChange(event.target.value)} className="rounded-xl border p-3">{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+}

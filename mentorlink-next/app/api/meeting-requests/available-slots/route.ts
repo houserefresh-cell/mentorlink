@@ -1,5 +1,4 @@
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { loadPublishedSchedulingMentor, loadSlots } from "@/lib/meeting-data";
 
 export async function GET(request: Request) {
@@ -12,16 +11,11 @@ export async function GET(request: Request) {
     const client = createSupabaseAdmin();
     const mentor = await loadPublishedSchedulingMentor(client, bookingId);
     if (!mentor) return Response.json({ error: "Mentor not found", code: "MENTOR_NOT_FOUND" }, { status: 404 });
-    const viewer = await authenticateMeetingUser(request.headers.get("authorization"));
-    const memberships = viewer ? await client.from("community_memberships").select("community_id").eq("user_id", viewer.id).eq("status", "active") : { data: [], error: null };
-    if (memberships.error) throw new Error("membership lookup failed");
-    const memberIds = new Set((memberships.data ?? []).map((row) => String(row.community_id)));
-    const [allSlots, windows] = await Promise.all([
+    const [slots, windows] = await Promise.all([
       loadSlots(client, mentor.mentorUserId, new Date(), days),
       client.from("mentor_availability_windows").select("id", { count: "exact", head: true }).eq("mentor_user_id", mentor.mentorUserId).eq("is_active", true),
     ]);
     if (windows.error) throw new Error("window count failed");
-    const slots = allSlots.filter((slot) => slot.audienceScope !== "community" || (slot.communityIds ?? []).some((id) => memberIds.has(id)));
     const availabilityWindowCount = windows.count ?? 0;
     const emptyReason = slots.length ? null : availabilityWindowCount === 0 ? "NO_AVAILABILITY" : "NO_OPEN_SLOTS";
     console.info("Meeting slot generation", { stage: "complete", days, availabilityWindowCount, slotCount: slots.length, emptyReason });

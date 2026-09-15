@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const ids = (activities.data ?? []).map((row) => row.id);
   const mentorIds = [...new Set((activities.data ?? []).map((row) => row.mentor_user_id))];
   const subjectIds = [...new Set((activities.data ?? []).map((row) => row.subject_id).filter(Boolean))];
-  const [sessions, registrations, profiles, subjects, publications, parentConsents, parentChildren, parentMemberships] = await Promise.all([
+  const [sessions, registrations, profiles, subjects, publications, parentConsents, parentChildren] = await Promise.all([
     ids.length ? admin.from("mentor_activity_sessions").select("activity_id, starts_at, ends_at, estimated_overrun").in("activity_id", ids).gt("starts_at", new Date().toISOString()).order("starts_at") : Promise.resolve({ data: [], error: null }),
     ids.length ? admin.from("mentor_activity_registrations").select("activity_id, child_id, parent_user_id, status").in("activity_id", ids).in("status", ["registered", "waitlisted"]) : Promise.resolve({ data: [], error: null }),
     mentorIds.length ? admin.from("mentor_profiles").select("user_id, first_name, last_name, city, phone, birth_date").in("user_id", mentorIds) : Promise.resolve({ data: [], error: null }),
@@ -19,24 +19,16 @@ export async function GET(request: Request) {
     mentorIds.length ? admin.from("mentor_publication").select("user_id, public_booking_id").in("user_id", mentorIds).eq("status", "published") : Promise.resolve({ data: [], error: null }),
     mentorIds.length ? admin.from("mentor_parent_consents").select("user_id, contact_confirmed, status").in("user_id", mentorIds).eq("status", "approved") : Promise.resolve({ data: [], error: null }),
     admin.from("parent_children").select("id, first_name").eq("parent_user_id", user.id),
-    admin.from("community_memberships").select("community_id").eq("user_id", user.id).eq("status", "active"),
   ]);
-  if (sessions.error || registrations.error || profiles.error || subjects.error || publications.error || parentConsents.error || parentChildren.error || parentMemberships.error) return Response.json({ error: "לא ניתן להשלים את טעינת הפעילויות." }, { status: 500 });
+  if (sessions.error || registrations.error || profiles.error || subjects.error || publications.error || parentConsents.error || parentChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת הפעילויות." }, { status: 500 });
   const participantIds = [...new Set((registrations.data ?? []).map((row) => row.child_id).filter(Boolean))];
   const participantChildren = participantIds.length ? await admin.from("parent_children").select("id, first_name, last_name").in("id", participantIds) : { data: [], error: null };
   if (participantChildren.error) return Response.json({ error: "לא ניתן להשלים את טעינת המשתתפים." }, { status: 500 });
   const participantById = new Map((participantChildren.data ?? []).map((child) => [child.id, child]));
   const displayName = (childId: string) => { const child = participantById.get(childId); const firstName = child?.first_name ?? "ילד/ה"; const initial = child?.last_name?.trim()?.charAt(0); return initial ? `${firstName} ${initial}׳` : firstName; };
-  const memberCommunityIds = new Set((parentMemberships.data ?? []).map((row) => String(row.community_id ?? "")).filter(Boolean));
   const publicActivities = (activities.data ?? []).flatMap((activity) => {
     const upcoming = (sessions.data ?? []).filter((session) => session.activity_id === activity.id);
     if (!upcoming.length) return [];
-    if (activity.audience_scope === "community" && activity.community_ids?.length) {
-      const allowed = (activity.community_ids ?? []).map((communityId: unknown) => String(communityId));
-      if (!allowed.some((communityId: string) => memberCommunityIds.has(communityId))) return [];
-    }
-    const publication = (publications.data ?? []).find((item) => item.user_id === activity.mentor_user_id);
-    if (!publication) return [];
     const mentor = (profiles.data ?? []).find((profile) => profile.user_id === activity.mentor_user_id);
     const subject = (subjects.data ?? []).find((item) => item.id === activity.subject_id);
     const counts = (registrations.data ?? []).filter((row) => row.activity_id === activity.id);
@@ -51,7 +43,7 @@ export async function GET(request: Request) {
     return [{
       id: activity.id, title: activity.title, description: activity.description, subjectId: activity.subject_id,
       subjectName: subject?.name ?? "פעילות העשרה", subjectCategory: subject?.category ?? null, mentorName: `${mentor?.first_name ?? "חונך/ת"}${mentor?.last_name ? ` ${Array.from(mentor.last_name)[0]}׳` : ""}`,
-      mentorBookingId: publication.public_booking_id,
+      mentorBookingId: (publications.data ?? []).find((publication) => publication.user_id === activity.mentor_user_id)?.public_booking_id ?? null,
       city: mentor?.city ?? null, locationType: activity.location_type, venueName: activity.venue_name,
       locationDetails: activity.location_details, minParticipants: activity.min_participants,
       maxParticipants: activity.max_participants, minimumAge: activity.minimum_age,

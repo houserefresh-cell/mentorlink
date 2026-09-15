@@ -18,19 +18,11 @@ export async function POST(request: Request) {
   const admin = createSupabaseAdmin();
   const profile = await admin.from("parent_profiles").select("phone").eq("user_id", user.id).maybeSingle();
   if (!profile.data?.phone) return Response.json({ error: "לפני הרשמה יש להשלים מספר טלפון בחשבון שלי.", code: "PARENT_PROFILE_REQUIRED" }, { status: 422 });
-  const [activity, activeRegistrations, memberships] = await Promise.all([
-    admin.from("mentor_activities").select("max_participants,mentor_user_id,title,audience_scope,community_ids").eq("id", activityId).maybeSingle(),
+  const [activity, activeRegistrations] = await Promise.all([
+    admin.from("mentor_activities").select("max_participants,mentor_user_id,title").eq("id", activityId).maybeSingle(),
     admin.from("mentor_activity_registrations").select("child_id,status").eq("activity_id", activityId).in("status", ["registered", "waitlisted"]),
-    admin.from("community_memberships").select("community_id").eq("user_id", user.id).eq("status", "active"),
   ]);
-  if (activity.error || activeRegistrations.error || memberships.error || !activity.data) return Response.json({ error: "לא ניתן לבדוק את מצב הפעילות כרגע." }, { status: 500 });
-  if (activity.data.audience_scope === "community" && Array.isArray(activity.data.community_ids) && activity.data.community_ids.length) {
-    const allowed = new Set((activity.data.community_ids as unknown[]).map(String));
-    const memberIds = new Set((memberships.data ?? []).map((row) => String(row.community_id ?? "")).filter(Boolean));
-    if (![...allowed].some((communityId) => memberIds.has(communityId))) {
-      return Response.json({ error: "הפעילות הזו מוגבלת לקהילה מסוימת ואין לך חברות פעילה בה." }, { status: 403 });
-    }
-  }
+  if (activity.error || activeRegistrations.error || !activity.data) return Response.json({ error: "לא ניתן לבדוק את מצב הפעילות כרגע." }, { status: 500 });
   const registeredCount = (activeRegistrations.data ?? []).filter((row) => row.status === "registered").length;
   const waitlistedCount = (activeRegistrations.data ?? []).filter((row) => row.status === "waitlisted").length;
   const availablePlaces = Math.max(0, Number(activity.data.max_participants ?? 0) - registeredCount);
