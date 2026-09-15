@@ -1,4 +1,4 @@
-import { authenticateMeetingUser } from "@/lib/meeting-auth";
+﻿import { authenticateMeetingUser } from "@/lib/meeting-auth";
 import { getPublishedMentors } from "@/lib/public-mentor-data";
 
 export async function GET(
@@ -11,7 +11,7 @@ export async function GET(
   }
   try {
     const user = await authenticateMeetingUser(request.headers.get("authorization"));
-    const mentors = await getPublishedMentors(user?.id ?? null);
+    const mentors = await getPublishedMentors();
     const mentor = mentors.find((item) => item.bookingId === bookingId);
     if (!mentor) return Response.json({ error: "Mentor not found" }, { status: 404 });
     return Response.json({ mentor }, { headers: { "Cache-Control": "private, max-age=30" } });
@@ -19,3 +19,4 @@ export async function GET(
     return Response.json({ error: "Unable to load mentor" }, { status: 500 });
   }
 }
+
